@@ -1,0 +1,23 @@
+{
+  "id": "podcast-angle-switch",
+  "tags": [
+    "editing",
+    "multicam"
+  ],
+  "timeout_min": 20,
+  "expects_weak": false,
+  "fixtures": [
+    "host.mp4 (testsrc2 1920x1080 30 fps 24 s, hue-shifted strongly blue via lavfi hue filter; camera audio = sine 1 kHz at -30 dBFS as a decoy)",
+    "guest.mp4 (smptebars 1920x1080 30 fps 24 s; camera audio = sine 440 Hz at -30 dBFS as a decoy)",
+    "room.wav (flite speech, two voices alternating, 24 s, 48 kHz mono)",
+    "speakers.csv (columns start,end,speaker; 7 rows covering 0-24 s, alternating host/guest, segments 2-5 s long)"
+  ],
+  "checks": [
+    "out/podcast.mp4: 1920x1080, H.264 + AAC, duration 24 s +/- 0.2 s",
+    "not black, not static: mean frame difference between 1 s samples > threshold; audio not silent (integrated loudness > -40 LUFS)",
+    "at the midpoint of every speakers.csv segment the frame matches the right camera: SSIM >= 0.8 vs the reference frame of that source at the same time (host vs guest are mutually SSIM < 0.4)",
+    "every picture cut lands within 3 frames of a segment boundary (cuts detected by SSIM drop between consecutive frames)",
+    "audio is room.wav only: spectral energy at 1 kHz and 440 Hz tones is > 25 dB below the speech band; cross-correlation with room.wav peaks at lag 0 +/- 1 frame",
+    "podcast.mgl.json loads and validates; has clips referencing both camera assets and one audio clip referencing room.wav"
+  ]
+}

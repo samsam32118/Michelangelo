@@ -1,0 +1,20 @@
+{
+  "id": "caption-reflow-sidecar",
+  "tags": [
+    "captions",
+    "export"
+  ],
+  "timeout_min": 15,
+  "expects_weak": false,
+  "fixtures": [
+    "vlog.mgl.json (1080x1920 30 fps 40 s; testsrc2 background clip; captions clip with 6 cues of 90-180 characters each, 5-9 s long, with word timings)",
+    "vlog.wav (flite speech of the same text, 40 s)"
+  ],
+  "checks": [
+    "out/vlog.srt and out/vlog.vtt parse; same cue count (>= 14) and times within 1 frame of each other",
+    "every cue: <= 2 lines, each line <= 32 characters, duration 0.8-6.0 s, no overlaps, sorted",
+    "concatenated cue words equal the original cue words in order (case and punctuation-insensitive)",
+    "each new cue lies within the time span of the original cue its words came from (+/- 2 frames)",
+    "out/vlog.mp4: not black, not static, audio not silent; caption band (lower 40 %) glyph density higher than the bg-only reference at 3 sampled cue midpoints"
+  ]
+}

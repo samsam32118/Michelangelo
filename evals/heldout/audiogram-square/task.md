@@ -1,0 +1,1 @@
+can you turn `clip.wav` into an audiogram for Instagram? square 1080x1080, dark background `#101828`, the episode title "Small Bets, Big Wins" near the top, and an animated waveform or bar visualiser in the middle that actually moves with the audio. output `out/audiogram.mp4`.

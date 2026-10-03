@@ -1,0 +1,1 @@
+The auto captions in `vlog.mgl.json` are way too long per cue for mobile. Re-split them so each cue is at most 2 lines of 32 characters, lasts between 0.8 and 6 seconds, and no words are lost or reordered; timing should follow the original cues. Then export sidecar files `out/vlog.srt` and `out/vlog.vtt` and a draft render `out/vlog.mp4` with the captions burned in.

@@ -1,0 +1,20 @@
+{
+  "id": "stats-bar-chart",
+  "tags": [
+    "motion",
+    "data",
+    "text"
+  ],
+  "timeout_min": 20,
+  "expects_weak": false,
+  "fixtures": [
+    "stats.csv (columns label,value,colour; 5 rows with values 12, 30, 45, 22, 60 and distinct saturated colours)"
+  ],
+  "checks": [
+    "out/chart.mp4: 1920x1080, 6 s +/- 0.1, not black, not static",
+    "at 5 s, the measured pixel height of each bar (column scan for its CSV colour, delta E < 8) is proportional to its value: ratio to the tallest bar within 5 % of value/60",
+    "bars left to right in CSV order (x of colour centroids increasing); background at the corners within delta E 3 of white",
+    "growth is animated and staggered: at 0.1 s all bars < 10 % of final height; at some sampled time between 0.5 and 3 s the first bar is >= 50 % taller (relative to final) than the last bar; frames at 4.5 s and 5.8 s SSIM >= 0.98 (hold)",
+    "glyph pixels present below the baseline under each bar at 5 s"
+  ]
+}

@@ -1,0 +1,1 @@
+In `drone.mp4` there's an orange box moving around. Pin a label that says "Package" with a small white pill background just above the box so it follows it for the whole clip. Make it 1920x1080 and render `out/tracked.mp4`.

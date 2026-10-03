@@ -1,0 +1,20 @@
+{
+  "id": "follow-the-box",
+  "tags": [
+    "motion",
+    "tracking",
+    "weak"
+  ],
+  "timeout_min": 25,
+  "expects_weak": true,
+  "fixtures": [
+    "drone.mp4 (1920x1080 30 fps 8 s: testsrc2 background darkened to 40 % with a 120x120 #ff7a00 square moving on a Lissajous path via overlay x/y expressions, visiting all quadrants)",
+    "track.json (ground-truth box centre per frame, grader-only, not given to the agent)"
+  ],
+  "checks": [
+    "out/tracked.mp4: 1920x1080, 8 s +/- 0.1, not black, not static",
+    "orange box still visible: an #ff7a00 blob (delta E < 10) of area >= 10,000 px is detected at 8 sampled times",
+    "label follows: at 8 sampled times a near-white blob (pill) of area >= 1,500 px has its centre within 60 px horizontally of the box centre and 40-200 px above it",
+    "label is not static: pill centre moves by > 400 px across the samples"
+  ]
+}

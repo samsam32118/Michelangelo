@@ -1,0 +1,20 @@
+{
+  "id": "quote-card-plugin",
+  "tags": [
+    "plugins",
+    "templates"
+  ],
+  "timeout_min": 30,
+  "expects_weak": false,
+  "fixtures": [
+    "reel.mgl.json (1080x1350 30 fps 11 s, testsrc2 background clip)",
+    "quotes.json (two short quotes with authors, plain text, written for the eval)"
+  ],
+  "checks": [
+    "plugins/quote-card exists, package.json has michelangelo.api ^1 and kinds including template; `mgl plugin test plugins/quote-card` exits 0",
+    "reel.mgl.json names the plugin; it contains entities tagged with the quote-card template at frames 30-150 and 180-300 whose text equals quotes.json",
+    "out/q1.png and out/q2.png are 1080x1350, not a single colour; q1 has a vertical run of >= 80 px of #22c55e (delta E < 8) and none of #ef4444; q2 the opposite",
+    "text glyph density in the card region is high in both stills and the glyph regions differ between q1 and q2",
+    "a still at 0.5 s (before the first card) has no #22c55e or #ef4444 pixels"
+  ]
+}

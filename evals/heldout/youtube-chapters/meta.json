@@ -1,0 +1,21 @@
+{
+  "id": "youtube-chapters",
+  "tags": [
+    "markers",
+    "text",
+    "export"
+  ],
+  "timeout_min": 20,
+  "expects_weak": false,
+  "fixtures": [
+    "lesson.mgl.json (1920x1080 30 fps, one testsrc2 clip 0-60 s with a sine 440 Hz audio clip)",
+    "lesson.mp4 (testsrc2 + sine, 60 s)",
+    "chapters.csv (columns time,title; 5 rows: 0 Intro, 0:12 Setup, 0:25 First pass, 0:41 Polish, 0:53 Wrap-up)"
+  ],
+  "checks": [
+    "out/chapters.txt: exactly 5 lines matching ^\\d{2}:\\d{2} .+$, first is 00:00, times and titles equal chapters.csv in order",
+    "lesson.mgl.json: 5 markers on comp main at frames 0, 360, 750, 1230, 1590 (+/- 1 frame)",
+    "out/lesson.mp4: 1920x1080, 60 s +/- 0.2, not black, not static, audio not silent",
+    "at chapter_time + 1 s the frame is darker than the source (mean luma < 0.75 x source luma at that time) and has high glyph density in the centre band; at chapter_time + 4 s the frame matches the source (SSIM >= 0.9)"
+  ]
+}

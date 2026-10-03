@@ -1,0 +1,1 @@
+I recorded a two-person podcast with two cameras, `host.mp4` and `guest.mp4`, plus one clean audio track `room.wav`. `speakers.csv` says who is talking when. Cut a 1920x1080 edit that always shows whoever is speaking, keeps `room.wav` as the only audio, and save it as `podcast.mgl.json` and `out/podcast.mp4`.

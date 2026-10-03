@@ -1,0 +1,1 @@
+Client wants the same 8-second spot `spot.mgl.json` in three deliverables: a VP9/Opus WebM for their website (`out/web.webm`), a ProRes 422 `.mov` for their editor (`out/master.mov`), and a 1280x720 JPEG thumbnail taken from 4 s (`out/thumb.jpg`). Don't change the project.

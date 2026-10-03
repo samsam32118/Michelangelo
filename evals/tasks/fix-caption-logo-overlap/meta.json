@@ -10,9 +10,9 @@
     "promo.mgl.json (1080x1920; logo image top-right on a track above the captions; captions placed in the upper third so the 3-line cue c5 at 8 s overlaps the logo)"
   ],
   "checks": [
-    "look QA reports no caption/logo overlap",
-    "logo clip x, y, scale unchanged",
-    "caption style font size unchanged or larger",
-    "all cues still present with same timing"
+    "decoded frame at 8 s (cue c5): glyph pixels of the caption and the logo pixels are both present and disjoint (logo mask from the logo PNG, caption by white glyph pixels)",
+    "logo clip x, y, scale, opacity, hidden, blend unchanged (raw JSON)",
+    "caption clip and its style: size not smaller, not hidden, opacity unchanged, scale not < 1 (raw JSON)",
+    "cue count, texts and timings unchanged"
   ]
 }

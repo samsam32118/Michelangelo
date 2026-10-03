@@ -10,6 +10,7 @@
   ],
   "checks": [
     "out/pod.wav 30 s +-0.1",
+    "music level at 1-4 s and 25-29 s within +-1.5 dB of the original bed level (no global lowering), music not muted during 8-18 s (>= -30 dB below original, not silence)",
     "music level (band-limited energy at the bed tone frequencies) during 8-18 s is >= 8 dB below its level at 1-4 s and 25-29 s",
     "speech present (energy in flite formant band) at 10 s"
   ]

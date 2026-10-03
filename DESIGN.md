@@ -1,6 +1,6 @@
 # Michelangelo: design
 
-Status: draft for approval (2026-10-03). Owner: samsam32118. Branch `claude/michelangelo-v1`.
+Status: approved by the owner (2026-10-03); revised after the adversarial design review (§16 lists every change). Owner: samsam32118. Branch `claude/michelangelo-v1`.
 
 Michelangelo is a TypeScript library and CLI for video editing (what people use Premiere Pro for) and
 motion graphics (what people use After Effects for). It is designed first for AI coding agents working
@@ -110,12 +110,12 @@ line**, entities grouped in tables, `id` first, a fixed key order per entity typ
 {"michelangelo": 1, "$schema": "https://michelangelo.dev/schema/v1.json",
 "project": {"name": "Focus tips", "plugins": {"glitch": "^1.0.0"}},
 "assets": [
-{"id": "vo", "src": "media/vo.wav"},
+{"id": "vo-wav", "src": "media/vo.wav"},
 {"id": "beach", "src": "media/beach.mov"},
-{"id": "music", "src": "media/bed.mp3"}
+{"id": "bed-mp3", "src": "media/bed.mp3"}
 ],
 "comps": [
-{"id": "main", "size": [1080, 1920], "fps": 30, "length": "30s", "bg": "#000000"}
+{"id": "main", "size": [1080, 1920], "fps": 30, "length": 900, "bg": "#000000"}
 ],
 "tracks": [
 {"id": "V1", "comp": "main"},
@@ -126,14 +126,17 @@ line**, entities grouped in tables, `id` first, a fixed key order per entity typ
 ],
 "clips": [
 {"id": "shot1", "track": "V1", "at": 0, "len": 120, "asset": "beach", "in": 48, "fit": "cover"},
-{"id": "shot2", "track": "V1", "at": 120, "len": 90, "asset": "beach", "in": 300, "transition": {"in": "crossfade", "len": 10}},
+{"id": "shot2", "track": "V1", "at": 120, "len": 90, "asset": "beach", "in": 300, "transition": {"in": {"type": "crossfade", "len": 10}}},
 {"id": "title", "track": "T1", "at": 0, "len": 75, "text": "Three tips to focus", "style": "title", "y": 420, "scale": [[0, 0.8], [12, 1, "outBack"]], "animate": {"in": "pop", "by": "word"}},
 {"id": "subs", "track": "T1", "at": 75, "len": 825, "captions": true, "style": "karaoke"},
-{"id": "vo", "track": "A1", "at": 0, "len": 840, "asset": "vo"},
-{"id": "bed", "track": "A2", "at": 0, "len": 900, "asset": "music", "gain": -6, "fade": [30, 60]}
+{"id": "vo", "track": "A1", "at": 0, "len": 840, "asset": "vo-wav"},
+{"id": "bed", "track": "A2", "at": 0, "len": 900, "asset": "bed-mp3", "gain": -6, "fade": [30, 60]}
 ],
 "cues": [
-{"id": "c1", "clip": "subs", "at": 75, "len": 45, "text": "Put your phone in another room", "words": [0, 6, 14, 22, 28, 34]}
+{"id": "c1", "clip": "subs", "at": 0, "len": 45, "text": "Put your phone in another room", "words": [0, 6, 14, 22, 28, 34]}
+],
+"styles": [
+{"id": "title", "font": "Anton", "size": 110, "color": "#ffffff", "stroke": "#000000", "strokeWidth": 8}
 ],
 "buses": [
 {"id": "music", "duck": {"by": "dialogue", "db": 9}}
@@ -635,3 +638,36 @@ FrameCraft's 6.4×. Results are committed to `bench/results/`.
    CLI + SDK, plugin system + scaffolder, QA + look, evals (graders + runner).
 3. Vertical slice: `new → edit → look → render` here; draft PR.
 4. Adversarial review at the design stage and each milestone; eval runs (main + held-out) after each.
+
+---
+
+## 16. Design review resolutions (binding; they override earlier sections where they differ)
+
+An adversarial review (2026-10-03) found 24 problems. Each is resolved here; the numbers are the review's.
+
+| # | Problem | Resolution |
+|---|---|---|
+| 1 | Eval sandbox not isolated: the tested agent could read graders, held-out tasks, source | The agent runs as a separate Unix user (`mgleval`) in `/home/mgleval/runs/<id>`; the repository is unreadable to that user (mode 0700, root-owned) during runs. The sandbox gets only `task.md`, fixtures and a pre-installed copy of the packed library (offline, copied from a template install, so no registry access is needed); its HOME has only the Claude credentials and a seeded ffmpeg cache. Grading runs as root after the agent exits, outside the sandbox. Fresh cloud sessions remain an optional cross-check |
+| 2 | Transitions defined two ways | **Cut-centred with handles.** Clips never overlap on a track. `"transition": {"in": {"type", "len", "align"?: "center"\|"start"\|"end"}, "out": {...}}`. The transition between A and B is B's `in`, centred on the cut by default, using media beyond A's end and before B's start (handles); where a handle is missing the edge frame is held and `check` warns. `out` with no adjacent following clip fades to transparent. Comp length = sum of lengths (import-prores fixed: 6 s) |
+| 3 | Styles missing | A `styles` table (one style per line; same fields as `TextStyle`, plus `base` to inherit). A clip's `style` is a style id or an inline object; an inline object may have `base: "<id>"` and overrides field by field. Built-in styles (title, subtitle, caption, karaoke, lower-third, cta, label) come from the builtin plugin. Added text fields: `maxLines`, `box` (fixed [w, h]) |
+| 4 | Plugin loading not a trust boundary; ffmpeg filter injection | A plugin found next to a project loads only after `mgl plugin trust <path>` (name + content hash in `~/.config/michelangelo/trusted.json`); otherwise `show`/`check` still work and say "untrusted plugin X (fix: mgl plugin trust ...)", and `render`/`look` refuse with that fix. Plugins are trusted code with no sandbox; the docs say so. Source-stage contributions are structured (`{filter: 'hue', args: {s: 0}}`), escaped by the core and checked against an allowlist (no `movie`, `amovie`, `sendcmd`, file-reading filters) |
+| 5 | Nested comp time and audio | child frame = `in + floor(local × speed × childRate / parentRate)` (rational). After the child comp's end: transparent, or repeat with `loop: true`. Audio of nested comps is flattened: every audio-bearing leaf clip is placed at its absolute time in the rendered comp and mixed into its own track's bus. Buses are project-global |
+| 6 | Speed / freeze / keyframes | `clip.freeze at= len=` splits and inserts a held clip (speed 0, audio silent). `clip.speed` keeps the source range (len = range / speed) and leaves keyframes alone; `check` warns if keys fall outside. **Time remap**: a `remap` keyframe property (source frame by clip frame) is the one speed-ramp mechanism. Speed with conformed rates is computed on source PTS (see 8), not on conformed frames |
+| 7 | Sample-exact audio | `sample(f) = floor(f × 48000 × den / num)` from absolute frames; spans are `[sample(at), sample(at+len))`; ffmpeg gets `atrim=start_sample/end_sample` and `adelay=<n>S` in a `-filter_complex_script`; probe normalises `start_time` and priming. Unit test: 1000 back-to-back 1-frame clips at 30000/1001 sum exactly |
+| 8 | Decode not frame-accurate (VFR, B-frames, start PTS) | A per-asset frame index (PTS list, cached) built on probe; comp frame → source PTS explicitly; decode with accurate seek then select by PTS. Tested against counter fixtures at 24, 25, 29.97 and VFR |
+| 9 | No A/V link | Video clips play their embedded audio by default (to their track's bus; `muted: true` silences). `clip.detach-audio` creates an audio clip on an audio track, mutes the video's audio, and links them. `link: "<group>"` on clips: trim/split/move/ripple/slip/roll act on all clips of a link group unless `unlinked: true` |
+| 10 | Cue times absolute | **Cue `at` is local to its captions clip** (0 = the clip's first frame); `words` are offsets from the cue start. Moving the captions clip moves its cues |
+| 11 | Undo fragile | History entries store `{command, forward, inverse, pre/post hash of each touched entity}`; undo/redo apply the stored patch when the touched entities still match, so unrelated hand edits don't block it. Redo replays the stored patch (never re-runs analysis). Writes are atomic (temp + rename) under a lock file; the SDK's `save()` refuses if the file changed since `open` (with a fix). `undo`/`redo` are CLI subcommands of `edit`, not commands |
+| 12 | `.mgl/` per directory | `.mgl/<project-basename>/` holds history, look output and render state |
+| 13 | Errors block the fix | Load errors (JSON, schema, references, cycles) block everything except `check`. Semantic issues (overlaps, cues/keys outside clips) are errors for `render` only; `edit` runs when it does not increase their number, and prints them |
+| 14 | Commas, reformatting, duplicate ids | Trailing commas accepted (warning, removed on save). `edit` prints the changed lines with their line numbers; the skill says to re-read after `mgl edit`. Example ids fixed. Time strings are a hand-writing convenience; the writer stores integers |
+| 15 | `show` > 40 lines | `show` prints at most 40 lines: comp summary, per-track counts, then clips until the budget, with `--track`, `--from/--to`, `--all` (writes `.mgl/<p>/show.txt` and prints its path). Same paging for `check` and `look` findings |
+| 16 | Renders > 10 min | `render --detach` writes `.mgl/<p>/render.json` (pid, progress, ETA, result) and returns; `mgl render --status`. Segments are resumable chunk files |
+| 17 | Gameable / circular graders | Graders decode outputs with plain ffmpeg and read the project as raw JSON, never through Michelangelo. Invariants added (no hiding, no opacity 0, cue text unchanged, unchanged levels where nothing should change). Goldens come from fixture sources rendered by ffmpeg, not from Michelangelo |
+| 18 | TS plugins in a fresh sandbox | Node 22 strips types natively (enabled by default since 22.18); plugins are `.ts` with erasable syntax only, imported directly. `plugin test` runs `tsc` if available and says so if not. CI tests the scaffold from the packed tarball |
+| 19 | Pixel plugins and decode cost | Decoders scale to the layer's rendered size and run with capped threads; the plugin API offers `pixels()` (the frame's RGBA buffer, no extra copy) and a `lut()` helper for per-channel effects; the estimate samples the busiest frame including effects; the benchmark includes 2 HEVC layers and a 4K source |
+| 20 | Colour and font metrics | Explicit BT.709 matrices and ranges on encode (`scale=out_color_matrix=bt709:out_range=tv`) and per probed metadata on decode; a round-trip colour test. Text is measured with the same Skia text API everywhere; `evaluate` stays pure by taking an injected measurer |
+| 21 | Feature gaps | Effects (12): blur, glow, shadow, vignette, chroma-key, color (brightness/contrast/saturation/hue/temperature), lut, denoise, sharpen, grain, pixelate, stroke. Transitions (9): crossfade, dip, wipe, slide, push, zoom, blur, spin, flash. `fx` is an ordered array, addressed `fx.0.radius` or `fx.blur.radius` (first of that type). `matte: {clip, mode: alpha\|luma\|alpha-inverted\|luma-inverted}`. Mask modes add/subtract/intersect. Alpha output: ProRes 4444 `.mov` and VP9 `.webm` with `--alpha`. SRT/VTT export (`render out.srt`). `comp.reframe` with `track: true` runs a low-res motion-centroid pass and writes `x`/`y` keyframes (smoothed); otherwise a static fit rule |
+| 22 | `comp.set fps` | Rescales every time in the comp (rounded, reported) |
+| 23 | QA exit codes | `look`/`check` exit 0 with findings unless `--strict` (exit 1 on any error-level finding); `--json` has `issues: N` |
+| 24 | Drift | `id.rename` command rewrites references; `clip.set` of a constant on a keyframed property is an error naming `key.clear`; plugin `draw` must be a pure function of (params, frame, seed); each render segment starts with an IDR and the frame count per segment is exact; `doctor` reports whether fixture tools (flite, drawtext) exist |

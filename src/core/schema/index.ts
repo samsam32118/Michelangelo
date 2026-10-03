@@ -29,6 +29,7 @@ export const Easing = z.union([EasingName, z.tuple([z.number(), z.number(), z.nu
 export const BLEND_MODES = ['normal', 'multiply', 'screen', 'overlay', 'darken', 'lighten', 'add', 'color-dodge', 'color-burn',
   'hard-light', 'soft-light', 'difference', 'exclusion', 'hue', 'saturation', 'color', 'luminosity'] as const;
 export const BlendMode = z.enum(BLEND_MODES);
+export type BlendMode = (typeof BLEND_MODES)[number];
 
 export const FITS = ['contain', 'cover', 'fill', 'none'] as const;
 export const PLATFORMS = ['shorts', 'tiktok', 'reels', 'youtube', 'none'] as const;

@@ -1,0 +1,1 @@
+Make the words of "Make every second count" appear one by one, each popping in, over the first 2 seconds of a 1080x1920 project. Render a contact sheet with `look` and a still at 0.6 s to `out/w.png`.

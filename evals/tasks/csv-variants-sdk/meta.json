@@ -1,0 +1,19 @@
+{
+  "id": "csv-variants-sdk",
+  "tags": [
+    "sdk",
+    "batch"
+  ],
+  "timeout_min": 20,
+  "expects_weak": false,
+  "fixtures": [
+    "products.csv (10 rows)",
+    "promo.mgl.json (bg solid, name text, price text)"
+  ],
+  "checks": [
+    "10 PNGs out/<id>.png at the comp size",
+    "background pixel colour of each matches its CSV colour (delta E < 5)",
+    "10 project files or one script: a .mjs/.ts file importing michelangelo exists and was run (no CLI-only loop)",
+    "name glyph region differs between variants"
+  ]
+}

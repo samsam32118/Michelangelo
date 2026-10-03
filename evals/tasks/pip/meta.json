@@ -1,0 +1,16 @@
+{
+  "id": "pip",
+  "tags": [
+    "compositing"
+  ],
+  "timeout_min": 15,
+  "expects_weak": false,
+  "fixtures": [
+    "screen.mp4 (testsrc2), cam.mp4 (smptebars)"
+  ],
+  "checks": [
+    "at 2 s: bottom-right region matches smptebars, the rest testsrc2",
+    "PiP box width 480 +-20 px",
+    "corners of the PiP box show background (rounded)"
+  ]
+}

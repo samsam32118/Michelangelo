@@ -1,0 +1,17 @@
+{
+  "id": "import-prores",
+  "tags": [
+    "media",
+    "transitions"
+  ],
+  "timeout_min": 15,
+  "expects_weak": false,
+  "fixtures": [
+    "master.mov (prores_ks 1920x1080 30fps, testsrc), film24.mp4 (24 fps, smptebars)"
+  ],
+  "checks": [
+    "out/edit.mp4 1920x1080 30 fps, 5.5 s +-1 frame",
+    "frame at 1 s matches testsrc, at 5 s matches smptebars (SSIM)",
+    "crossfade: frame at the midpoint is a blend (pixel values between both sources)"
+  ]
+}

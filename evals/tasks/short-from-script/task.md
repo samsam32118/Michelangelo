@@ -1,0 +1,1 @@
+Make a 9:16 YouTube Short from `script.txt` (a hook line and three tips). Use the voice-over `vo.wav` and the background clip `bg.mp4`. Burn in word-timed captions, put a title on the first 2 seconds, and render `out/short.mp4`.

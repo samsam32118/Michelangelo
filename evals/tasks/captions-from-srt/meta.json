@@ -1,0 +1,17 @@
+{
+  "id": "captions-from-srt",
+  "tags": [
+    "captions"
+  ],
+  "timeout_min": 15,
+  "expects_weak": false,
+  "fixtures": [
+    "talk.mgl.json (one 1920x1080 video clip, 30 s)",
+    "talk.srt (12 cues)"
+  ],
+  "checks": [
+    "project has 12 cues; each cue start/end within 1 frame of the SRT",
+    "cue clip vertical position: text box centre in bottom third (evaluate layout)",
+    "out/draft.mp4 exists, duration 30 s +-0.2, glyph pixels in bottom third at 3 cue midpoints and none at a gap"
+  ]
+}

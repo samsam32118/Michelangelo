@@ -1,0 +1,15 @@
+{
+  "id": "gif-export",
+  "tags": [
+    "export"
+  ],
+  "timeout_min": 10,
+  "expects_weak": false,
+  "fixtures": [
+    "demo.mgl.json (animated text over testsrc2, 10 s)"
+  ],
+  "checks": [
+    "out/clip.gif width 480, 3 s +-0.2, loops, < 5 MB",
+    "first frame matches the project rendered at 3 s (SSIM > 0.6 at 480 px)"
+  ]
+}

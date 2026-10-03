@@ -1,0 +1,15 @@
+{
+  "id": "per-word-animation",
+  "tags": [
+    "motion",
+    "text"
+  ],
+  "timeout_min": 15,
+  "expects_weak": false,
+  "fixtures": [],
+  "checks": [
+    "text clip with per-word animation (animate by word) or per-word clips",
+    "still at 0.6 s shows fewer glyph columns than the still at 2.5 s (rendered by grader from the project)",
+    ".mgl/look/sheet.png exists, long edge <= 1568"
+  ]
+}

@@ -1,0 +1,14 @@
+{
+  "id": "nested-comp",
+  "tags": [
+    "comps"
+  ],
+  "timeout_min": 20,
+  "expects_weak": false,
+  "fixtures": [],
+  "checks": [
+    "project has a comp used by 3 clips of kind comp in main",
+    "frames: badge visible at 3 different scales at a time when all three overlap",
+    "rotation differs between two frames 0.5 s apart"
+  ]
+}

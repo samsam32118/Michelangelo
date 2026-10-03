@@ -1,0 +1,17 @@
+{
+  "id": "j-and-l-cuts",
+  "tags": [
+    "editing",
+    "audio"
+  ],
+  "timeout_min": 15,
+  "expects_weak": false,
+  "fixtures": [
+    "dialog.mgl.json (two video clips with linked audio clips; A has 440 Hz tone, B 660 Hz)"
+  ],
+  "checks": [
+    "picture cut frame unchanged",
+    "440 Hz present for 1 s after the picture cut in a rendered wav, then 660 Hz",
+    "no gap or overlap errors in check"
+  ]
+}

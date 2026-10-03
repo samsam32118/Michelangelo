@@ -1,0 +1,17 @@
+{
+  "id": "plugin-transition-new",
+  "tags": [
+    "plugins",
+    "transitions"
+  ],
+  "timeout_min": 25,
+  "expects_weak": false,
+  "fixtures": [
+    "two.mgl.json (red solid 3 s then blue solid 3 s)"
+  ],
+  "checks": [
+    "plugin test passes",
+    "at the transition midpoint frame: centre pixel blue, corner pixel red",
+    "before: all red; after: all blue"
+  ]
+}

@@ -1,0 +1,15 @@
+{
+  "id": "speed-and-freeze",
+  "tags": [
+    "editing"
+  ],
+  "timeout_min": 20,
+  "expects_weak": false,
+  "fixtures": [
+    "run.mgl.json; counter.mp4 (a big frame counter burned in, 30 fps)"
+  ],
+  "checks": [
+    "decoded counter values (digit template matching on burned-in counter) follow: 1x, then 2x steps, then constant for 30 frames, then 1x",
+    "duration consistent"
+  ]
+}

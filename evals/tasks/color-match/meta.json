@@ -1,0 +1,16 @@
+{
+  "id": "color-match",
+  "tags": [
+    "color",
+    "weak"
+  ],
+  "timeout_min": 20,
+  "expects_weak": true,
+  "fixtures": [
+    "match.mgl.json (A: neutral testsrc2; B: same footage with colorbalance warm shift)"
+  ],
+  "checks": [
+    "mean R/B ratio of B still within 5 % of A still",
+    "B not just replaced by A (B source still referenced)"
+  ]
+}

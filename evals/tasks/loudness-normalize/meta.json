@@ -1,0 +1,16 @@
+{
+  "id": "loudness-normalize",
+  "tags": [
+    "audio",
+    "export"
+  ],
+  "timeout_min": 15,
+  "expects_weak": false,
+  "fixtures": [
+    "mix.mgl.json (quiet speech + tones ~-24 LUFS)"
+  ],
+  "checks": [
+    "out/mix.wav integrated loudness -14 +-1 LU, true peak <= -1.0 dBTP",
+    "out/mix.mp3 exists, mp3 codec, similar loudness +-1.5"
+  ]
+}

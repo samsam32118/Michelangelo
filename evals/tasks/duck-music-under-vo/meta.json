@@ -1,0 +1,16 @@
+{
+  "id": "duck-music-under-vo",
+  "tags": [
+    "audio"
+  ],
+  "timeout_min": 15,
+  "expects_weak": false,
+  "fixtures": [
+    "pod.mgl.json (music bed 30 s tone-chord at -12 LUFS, vo.wav speech 6-20 s)"
+  ],
+  "checks": [
+    "out/pod.wav 30 s +-0.1",
+    "music level (band-limited energy at the bed tone frequencies) during 8-18 s is >= 8 dB below its level at 1-4 s and 25-29 s",
+    "speech present (energy in flite formant band) at 10 s"
+  ]
+}

@@ -1,0 +1,17 @@
+{
+  "id": "cta-end",
+  "tags": [
+    "templates"
+  ],
+  "timeout_min": 15,
+  "expects_weak": false,
+  "fixtures": [
+    "vlog.mgl.json (1080x1920, 15 s)"
+  ],
+  "checks": [
+    "a CTA clip spans 12-15 s",
+    "its rendered box at 13.5 s is within the Shorts safe zone",
+    "scale or animate keyframes with a back/bounce/elastic easing or pop preset",
+    "draft mp4 rendered, 15 s"
+  ]
+}

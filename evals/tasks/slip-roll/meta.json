@@ -1,0 +1,15 @@
+{
+  "id": "slip-roll",
+  "tags": [
+    "editing"
+  ],
+  "timeout_min": 15,
+  "expects_weak": false,
+  "fixtures": [
+    "trim.mgl.json (3 clips from counter.mp4 back to back)"
+  ],
+  "checks": [
+    "a.len +12, b.at +12, b.in +12, b.len -12; c.at and c.len unchanged, c.in +30",
+    "rendered counter at c start = old + 30"
+  ]
+}

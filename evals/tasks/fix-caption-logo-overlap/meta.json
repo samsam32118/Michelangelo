@@ -1,0 +1,18 @@
+{
+  "id": "fix-caption-logo-overlap",
+  "tags": [
+    "qa",
+    "captions"
+  ],
+  "timeout_min": 15,
+  "expects_weak": false,
+  "fixtures": [
+    "promo.mgl.json (1080x1920; logo image top-right on a track above the captions; captions placed in the upper third so the 3-line cue c5 at 8 s overlaps the logo)"
+  ],
+  "checks": [
+    "look QA reports no caption/logo overlap",
+    "logo clip x, y, scale unchanged",
+    "caption style font size unchanged or larger",
+    "all cues still present with same timing"
+  ]
+}

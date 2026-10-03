@@ -1,0 +1,1 @@
+Animate the title in `title.mgl.json`: it slides in from the left over 0.5 s with an ease-out, holds, then fades out over the last 0.5 s of the clip. Render stills at 0.25 s, 1.5 s and the last frame.

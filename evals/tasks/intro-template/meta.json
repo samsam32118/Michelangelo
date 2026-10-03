@@ -1,0 +1,16 @@
+{
+  "id": "intro-template",
+  "tags": [
+    "templates"
+  ],
+  "timeout_min": 15,
+  "expects_weak": false,
+  "fixtures": [
+    "cook.mp4 (testsrc2 8 s)"
+  ],
+  "checks": [
+    "out/intro.mp4 1920x1080, 12 s +-0.2",
+    "frames at 0.5 s and 2.5 s differ (animated) and contain title glyphs",
+    "frame at 6 s matches cook.mp4 at 2 s (SSIM > 0.8)"
+  ]
+}

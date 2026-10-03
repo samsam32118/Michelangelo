@@ -1,0 +1,18 @@
+{
+  "id": "beat-cut",
+  "tags": [
+    "audio",
+    "editing",
+    "weak"
+  ],
+  "timeout_min": 20,
+  "expects_weak": true,
+  "fixtures": [
+    "photos/*.png (8 solid-colour images with numbers)",
+    "beat.wav (click track 120 BPM, first beat at 0.5 s)"
+  ],
+  "checks": [
+    "cut times in the render (frame-colour changes) within 2 frames of the beats 0.5, 1.0, ... 4.0 s",
+    "8 distinct colours appear in order"
+  ]
+}

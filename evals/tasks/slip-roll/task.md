@@ -1,0 +1,1 @@
+In `trim.mgl.json`, roll the cut between clips "a" and "b" 12 frames later, then slip clip "c" so its content starts 1 s later in the source, without changing any clip's position or length on the timeline.

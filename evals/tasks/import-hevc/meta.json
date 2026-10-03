@@ -1,0 +1,16 @@
+{
+  "id": "import-hevc",
+  "tags": [
+    "media"
+  ],
+  "timeout_min": 15,
+  "expects_weak": false,
+  "fixtures": [
+    "phone.mov (HEVC/x265 1920x1080 with rotate=90 side data, testsrc2 with a red marker top-left)"
+  ],
+  "checks": [
+    "out/day1.mp4 H.264 1080x1920, 6 s +-1 frame",
+    "rotation honoured: red marker appears in the expected corner after rotation",
+    "first frame matches source frame at 2 s (SSIM > 0.7 after scaling)"
+  ]
+}

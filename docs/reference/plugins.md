@@ -119,7 +119,7 @@ plus `test` and `assert` (node:test).
   is refused.
 - Plugin code imports `michelangelo/plugin` and `michelangelo/testing`; they resolve to the Michelangelo that
   is running (global install, npx or a project dependency), so a plugin folder needs no `node_modules`.
-- The manifest's `api` range must include this Michelangelo's plugin API (1.3.0; `mgl --version` prints it), and the version must
+- The manifest's `api` range must include this Michelangelo's plugin API (1.4.0; `mgl --version` prints it), and the version must
   satisfy the project's range; otherwise the plugin is refused with the reason and a fix.
 - **Plugins are code that runs on your machine with no sandbox.** Read a plugin before trusting it.
 - `mgl plugin list [file]` shows what is loaded, versions and sources, and every plugin problem.

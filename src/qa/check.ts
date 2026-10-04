@@ -9,7 +9,7 @@ import type { PluginRegistry } from '../plugin/registry.js';
 import type { Problem } from '../core/load.js';
 import type { ProjectFile } from '../core/schema/index.js';
 import type { TextLayouter } from '../render/types.js';
-import { safeArea } from './safezones.js';
+import { safeArea, uiZones } from './safezones.js';
 import { ALPHA_PIX_FMT, ignores, ignoresExplicitly } from '../builtin/checks/index.js';
 
 export type { Finding };
@@ -66,7 +66,7 @@ export async function projectRegistry(project: ProjectFile, baseDir: string): Pr
 export function makeContext(project: ProjectFile, compId: string, platform: string | undefined, extra: Partial<CheckContext> = {}): CheckContext {
   const comp = project.comps.find((c) => c.id === compId)!;
   const pf = platform ?? project.project?.platform ?? 'none';
-  return { project, compId, platform: pf, safeArea: (p) => safeArea(p ?? pf, comp.size[0], comp.size[1]), ...extra };
+  return { project, compId, platform: pf, safeArea: (p) => safeArea(p ?? pf, comp.size[0], comp.size[1]), uiZones: (p) => uiZones(p ?? pf, comp.size[0], comp.size[1]), ...extra };
 }
 
 /** Rules whose findings are about a stretch of the timeline: a tagged clip playing at that frame silences them. */

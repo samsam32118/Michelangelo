@@ -20,7 +20,7 @@ export async function look(a: Args, o: Out) {
   const r = await fixLook(p, {
     displayFile: shown, comp: comp.id, ...(at?.length ? { frames: at } : {}), ...(n !== undefined ? { n } : {}),
     ...(bool(a, 'cuts') ? { cuts: true } : {}), ...(bool(a, 'no-audio') ? { audio: false } : {}),
-    ...(platform ? { platforms: parsePlatforms(platform) } : {}), ...(bool(a, 'alpha') ? { alpha: true } : {}), ...(bool(a, 'dry-run') ? { dryRun: true } : {}),
+    ...(platform ? { platforms: parsePlatforms(platform) } : {}), ...(bool(a, 'alpha') ? { alpha: true } : {}), ...(bool(a, 'safe') ? { safe: true } : {}), ...(bool(a, 'dry-run') ? { dryRun: true } : {}),
   });
   const lines = formatFix(r, shown, 'look');
   o.line(...lines.slice(0, 9), `sheet: ${displayName(r.report.sheet)}`);

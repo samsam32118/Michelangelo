@@ -81,7 +81,7 @@ function allLayers(ctx: QaContext): [number, Layer[]][] {
 
 /** Which rules a "qa-ignore:<word>" tag covers besides the rule id itself. */
 export const IGNORE_ALIASES: Record<string, string[]> = {
-  'safe-zone': ['text-outside-safe'], safe: ['text-outside-safe'],
+  'safe-zone': ['text-outside-safe', 'ui-overlap'], safe: ['text-outside-safe', 'ui-overlap'], ui: ['ui-overlap'],
   covered: ['layer-hidden'], hidden: ['layer-hidden'],
   overlap: ['caption-overlap', 'overlap-alpha'],
   'cut-off': ['text-cut-off'], 'off-frame': ['media-off-frame', 'text-cut-off'],
@@ -420,6 +420,88 @@ const textOutsideSafe = defineCheck({
       out.push({ rule: 'text-outside-safe', severity: 'warning', frame: f, clip: l.clipId, box: round(b),
         message: `${l.kind} ${quote(l.text)}(${l.clipId}) crosses the ${andList(edges)} of the ${ctx.platform === 'none' ? 'title' : ctx.platform}-safe area at ${sec(f, c.fps)}`,
         fix: fitFix(clips.get(l.clipId), l.clipId, b, r, c) });
+    }
+    return out;
+  },
+});
+
+/** Vertical platforms whose interface covers the video (header, action buttons, caption panel). */
+const UI_PLATFORMS = ['tiktok', 'reels', 'shorts'];
+const UI_NAMES: Record<string, string> = { tiktok: 'TikTok', reels: 'Reels', shorts: 'Shorts' };
+/** Layer kinds that count as stickers when small (logos, emoji, arrows, product shots, lower-third plates). */
+const STICKER_KINDS = new Set(['image', 'video', 'gen', 'shape', 'comp', 'solid']);
+
+/** Which platforms' interfaces to test: the project's own when it is vertical-only, all three when none is set. */
+function uiPlatforms(platform: string): string[] {
+  if (UI_PLATFORMS.includes(platform)) return [platform];
+  return platform === 'none' ? UI_PLATFORMS : [];
+}
+
+/** The part of the frame clear of every listed platform's interface (intersection of their safe areas). */
+function sharedSafe(ctx: QaContext, platforms: string[]): Rect {
+  let x0 = 0, y0 = 0, x1 = Infinity, y1 = Infinity;
+  for (const p of platforms) {
+    const r = ctx.safeArea(p);
+    x0 = Math.max(x0, r.x); y0 = Math.max(y0, r.y); x1 = Math.min(x1, r.x + r.w); y1 = Math.min(y1, r.y + r.h);
+  }
+  return { x: x0, y: y0, w: Math.max(0, x1 - x0), h: Math.max(0, y1 - y0) };
+}
+
+/** A fix for a sticker: move it into r, scaling it down first when it is larger than r. */
+function stickerFix(clip: Clip | undefined, id: string, box: Box, r: Rect, c: Comp): string {
+  const k = Math.min(1, r.w / Math.max(1, box[2]), r.h / Math.max(1, box[3]));
+  if (k >= 1) return fitFix(clip, id, box, r, c);
+  const sc = clip?.scale;
+  if (keyed(sc) || Array.isArray(sc)) return fitFix(clip, id, box, r, c);
+  const s = (typeof sc === 'number' ? sc : 1) * k * 0.98;
+  const w = box[2] * k * 0.98, h = box[3] * k * 0.98, cx = box[0] + box[2] / 2, cy = box[1] + box[3] / 2;
+  const nx = Math.min(Math.max(cx, r.x + w / 2), r.x + r.w - w / 2), ny = Math.min(Math.max(cy, r.y + h / 2), r.y + r.h - h / 2);
+  const move = moveFix(clip, id, nx - cx, ny - cy, c, box);
+  const xy = move.includes('key.clear') ? [] : move.split(' ').filter((q) => /^[xy]=/.test(q));
+  return `mgl edit <file> clip.set ${id} scale=${Math.round(s * 1000) / 1000}${xy.length ? ' ' + xy.join(' ') : ''}`;
+}
+
+const uiOverlap = defineCheck({
+  id: 'ui-overlap', stage: 'project',
+  describe: 'captions, text and stickers under the TikTok / Reels / Shorts interface (header, action buttons, caption panel); all three when the project names no platform',
+  run(ctx: QaContext) {
+    const c = compOf(ctx);
+    const platforms = uiPlatforms(ctx.platform);
+    if (c.H <= c.W || !platforms.length || !ctx.uiZones) return [];
+    const zones = platforms.map((p) => [p, ctx.uiZones!(p)] as const);
+    const clips = byId(c), every = allClips(ctx.project), samples = allLayers(ctx);
+    const hits = new Map<string, { f: number; l: Layer; under: Map<string, number> }>();
+    const skip = new Set<string>();
+    for (const [f, layers] of samples) for (const l of layers) {
+      if (skip.has(l.clipId)) continue;
+      const clip = clips.get(l.clipId);
+      const text = isText(l.kind);
+      const b = l.box;
+      if (!text) {
+        const tagged = !!clip?.tags?.includes('sticker');
+        if (!STICKER_KINDS.has(l.kind) || (!tagged && area(intersect(b, frameBox(c))) >= 0.4 * c.W * c.H)) continue;
+      }
+      if (b[0] + b[2] <= 0 || b[1] + b[3] <= 0 || b[0] >= c.W || b[1] >= c.H) continue; // off-screen (animating in)
+      if (ignores(clip, 'ui-overlap') || moving(ctx.project, every, l.clipId, samples, c)) { skip.add(l.clipId); continue; }
+      for (const [p, zs] of zones) for (const z of zs) {
+        const r = z.rect, i = intersect(b, [r.x, r.y, r.w, r.h]);
+        // depth into the panel: the smallest move that clears it
+        const depth = Math.min(i[2], i[3]);
+        if (area(i) <= 0 || depth <= 2) continue;
+        let h = hits.get(l.clipId);
+        if (!h) hits.set(l.clipId, h = { f, l, under: new Map() });
+        const key = `${UI_NAMES[p]} ${z.name}`;
+        h.under.set(key, Math.max(h.under.get(key) ?? 0, Math.round(depth)));
+      }
+    }
+    const safe = sharedSafe(ctx, platforms), out: Finding[] = [];
+    for (const [id, h] of hits) {
+      const { f, l } = h, text = isText(l.kind), clip = clips.get(id);
+      const what = l.kind === 'captions' ? 'caption cue' : text ? 'text' : `sticker (${l.kind})`;
+      const where = [...h.under].map(([k, d]) => `${k} (${d} px)`);
+      out.push({ rule: 'ui-overlap', severity: text ? 'error' : 'warning', frame: f, clip: id, box: round(l.box),
+        message: `${what} ${quote(l.text)}(${id}) is under the ${andList(where)} at ${sec(f, c.fps)}`,
+        fix: text ? fitFix(clip, id, l.box, safe, c) : stickerFix(clip, id, l.box, safe, c) });
     }
     return out;
   },
@@ -1163,7 +1245,7 @@ const longSilence = defineCheck({
   },
 });
 
-export const builtinChecks: CheckDef[] = [gaps, textOutsideSafe, tinyText, captionOverlap, clipPastEnd, keyframesOutside,
+export const builtinChecks: CheckDef[] = [gaps, textOutsideSafe, uiOverlap, tinyText, captionOverlap, clipPastEnd, keyframesOutside,
   layerHidden, mediaOffFrame, trailingBlack, clipPastSource, alphaWithBg, textCutOff, musicOverVoice,
   blackFrames, frozen, overlapAlpha, lumaRange, clipping, loudness, longSilence, ...retentionChecks];
 

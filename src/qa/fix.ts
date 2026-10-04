@@ -281,6 +281,8 @@ export interface FixLookOptions extends FixVerbOptions {
   n?: number;
   cuts?: boolean;
   audio?: boolean;
+  /** outline the platform interface panels on the sheet and crops */
+  safe?: boolean;
 }
 
 /** `look --fix`: the full look (rendered frames, project, frame and audio rules) as the verifier. */
@@ -294,7 +296,7 @@ export async function fixLook(p: MglProject, o: FixLookOptions = {}): Promise<Fi
         baseDir: p.dir, file: p.file, registry: p.registry, displayFile: file,
         ...(o.comp ? { comp: o.comp } : {}), ...(o.frames?.length ? { frames: o.frames } : {}), ...(o.n !== undefined ? { n: o.n } : {}),
         ...(o.cuts ? { cuts: true } : {}), ...(o.audio === false ? { audio: false } : {}),
-        ...(o.platforms?.length ? { platforms: o.platforms } : {}), ...(o.alpha ? { alpha: true } : {}),
+        ...(o.platforms?.length ? { platforms: o.platforms } : {}), ...(o.alpha ? { alpha: true } : {}), ...(o.safe ? { safe: true } : {}),
       });
       return { findings: report.findings, report };
     },

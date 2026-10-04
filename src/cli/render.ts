@@ -154,6 +154,7 @@ export async function look(a: Args, o: Out) {
   if (bool(a, 'no-audio')) opts.audio = false;
   if (str(a, 'platform')) opts.platforms = parsePlatforms(str(a, 'platform')!);
   if (bool(a, 'alpha')) opts.alpha = true;
+  if (bool(a, 'safe')) opts.safe = true;
   opts.displayFile = file;
   await lookEstimate(p, opts, o);
   const qa = await qaModule();

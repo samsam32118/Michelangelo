@@ -153,6 +153,8 @@ stretches, gaps, clipping or off-target loudness, music over voice) and reports 
 (LUFS, true peak, silences, tempo). Each finding has a crop image, the file line and a `fix:` command.
 `mgl check` runs the checks that need no pixels. Both exit 0 with findings; `--strict` exits 1 on errors;
 `--fix` applies the findings' fix commands for you and re-checks.
+A 9:16 comp is checked against the TikTok, Reels and Shorts interfaces by default (`ui-overlap`: captions, text and
+stickers under buttons or caption panels); `look --safe` outlines those panels on the sheet.
 `--platforms tiktok,reels,shorts` checks several platforms' safe zones at once. Tag a clip `qa-ignore:<rule>`
 (e.g. `tags='["qa-ignore:safe-zone"]'` on a burned-in timecode) when a finding is intended.
 

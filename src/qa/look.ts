@@ -11,6 +11,7 @@ import type { ProjectFile } from '../core/schema/index.js';
 import { parseRate, rateToNumber } from '../core/time.js';
 import type { AudioAnalysisReport, MediaBackend } from '../media/types.js';
 import type { AudioPlan, RGBAFrame } from '../render/types.js';
+import { uiZones, type Rect } from './safezones.js';
 import { compIdOf, makeContext, mergePlatforms, missingMedia, platformsOf, probeAssets, problemFindings, projectLayers, projectRegistry, qaExtras, restFrames, runStage, sampleFrames, sortFindings, withFile, type Layers, type PlatformFinding, type ProbeFn } from './check.js';
 
 export const SHEET_MAX = 1568;
@@ -38,6 +39,8 @@ export interface LookOptions {
   platforms?: string[];
   /** the render will use --alpha (enables alpha-with-bg) */
   alpha?: boolean;
+  /** outline each platform's interface panels (header, buttons, caption panel) on the sheet and crops; never rendered */
+  safe?: boolean;
   /** how fixes name the project file (default: `file` relative to the cwd when below it, else as given) */
   displayFile?: string;
   registry?: PluginRegistry;
@@ -110,8 +113,57 @@ function toCanvas(img: RGBAFrame): Canvas {
   return cv;
 }
 
-/** A zoomed crop of a finding's box: padded 30%, long edge 512..1568, box outlined in red. */
-export function cropFinding(img: RGBAFrame, scale: number, box: [number, number, number, number]): Canvas {
+/** Outline colours of each platform's interface with --safe. */
+export const SAFE_COLOURS: Record<string, string> = { tiktok: '#25f4ee', reels: '#ff4fd8', shorts: '#ffd400' };
+
+export interface SafeZone { platform: string; name: string; rect: Rect }
+
+/** The interface panels `look --safe` outlines: the look's platforms, or all three vertical ones when none is set on a 9:16 comp. */
+export function safeOverlays(platforms: string[], W: number, H: number): SafeZone[] {
+  const list = platforms.flatMap((p) => (p === 'none' ? (H > W ? ['tiktok', 'reels', 'shorts'] : []) : [p]));
+  return [...new Set(list)].flatMap((p) => uiZones(p, W, H).map((z) => ({ platform: p, name: z.name, rect: z.rect })));
+}
+
+/** Draw zone outlines (comp px) mapped by comp px × k + (ox, oy), with a light tint so a crop wholly inside a panel still shows it. */
+function drawZones(ctx: ReturnType<Canvas['getContext']>, zones: SafeZone[], ox: number, oy: number, k: number): void {
+  const lw = Math.max(1, Math.round(k * 4));
+  ctx.save();
+  ctx.lineWidth = lw;
+  ctx.setLineDash([lw * 3, lw * 2]);
+  zones.forEach((z, i) => {
+    const off = (i % 3) * lw; // the three platforms' panels overlap: stagger them so each stays visible
+    const x = ox + z.rect.x * k + off, y = oy + z.rect.y * k + off, w = z.rect.w * k - 2 * off, h = z.rect.h * k - 2 * off;
+    const colour = SAFE_COLOURS[z.platform] ?? '#ffffff';
+    ctx.globalAlpha = 0.07;
+    ctx.fillStyle = colour;
+    ctx.fillRect(x, y, w, h);
+    ctx.globalAlpha = 1;
+    ctx.strokeStyle = colour;
+    ctx.strokeRect(x, y, w, h);
+  });
+  ctx.restore();
+}
+
+/** The crop with a legend strip below it naming the panels the crop region touches (labels never cover the picture). */
+function withLegend(crop: Canvas, names: { platform: string; name: string }[]): Canvas {
+  if (!names.length) return crop;
+  const fontPx = 18, lineH = fontPx + 6;
+  const out = createCanvas(crop.width, crop.height + names.length * lineH + 8);
+  const ctx = out.getContext('2d');
+  ctx.fillStyle = '#16161a';
+  ctx.fillRect(0, 0, out.width, out.height);
+  ctx.drawImage(crop, 0, 0);
+  ctx.font = `${fontPx}px "JetBrains Mono", "Inter", sans-serif`;
+  ctx.textBaseline = 'top';
+  names.forEach((n, i) => {
+    ctx.fillStyle = SAFE_COLOURS[n.platform] ?? '#ffffff';
+    ctx.fillText(`under: ${n.platform} ${n.name}`, 8, crop.height + 4 + i * lineH, out.width - 16);
+  });
+  return out;
+}
+
+/** A zoomed crop of a finding's box: padded 30%, long edge 512..1568, box outlined in red (and interface panels with --safe). */
+export function cropFinding(img: RGBAFrame, scale: number, box: [number, number, number, number], zones: SafeZone[] = []): Canvas {
   const px = box.map((v) => v * scale) as [number, number, number, number];
   const pw = Math.max(px[2] * 0.3, 8), ph = Math.max(px[3] * 0.3, 8);
   const x0 = Math.max(0, Math.floor(px[0] - pw)), y0 = Math.max(0, Math.floor(px[1] - ph));
@@ -129,8 +181,14 @@ export function cropFinding(img: RGBAFrame, scale: number, box: [number, number,
   ctx.strokeStyle = '#ff2020';
   ctx.lineWidth = lw;
   ctx.strokeRect(...r);
-  return out;
+  if (!zones.length) return out;
+  drawZones(ctx, zones, -x0 * z, -y0 * z, scale * z);
+  // the panels the finding's box itself is under (comp px)
+  const under = zones.filter((q) => Math.min(box[0] + box[2], q.rect.x + q.rect.w) - Math.max(box[0], q.rect.x) > 0 && Math.min(box[1] + box[3], q.rect.y + q.rect.h) - Math.max(box[1], q.rect.y) > 0);
+  return withLegend(out, under);
 }
+
+const colourName = (p: string) => ({ tiktok: 'cyan', reels: 'magenta', shorts: 'yellow' } as Record<string, string>)[p] ?? 'white';
 
 async function savePng(cv: Canvas, path: string): Promise<void> {
   writeFileSync(path, await cv.encode('png'));
@@ -165,6 +223,10 @@ export async function look(project: ProjectFile, opts: LookOptions): Promise<Loo
   const probeFn: ProbeFn | undefined = opts.deps ? opts.deps.backend?.probe?.bind(opts.deps.backend) : await realProbe(opts.baseDir);
   const facts = await probeAssets(project, opts.baseDir, probeFn);
   const platforms = platformsOf(project, opts);
+  const zones = opts.safe ? safeOverlays(platforms, W, H) : [];
+  if (opts.safe) notes.push(zones.length
+    ? `--safe: interface panels outlined on the sheet and crops (${[...new Set(zones.map((z) => z.platform))].map((p) => `${p} ${colourName(p)}`).join(', ')}); outlines are never rendered`
+    : `--safe: no interface panels for ${platforms.join(', ')} on a ${W}x${H} comp (they exist for tiktok, reels and shorts on vertical comps)`);
 
   // project stage first (no pixels): its boxed findings' frames are rendered too, for their crops
   const lo = { baseDir: opts.baseDir, registry, media: facts };
@@ -201,6 +263,7 @@ export async function look(project: ProjectFile, opts: LookOptions): Promise<Loo
     const col = i % layout.cols, row = Math.floor(i / layout.cols);
     const x = PAD + col * (layout.tileW + PAD), y = PAD + row * (layout.tileH + LABEL_H + PAD);
     if (s) ctx.drawImage(toCanvas(s.image), x, y, layout.tileW, layout.tileH);
+    if (zones.length) drawZones(ctx, zones, x, y, layout.tileW / W);
     ctx.fillStyle = '#e8e8ec';
     ctx.fillText(`${(f / fps).toFixed(2)}s · f${f}`, x + layout.tileW / 2, y + layout.tileH + LABEL_H / 2);
   });
@@ -238,7 +301,7 @@ export async function look(project: ProjectFile, opts: LookOptions): Promise<Loo
     const s = sharp.get(f.frame) ?? byFrame.get(f.frame);
     if (!s) return;
     const path = join(dir, `qa-${i + 1}.png`);
-    writes.push(savePng(cropFinding(s.image, s.image.width / W, f.box), path));
+    writes.push(savePng(cropFinding(s.image, s.image.width / W, f.box, zones), path));
     crops.push({ finding: i, path });
   });
   await Promise.all(writes);

@@ -16,7 +16,7 @@ export { defineCommand } from '../core/commands/registry.js';
 export type { CommandDef, TemplateDef, TemplateOutput, CommandContext } from '../core/commands/registry.js';
 export type { FilterSpec } from '../render/types.js';
 
-export const PLUGIN_API_VERSION = '1.3.0';
+export const PLUGIN_API_VERSION = '1.4.0';
 
 /** A CanvasRenderingContext2D-compatible drawing context (Skia today; a GPU renderer provides the same contract). */
 export type Canvas2D = SKRSContext2D;
@@ -129,6 +129,11 @@ export interface CheckContext {
   /** the render will use --alpha (since 1.1) */
   alpha?: boolean;
   safeArea(platform?: string): { x: number; y: number; w: number; h: number };
+  /**
+   * (API 1.4) the platform's interface overlays in comp px: header, action buttons, caption panel (none for youtube /
+   * none). Lets a check say which panel a layer sits under.
+   */
+  uiZones?(platform?: string): { name: string; rect: { x: number; y: number; w: number; h: number } }[];
 }
 
 export interface CheckDef {

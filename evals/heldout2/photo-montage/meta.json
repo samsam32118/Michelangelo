@@ -1,0 +1,18 @@
+{
+  "id": "photo-montage",
+  "tags": ["stills", "motion", "transitions", "audio", "social"],
+  "timeout_min": 20,
+  "expects_weak": false,
+  "fixtures": [
+    "photos/1.jpg ... photos/5.jpg (1920x1080; each a distinct muted background colour with darker shapes in the lower part and two white marker squares at x = 768 and 1152, y = 540)",
+    "music.wav (24 s chord 220/277/330 Hz with a slow tremolo, 48 kHz)"
+  ],
+  "checks": [
+    "out/montage.mp4: 1920x1080 with audio, 20 s +/- 0.3, not black/static/silent",
+    "at 2, 6, 10, 14, 18 s the frame shows photos 1-5 in order (nearest background colour)",
+    "every photo pushes in: marker distance grows by >= 4% between 0.6 s after and 0.6 s before its transitions",
+    "crossfades: within +-0.4 s of 4, 8, 12, 16 s some frame is a blend of the two photos (colour 20-80% along the line between them)",
+    "music under the whole slideshow (chord tones present at 10 s); fade-out: last 0.4 s >= 12 dB below 15-16 s, 19.0-19.5 s >= 3 dB below, 17.0-17.8 s within 4 dB",
+    "montage.mgl.json validates, 1920x1080, uses all five photos and music.wav; inputs unchanged"
+  ]
+}

@@ -1,0 +1,18 @@
+{
+  "id": "logo-bug-dips",
+  "tags": ["editing", "transitions", "branding", "compositing"],
+  "timeout_min": 20,
+  "expects_weak": false,
+  "fixtures": [
+    "clips/01.mp4, clips/02.mp4, clips/03.mp4 (1280x720 30 fps, 4 s each, visually distinct lavfi sources; each with its own tone: 330 / 550 / 770 Hz)",
+    "logo.png (200x200 RGBA: a #14205a disc of diameter 180 on transparency)"
+  ],
+  "checks": [
+    "out/bug.mp4: 1280x720 with audio, 12 s +/- 0.25, not black/static/silent",
+    "at 2 / 6 / 10 s the picture (outside the logo corner) is clip 01 / 02 / 03 (mean abs difference <= 20 and far below the other clips)",
+    "near-black frame (outside the logo) within 0.2 s of each cut (4 s, 8 s); bright at 3.4 / 4.6 / 7.4 / 8.6 s (dips are short)",
+    "logo disc in the top-right: diameter 180 +/- 20 px, right edge 10-60 px from the frame edge, top 10-60 px; luma blend alpha 0.6 +/- 0.1 at 1 / 6 / 11 s",
+    "each segment's audio is its own clip's tone (>= 20 dB above the other two)",
+    "bug.mgl.json validates, 1280x720, uses the three clips and logo.png; inputs unchanged"
+  ]
+}

@@ -1,0 +1,1 @@
+The sound in `interview.mp4` is out of sync: it lags behind the picture. There are a few slate claps in it (a white flash in the picture with a beep in the sound) that should line up exactly. Fix the sync without moving or shortening the picture, save the project as `synced.mgl.json` and render `out/synced.mp4`.

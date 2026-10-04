@@ -1,0 +1,16 @@
+{
+  "id": "av-sync-fix",
+  "tags": ["audio", "editing", "sync", "weak"],
+  "timeout_min": 20,
+  "expects_weak": true,
+  "fixtures": [
+    "interview.mp4 (1280x720 30 fps 12 s: grey background with moving boxes, 2-frame white flashes at four times; AAC audio = flite speech plus 60 ms 2 kHz beeps that lag their flashes by a fixed 13 frames)"
+  ],
+  "checks": [
+    "out/synced.mp4: 1280x720 with audio, 12 s +/- 0.2, not black/static/silent",
+    "picture timing unchanged: four flashes, each within 1 frame of its time in interview.mp4",
+    "every beep onset is within 45 ms of its flash",
+    "speech kept: correlation with interview.mp4's audio (best lag) >= 0.85 over 2-7 s, at the corrected offset (+-1 frame)",
+    "synced.mgl.json validates, uses interview.mp4; input unchanged"
+  ]
+}

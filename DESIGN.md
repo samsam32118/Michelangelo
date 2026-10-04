@@ -671,3 +671,20 @@ An adversarial review (2026-10-03) found 24 problems. Each is resolved here; the
 | 22 | `comp.set fps` | Rescales every time in the comp (rounded, reported) |
 | 23 | QA exit codes | `look`/`check` exit 0 with findings unless `--strict` (exit 1 on any error-level finding); `--json` has `issues: N` |
 | 24 | Drift | `id.rename` command rewrites references; `clip.set` of a constant on a keyframed property is an error naming `key.clear`; plugin `draw` must be a pure function of (params, frame, seed); each render segment starts with an IDR and the frame count per segment is exact; `doctor` reports whether fixture tools (flite, drawtext) exist |
+
+### 16.1 Eval isolation as built (2026-10-04)
+
+The user-level sandbox of #1 needs the agent's credentials copied to another Unix user, and a mount-namespace
+variant needs privileged namespace tricks; both were refused by this environment's safety policy, rightly. What runs
+instead ("audit" isolation, `evals/run.mjs --no-sandbox`):
+
+- each task runs in a fresh directory outside the repository, with a fresh `HOME` (no memory, settings or skills
+  other than the copied Michelangelo skill) and only the packed library installed from a tarball;
+- the agent runs `claude -p` in the default permission mode with an allowlist (file tools, and the shell for `npx`,
+  `mgl`, `node`, `npm`, `ffmpeg`, `ffprobe` and plain file commands; no web tools), never `bypassPermissions`;
+- the agent is not technically prevented from reading the repository; every tool call touching a path outside its
+  run dir (`/home`, `/root`, the scratchpad, `evals/`) is recorded as a violation and reported per task, and a run
+  with a violation that reads graders or held-out tasks is counted as a failure;
+- grading runs after the agent exits, with the grader-only files stashed outside the run dir while the agent works.
+
+Fresh cloud sessions (separate containers) remain the stronger option for the held-out set when available.

@@ -1,0 +1,60 @@
+{
+  "date": "2026-10-04T02:38:37.848Z",
+  "seconds": 30,
+  "cpus": 4,
+  "cpu": "Intel(R) Xeon(R) Processor @ 2.80GHz",
+  "node": "v22.22.0",
+  "targets": {
+    "look": 10,
+    "draft": 1,
+    "final": 3,
+    "framecraft": 6.4
+  },
+  "rows": [
+    {
+      "project": "short",
+      "size": "1080x1920",
+      "seconds": 30,
+      "errors": [],
+      "look": 2.781180742,
+      "draft": 21.899591064,
+      "draftRt": 0.7299863688,
+      "draftEst": 26.531563519318254,
+      "draftSegments": 2,
+      "final": 46.412898593,
+      "finalRt": 1.5470966197666667,
+      "finalEst": 50.40753819119128,
+      "segments": 1
+    },
+    {
+      "project": "text",
+      "size": "1080x1920",
+      "seconds": 30,
+      "errors": [],
+      "look": 0.12796446499999728,
+      "draft": 7.791975707000005,
+      "draftRt": 0.2597325235666668,
+      "draftEst": 8.473871613634003,
+      "draftSegments": 1,
+      "final": 30.360366189000008,
+      "finalRt": 1.0120122063000003,
+      "finalEst": 37.67007055769657,
+      "segments": 1
+    },
+    {
+      "project": "hevc",
+      "size": "1920x1080",
+      "seconds": 30,
+      "errors": [],
+      "look": 5.717738301999998,
+      "draft": 23.555688119,
+      "draftRt": 0.7851896039666666,
+      "draftEst": 33.41912671931657,
+      "draftSegments": 2,
+      "final": 42.450557069000006,
+      "finalRt": 1.4150185689666668,
+      "finalEst": 49.23863131768925,
+      "segments": 1
+    }
+  ]
+}

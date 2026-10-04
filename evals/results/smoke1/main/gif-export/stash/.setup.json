@@ -1,0 +1,23 @@
+{
+ "created": "2026-10-04T02:40:27.956Z",
+ "hashes": {
+  ".claude/skills/michelangelo/SKILL.md": "6f98a2c3db99df6f28434daa668e3bf02fe1dc847371fe0db49e80c0aece5c31",
+  ".claude/skills/michelangelo/docs/reference/audio.md": "d1c7717a19f2686768974b5b4e7d889bb6335c0957175a6fe7a9806fff06a89f",
+  ".claude/skills/michelangelo/docs/reference/commands.md": "834d3668fa5bfd33167a0449465c228b11f04ea05a2ff036d6d3214ac769de74",
+  ".claude/skills/michelangelo/docs/reference/editing.md": "20e4db936168c3667da374d3b45a242dec362a19fdfa690847a2b02351334d16",
+  ".claude/skills/michelangelo/docs/reference/effects.md": "bbc11e2c60dfbb8f888056145e20f565898940dd298830e43cd0efb65e25b7fc",
+  ".claude/skills/michelangelo/docs/reference/errors.md": "3c3295b6712c5deb6aca885d640c424c1d13d329d04c177b32d6043ef4dee273",
+  ".claude/skills/michelangelo/docs/reference/format.md": "f8ac319879de248f95cc0befebd38427465734fd5e1be5b34c0ea6c0ea123d13",
+  ".claude/skills/michelangelo/docs/reference/look-and-qa.md": "527a9d697e64ef1b51210d3d88a14f24e71125d66a9f0d0f23b47e734cb21fe3",
+  ".claude/skills/michelangelo/docs/reference/plugins.md": "86bde4a1473cce7038fa897986a85909cf77424529ae33ab93287c272159be15",
+  ".claude/skills/michelangelo/docs/reference/rendering.md": "fdc489c2d358789d3b5c0e9c21050e8959c0c150098d57ba62910d42f2e5161d",
+  ".claude/skills/michelangelo/docs/reference/sdk.md": "770b8e0ad3f9bd6b8fb9a826457010ae3971633342b1832e3cbfe2aa9765168a",
+  ".claude/skills/michelangelo/docs/reference/templates.md": "8424b3255a084d80c8f698b5618c2850da436eac65699b869d958176ca85c4f9",
+  ".claude/skills/michelangelo/docs/reference/text-and-captions.md": "765a17a10d3c0163db4b20277f4e20fc3f361c436faaec3f74016981446ff5f7",
+  "demo.mgl.json": "23ac98709bfbe9e429ca38523a2dc747bcf6af90f1b8aaeea280edc1c1ee25a0",
+  "media/bg.mp4": "dccf1f0d6c1e5dbae4b7f75c9bb72fd9e41c3a359a08bace95295b786db91d27",
+  "package-lock.json": "9c0267ab77bda97df356717525299c56ce9e0f3279f72a96ed226da1d1335f23",
+  "package.json": "710d1d57b63200a6845f6954ab04ae561034d6cdec58ba3473a480af279bfc5f"
+ },
+ "info": {}
+}

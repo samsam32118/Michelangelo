@@ -49,7 +49,9 @@ export function parseArgs(argv) {
     }
   }
   if (!['main', 'heldout'].includes(o.set)) throw new Error(`--set ${o.set}: use main or heldout.`);
-  if (!o.sandbox && !o.dryRun) throw new Error('--no-sandbox is for dry runs only: real agent runs must be sandboxed. fix: add --dry-run or drop --no-sandbox.');
+  // --no-sandbox with real agents = "audit" isolation: the agent runs as the current user in a fresh directory with a
+  // fresh HOME; it is not prevented from reading the repository, but every access outside its run dir is recorded
+  // as a violation from the transcript and reported (DESIGN.md §16 #1 records why).
   o.label ??= `${new Date().toISOString().slice(0, 10)}-${o.dryRun ? 'dry' : 'run'}`;
   if (!/^[A-Za-z0-9._-]+$/.test(o.label)) throw new Error(`--label "${o.label}": use letters, digits, ".", "_" and "-".`);
   return o;
@@ -70,10 +72,16 @@ function killProcsIn(dir) {
   }
 }
 
+/** What an eval agent may use: file tools, and the shell for the library, Node, ffmpeg and plain file commands. */
+export const AGENT_TOOLS = ['Read', 'Write', 'Edit', 'Glob', 'Grep', 'TodoWrite',
+  ...['npx', 'mgl', 'node', 'npm', 'ffmpeg', 'ffprobe', 'ls', 'cat', 'head', 'tail', 'wc', 'mkdir', 'cp', 'mv', 'grep', 'find', 'echo', 'pwd', 'sort', 'diff', 'file', 'stat', 'du', 'python3'].map((c) => `Bash(${c}:*)`)];
+
 const children = new Set();
 function runAgent({ dir, prompt, env, model, maxTurns, timeoutMs, transcript, stderrFile, sandbox, claude = 'claude' }) {
   return new Promise((done) => {
-    const claudeArgs = ['-p', prompt, '--output-format', 'stream-json', '--verbose', '--model', model, '--permission-mode', 'bypassPermissions', '--max-turns', String(maxTurns)];
+    const claudeArgs = ['-p', prompt, '--output-format', 'stream-json', '--verbose', '--model', model, '--max-turns', String(maxTurns),
+      // default permission mode with an allowlist (no bypass): anything else is denied in -p mode and counted
+      '--allowedTools', ...AGENT_TOOLS, '--disallowedTools', 'WebFetch', 'WebSearch'];
     const envArgs = Object.entries(env).map(([k, v]) => `${k}=${v}`);
     const [cmd, args] = sandbox ? ['runuser', ['-u', S.USER, '--', 'env', '-i', ...envArgs, claude, ...claudeArgs]] : [claude, claudeArgs];
     const out = createWriteStream(transcript), err = createWriteStream(stderrFile);
@@ -136,7 +144,8 @@ export async function main(argv = process.argv.slice(2)) {
     template = await S.buildTemplate(tgz, { log });
     log(`template ${S.TEMPLATE}: michelangelo ${template.version} (${template.offline ? 'offline install' : 'online install'}), skill ${template.skill ? 'copied' : 'MISSING'}`);
   }
-  if (!o.dryRun) agentEnv = o.sandbox ? (await S.prepareHome({ passEnv: o.passEnv, credentials: o.credentials, log })).env : {};
+  if (!o.dryRun) agentEnv = o.sandbox ? (await S.prepareHome({ passEnv: o.passEnv, credentials: o.credentials, log })).env
+    : { HOME: mkdtempSync(join(tmpdir(), 'mgl-eval-home-')), DISABLE_AUTOUPDATER: '1' };
   const gradeEnv = { MGL_EVAL_RUN_AS: o.sandbox ? S.USER : '', ...(existsSync(S.templateCli()) ? { MGL_EVAL_MGL: S.templateCli() } : {}) };
   const unlock = o.sandbox ? S.lockRepo(REPO) : () => {};
   const onSignal = () => { killChildren(); };
@@ -164,7 +173,7 @@ export async function main(argv = process.argv.slice(2)) {
           const a = await runAgent({ dir, prompt, env: agentEnv, model: o.model, maxTurns: o.maxTurns, timeoutMs: (meta.timeout_min ?? 15) * 60_000 * o.timeoutScale,
             transcript: join(privDir, 'transcript.jsonl'), stderrFile: join(privDir, 'agent.stderr.log'), sandbox: o.sandbox, claude: o.claude });
           Object.assign(r, { timedOut: a.timedOut, wallSec: a.wallSec, exitCode: a.code });
-          r.metrics = metricsFrom(readTranscript(join(privDir, 'transcript.jsonl')), { runDir: dir, forbidden: [REPO, '/root'] });
+          r.metrics = metricsFrom(readTranscript(join(privDir, 'transcript.jsonl')), { runDir: dir, forbidden: [REPO, '/root', '/home', '/tmp/claude-0', EVALS] });
         }
         S.unstash(dir, join(privDir, 'stash'));
         const g = await gradeIn(join(tdir, 'grade.mjs'), dir, gradeEnv);
@@ -185,7 +194,7 @@ export async function main(argv = process.argv.slice(2)) {
     if (o.sandbox) log('repository unlocked');
   }
   const s = summarise(results, {
-    label: o.label, set: o.set, model: o.dryRun ? 'none' : o.model, date: new Date().toISOString(), dryRun: o.dryRun, sandbox: o.sandbox, packageVersion: template?.version, timeoutScale: o.timeoutScale,
+    label: o.label, set: o.set, model: o.dryRun ? 'none' : o.model, date: new Date().toISOString(), dryRun: o.dryRun, sandbox: o.sandbox, isolation: o.sandbox ? 'user' : 'audit', packageVersion: template?.version, timeoutScale: o.timeoutScale,
   });
   writeSummary(outRoot, s, { hideChecks: hidden });
   if (hidden) writeSummary(privRoot, s);

@@ -54,3 +54,7 @@ Status as of 2026-10-04 (branch `claude/michelangelo-v1`, draft PR #1). Measured
 15. **Template library.** On purpose, only a couple of high-quality items per kind (hook-title and outro
     templates, hormozi and word-pop caption styles, whip and zoom-punch transitions, two fonts). A larger library
     is a separate effort.
+16. **Recipe Short render speed.** A `mgl new shorts --script` Short (animated noise and gradient backgrounds,
+    particles, glow, transitions) drafts at about 2.4x real time on 4 vCPUs (was 4x before the glow became a
+    gradient), above the 1x draft target the typical-Short benchmark meets. The per-pixel noise generator and
+    particles are the next costs; add the recipe Short to `npm run bench`.

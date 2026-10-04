@@ -511,8 +511,12 @@ defineCommand({
         bgIds.push(`bg${i + 1}`);
       }
       // depth and motion over the whole piece: a slow glow, plus drifting particles for the loud looks
-      await step(ctx, notes, { op: 'clip.add', id: 'glow', track: tDecor, at: 0, len: total, shape: { type: 'ellipse', size: [Math.round(W * 0.9), Math.round(W * 0.9)], fill: look.accent }, opacity: 0.18, tags: ['role:watermark'],
-        x: [[0, Math.round(W * 0.25)], [total - 1, Math.round(W * 0.75), 'inOutSine']], y: [[0, Math.round(H * 0.3)], [total - 1, Math.round(H * 0.62), 'inOutSine']], fx: [{ type: 'blur', radius: Math.round(160 * u), edges: 'transparent' }] });
+      // a radial-gradient disc looks like a heavily blurred one at a fraction of the cost (a 160 px blur per frame
+      // was half the draft render time)
+      const glowD = Math.round(W * 0.9 + 320 * u);
+      await step(ctx, notes, { op: 'clip.add', id: 'glow', track: tDecor, at: 0, len: total, opacity: 0.18, tags: ['role:watermark'],
+        shape: { type: 'ellipse', size: [glowD, glowD], gradient: { type: 'radial', stops: [[0, look.accent], [0.4, look.accent], [0.7, `${look.accent}80`], [1, `${look.accent}00`]] } },
+        x: [[0, Math.round(W * 0.25)], [total - 1, Math.round(W * 0.75), 'inOutSine']], y: [[0, Math.round(H * 0.3)], [total - 1, Math.round(H * 0.62), 'inOutSine']] });
       if (look.particles) {
         const tP = await ensureTrack(ctx, notes, comp, { id: 'V3', above: tDecor });
         await step(ctx, notes, { op: 'clip.add', id: 'particles', track: tP, at: 0, len: total, gen: { type: 'particles', count: 46, size: Math.round(7 * u), speed: Math.round(70 * u), color: '#ffffff', seed, twinkle: 0.6 }, opacity: 0.3, tags: ['role:watermark'] });

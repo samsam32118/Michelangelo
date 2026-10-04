@@ -1,0 +1,8 @@
+{
+  "id": "collage-kit-basic",
+  "tags": ["plugins", "generator", "template"],
+  "timeout_min": 15,
+  "expects_weak": false,
+  "fixtures": ["demo.mgl.json (an empty 1080x1920 30 fps comp)", "plugins/collage-kit"],
+  "checks": ["demo.mgl.json names the plugin; a clip with gen paper-field #1f3fe0 spans the comp", "clips tagged template:paper-number with the text '74%' start at 0 s; clips tagged template:tape-label with the text 'ONE STUDY' start at 0.5 s and sit above the number", "out/collage.png: mostly blue, with cream paper pixels in the upper half"]
+}

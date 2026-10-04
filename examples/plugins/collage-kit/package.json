@@ -1,0 +1,21 @@
+{
+  "name": "collage-kit",
+  "version": "1.0.0",
+  "description": "Hand-cut paper collage kit: stop-motion boil, flat-ink silhouettes, paper field, cut-out / tape-label / paper-number templates.",
+  "type": "module",
+  "main": "src/index.ts",
+  "michelangelo": {
+    "api": "^1.3.0",
+    "kinds": [
+      "effect",
+      "generator",
+      "template"
+    ]
+  },
+  "scripts": {
+    "test": "node --test test/*.test.ts"
+  },
+  "peerDependencies": {
+    "michelangelo": ">=0.1.0"
+  }
+}

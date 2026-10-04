@@ -119,9 +119,36 @@ QA (built-in, project stage): `stock-credits` warns when a CC BY asset is used a
 |---|---|---|
 | **sfx** | Openverse → Freesound | Measured from this container: keyless search returns Freesound CC0 / CC BY effects with HQ MP3 previews on `cdn.freesound.org` (downloads work). Openverse's `category=sound_effect` filter returns nothing, so sfx means source Freesound plus a duration cap (default ≤ 10 s). |
 |  | Freesound API (`FREESOUND_API_KEY`, optional) | original WAV/FLAC files, duration and tag filters |
-| **music** | Openverse → Jamendo, ccMixter | CC BY tracks (measured: "Upbeat Corporate", 1:40, Jamendo, CC BY); `license_type=commercial,modification` filtering |
-| **image** | Openverse images, Wikimedia Commons, NASA, Art Institute of Chicago (CC0 only) | Pexels (`PEXELS_API_KEY`), Unsplash (`UNSPLASH_ACCESS_KEY`) optional |
-| **video** | Wikimedia Commons (webm/ogv; the transcode closest to the comp's height), NASA Image and Video Library, Internet Archive (items with a PD or CC licence URL only) | Pexels, Pixabay (`PIXABAY_API_KEY`) optional |
+| **music** | Openverse → Jamendo, ccMixter; Internet Archive **Musopen** (public-domain classical recordings, CC0 / PD, items without a licence URL skipped) | CC BY tracks (measured: "Upbeat Corporate", 1:40, Jamendo, CC BY); `license_type=commercial,modification` filtering |
+| **image** | Openverse images, Wikimedia Commons, NASA, plus the public-domain archives in the next table | Pexels (`PEXELS_API_KEY`), Unsplash (`UNSPLASH_ACCESS_KEY`) optional |
+| **video** | Wikimedia Commons (webm/ogv; the transcode closest to the comp's height), NASA Image and Video Library, Internet Archive (items with a PD or CC licence URL only), including the **Prelinger Archives** (10,468 ephemeral, industrial and educational films, measured: marked public domain) | Pexels, Pixabay (`PIXABAY_API_KEY`) optional |
+
+**Public-domain archives for images** (old scanned books, prints, maps, photographs, paintings). Measured from this
+container on 2026-10-04:
+
+| Archive | What it has | Access | Licence filter |
+|---|---|---|---|
+| **Smithsonian Open Access** | 5M+ CC0 items across 21 museums and Smithsonian Libraries (natural-history plates, book scans, aircraft, portraits) | `api.si.edu`, needs a free api.data.gov key (`SMITHSONIAN_API_KEY`). The shared `DEMO_KEY` allows 10 requests and was exhausted after one, so it is not a usable default | `usage.access == "CC0"` |
+| **Library of Congress** | photographs, prints, posters, maps (Prints & Photographs, FSA/OWI, HABS) | `loc.gov/photos/?fo=json`, keyless | only items whose rights say "No known restrictions on publication" (read per item; anything else dropped) |
+| **Metropolitan Museum** | 400k+ open-access works | keyless; `v1.1/search?isPublicDomain=true` (the old `v1/search` was retired on 2026-10-01, measured) | `isPublicDomain` |
+| **Art Institute of Chicago** | 60k+ public-domain works | keyless (`api.artic.edu`), IIIF images | `is_public_domain` |
+| **Cleveland Museum of Art** | 60k+ CC0 works | keyless (`openaccess-api.clevelandart.org`) | `cc0=1` |
+| **Rijksmuseum** | Dutch Golden Age paintings, prints, drawings | keyless Linked Art search (`data.rijksmuseum.nl`) + IIIF | CC0 / PD statement |
+| **Wellcome Collection** | medicine and science history: anatomy plates, botanical prints, old book scans | keyless (`api.wellcomecollection.org`), IIIF | PDM / CC0 / CC BY only |
+| **SMK (National Gallery of Denmark)** | paintings and prints | keyless (`api.smk.dk`) | `public_domain:true` |
+| **Europeana** | 13M+ items from European libraries and museums | `api2demo` key works for testing; real use needs a free key (`EUROPEANA_API_KEY`) | `reusability=open` |
+
+Not added: **Biodiversity Heritage Library** and **NYPL Digital Collections** need registered keys (401 without);
+their best material is also reachable through Smithsonian, Openverse or Wikimedia Commons. **Internet Archive Book
+Images**, **British Library** and Flickr Commons sit on Flickr, whose API needs a key (a later keyed source).
+**Public Domain Image Archive** (Public Domain Review) has no API. **National Gallery of Art** publishes open data
+but no search API. **David Rumsey** maps are CC BY-NC-SA (refused by the licence rules).
+
+**Why query these directly when Openverse indexes some of them:** Openverse's coverage of the old-book material is
+thin (Smithsonian Libraries: 55 images; NYPL: 1,281) and its copies can be small (Biodiversity Heritage Library
+results came back 575–624 px wide). A vertical video needs at least 1920 px on the long side, so archive sources
+fetch the full-resolution IIIF image and `media.search` shows each result's real size and drops images under
+`minWidth` (default: the comp's long side ÷ 2, with a note when an image will be upscaled).
 
 Measured reachability (2026-10-04): Openverse, Freesound CDN, Wikimedia Commons, NASA and Internet Archive return
 200. Commons needs a descriptive `User-Agent`, which every request sends (`michelangelo/<v> (+repo url)`). Freesound
@@ -151,7 +178,8 @@ a credits check, and compared with `script-only-short` on cost per high-quality 
 2. Core API 1.4 for open-media: `stock` provider kind, `media.search` / `media.fetch` / `media.credits`, licence
    rules, sound-as-text on fetch, the two QA checks, docs (`mgl docs media`, `mgl docs plugins`), schema
    regenerated, `PLUGIN_API_VERSION = 1.4.0`.
-3. `examples/plugins/open-media`: sfx and music first (Openverse), then images, then video.
+3. `examples/plugins/open-media`: sfx and music first (Openverse, Musopen), then images (Openverse, Commons, the
+   public-domain archives), then video (Commons, NASA, Prelinger).
 4. The `open-media-short` eval, run with and without the plugin.
 
 Before each push: `npm run typecheck`, `npm test`, `npm run docs:check`, `mgl plugin test examples/plugins/open-media`.
@@ -170,5 +198,6 @@ Before each push: `npm run typecheck`, `npm test`, `npm run docs:check`, `mgl pl
 
 1. **Safe zones in core, not a plugin.** Recommended, so every vertical project is checked.
 2. **Share-alike media:** refused unless asked (it would bind the whole video).
-3. **Keyed sources** (Freesound API, Pexels, Pixabay, Unsplash): off unless their key is in the environment.
+3. **Keyed sources** (Freesound API, Pexels, Pixabay, Unsplash, Smithsonian, Europeana): off unless their key is in
+   the environment. Smithsonian is the one most worth a key (free, instant from api.data.gov).
 4. **Network in evals:** allow the open-media hosts for the `open-media-short` eval only.

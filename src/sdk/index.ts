@@ -145,16 +145,27 @@ export function withPluginProblems<E>(e: E, problems: readonly Problem[]): E {
 
 async function attach(p: Project): Promise<MglProject> {
   const { loadRegistry } = await import('../plugin/loader.js');
-  const reg = await loadRegistry(p.data, p.dir);
-  p.services = makeServices(p.dir, reg);
   const self = p as MglProject;
-  self.registry = reg;
-  self.pluginProblems = reg.problems;
-  const edit = p.edit.bind(p);
-  self.edit = async (cmds, opts) => {
-    try { return await edit(cmds, opts); } catch (e) { throw withPluginProblems(e, reg.problems); }
+  let loaded = '';
+  /** (Re)load the registry when the project's plugin list changed: a plugin named by `project.set plugins=...` is usable on this session at once. */
+  const sync = async (): Promise<void> => {
+    const want = JSON.stringify(p.data.project?.plugins ?? null);
+    if (self.registry && want === loaded) return;
+    const reg = await loadRegistry(p.data, p.dir);
+    loaded = want;
+    p.services = makeServices(p.dir, reg);
+    self.registry = reg;
+    self.pluginProblems = reg.problems;
   };
-  self.dryRun = (cmds) => p.edit(cmds, { dryRun: true });
+  await sync();
+  const edit = p.edit.bind(p), undo = p.undo.bind(p), redo = p.redo.bind(p);
+  // a dry run changes nothing, so it cannot change the plugin list either
+  self.edit = async (cmds, opts) => {
+    try { return await edit(cmds, opts); } catch (e) { throw withPluginProblems(e, self.pluginProblems); } finally { if (!opts?.dryRun) await sync(); }
+  };
+  self.undo = async (steps) => { try { return await undo(steps); } finally { await sync(); } };
+  self.redo = async (steps) => { try { return await redo(steps); } finally { await sync(); } };
+  self.dryRun = (cmds) => self.edit(cmds, { dryRun: true });
   self.look = (opts = {}) => lookProject(self, opts);
   self.render = (out, opts = {}) => renderProject(self, out, opts);
   self.check = (opts = {}) => checkProject(self, opts);

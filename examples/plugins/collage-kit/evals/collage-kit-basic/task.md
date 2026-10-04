@@ -1,0 +1,1 @@
+Make a 3 s paper-collage title card in `demo.mgl.json` with the `collage-kit` plugin: a `paper-field` background in #1f3fe0 for the whole comp, the number "74%" on a torn paper scrap (`paper-number`) in the upper half from 0 s, and a taped label (`tape-label`) reading "ONE STUDY" above it from 0.5 s. Render a still at 2 s to `out/collage.png`.

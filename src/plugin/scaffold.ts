@@ -10,7 +10,7 @@ import { builtinRegistry } from '../builtin/index.js';
 import '../core/commands/index.js';
 import { listCommands } from '../core/commands/registry.js';
 
-export const SCAFFOLD_KINDS = ['effect', 'audio-effect', 'transition', 'generator', 'template', 'command', 'check', 'importer', 'exporter'] as const;
+export const SCAFFOLD_KINDS = ['effect', 'audio-effect', 'transition', 'generator', 'template', 'command', 'check', 'importer', 'exporter', 'provider'] as const;
 export type ScaffoldKind = (typeof SCAFFOLD_KINDS)[number];
 
 interface Parts { src: string; test: string; task: string; checks: string[]; use: string; what: string }
@@ -442,6 +442,101 @@ test('writes one line per clip in seconds', async () => {
       checks: [`demo.mgl.json names the plugin`, 'out/list.cuts has one "start end id" line per clip of the main comp, in order'],
       use: 'mgl render demo.mgl.json out/list.cuts',
     };
+    case 'provider': return {
+      what: `a text-to-speech provider for audio.speak, "${n}", that says each word as a short tone (replace speak() with a real engine)`,
+      src: `import { definePlugin, defineProvider, type SpeakProvider } from 'michelangelo/plugin';
+
+const RATE = 48000;
+const VOICES = [
+  { id: 'low', describe: 'low tones (default)', lang: 'en-US' },
+  { id: 'high', describe: 'high tones', lang: 'en-US' },
+];
+
+/** A 16-bit mono WAV file. */
+export function wav(pcm: Int16Array): Uint8Array {
+  const out = new Uint8Array(44 + pcm.length * 2), v = new DataView(out.buffer);
+  const tag = (at: number, t: string) => { for (let i = 0; i < 4; i++) out[at + i] = t.charCodeAt(i); };
+  tag(0, 'RIFF'); v.setUint32(4, 36 + pcm.length * 2, true); tag(8, 'WAVE'); tag(12, 'fmt ');
+  v.setUint32(16, 16, true); v.setUint16(20, 1, true); v.setUint16(22, 1, true); v.setUint32(24, RATE, true);
+  v.setUint32(28, RATE * 2, true); v.setUint16(32, 2, true); v.setUint16(34, 16, true); tag(36, 'data'); v.setUint32(40, pcm.length * 2, true);
+  for (let i = 0; i < pcm.length; i++) v.setInt16(44 + i * 2, pcm[i]!, true);
+  return out;
+}
+
+/**
+ * A speak provider (plugin API 1.3): audio.speak calls speak() with the text and a path to write a WAV to
+ * (48 kHz preferred), and stores the word timings it returns (seconds) for captions.from-speech.
+ * This one needs no engine: every word becomes a tone as long as the word. Put your model or CLI here; fetch or
+ * bundle what it needs yourself (the core never downloads models) and say so in the README.
+ * Node built-ins are imported lazily, so loading the plugin costs nothing until it speaks.
+ */
+export const ${v}: SpeakProvider = defineProvider({
+  kind: 'speak',
+  id: '${n}',
+  describe: 'Says each word as a short tone (a placeholder engine).',
+  async voices() { return VOICES; },
+  async speak({ text, voice, speed, out }) {
+    const { writeFile } = await import('node:fs/promises');
+    const list = text.replace(/\\s+/g, ' ').trim().split(' ').filter(Boolean);
+    const sp = Math.min(2, Math.max(0.5, speed ?? 1));
+    const base = voice === 'high' ? 440 : 220;
+    const gap = 0.06 / sp;
+    const pcm: number[] = [];
+    const words = list.map((w, i) => {
+      const start = pcm.length / RATE, n = Math.round(((0.12 + 0.05 * w.length) / sp) * RATE), f = base * (1 + (i % 5) / 8);
+      // a sine with a short fade in and out, so words do not click
+      for (let k = 0; k < n; k++) pcm.push(Math.round(Math.sin((2 * Math.PI * f * k) / RATE) * 9000 * Math.min(1, k / 400, (n - k) / 400)));
+      const end = pcm.length / RATE;
+      for (let k = 0; k < Math.round(gap * RATE); k++) pcm.push(0);
+      return { text: w, start: Math.round(start * 1000) / 1000, end: Math.round(end * 1000) / 1000 };
+    });
+    await writeFile(out, wav(Int16Array.from(pcm)));
+    return { words };
+  },
+});
+
+export default definePlugin({ name: '${n}', version: '0.1.0', providers: [${v}] });
+`,
+      test: `import { test, assert, loadPlugin, tempFile } from 'michelangelo/testing';
+
+const plugin = await loadPlugin(import.meta.url);
+const provider = plugin.providers!.find((p) => p.id === '${n}')!;
+const { readFile } = await import('node:fs/promises');
+
+test('${n} is a speak provider with voices', async () => {
+  assert.equal(provider.kind, 'speak');
+  if (provider.kind !== 'speak') return;
+  assert.ok((await provider.voices()).length >= 1);
+});
+
+test('speak writes a 48 kHz WAV and word timings that increase', async () => {
+  if (provider.kind !== 'speak') return;
+  const out = tempFile('${n}.wav');
+  const r = await provider.speak({ text: 'Hello there, world.', out });
+  const b = await readFile(out);
+  assert.equal(b.subarray(0, 4).toString('latin1'), 'RIFF');
+  assert.equal(b.readUInt32LE(24), 48000);
+  const words = r?.words ?? [];
+  assert.deepEqual(words.map((w) => w.text), ['Hello', 'there,', 'world.']);
+  const span = words.map((w) => [w.start, w.end ?? w.start] as const);
+  for (let i = 0; i < span.length; i++) {
+    assert.ok(span[i]![1] > span[i]![0]);
+    if (i) assert.ok(span[i]![0] >= span[i - 1]![1]);
+  }
+});
+
+test('speed shortens the speech', async () => {
+  if (provider.kind !== 'speak') return;
+  const a = await provider.speak({ text: 'one two three', out: tempFile('a.wav') });
+  const b = await provider.speak({ text: 'one two three', speed: 2, out: tempFile('b.wav') });
+  const last = (r: Awaited<ReturnType<typeof provider.speak>>) => r?.words?.at(-1)?.end ?? 0;
+  assert.ok(last(b) > 0 && last(b) < last(a));
+});
+`,
+      task: `Speak "Three tips for better sleep." into \`demo.mgl.json\` with the \`${n}\` speak provider (\`audio.speak\`), add word-timed captions from it, and render to \`out/${n}.mp4\`.`,
+      checks: [`demo.mgl.json names the plugin and has a voice clip on the dialogue bus made by audio.speak`, 'a captions clip has cues with word timings', `out/${n}.mp4 has an audio stream that is not silent`],
+      use: `mgl edit demo.mgl.json audio.speak text="Three tips for better sleep." id=line1\nmgl edit demo.mgl.json captions.from-speech style=karaoke`,
+    };
   }
 }
 
@@ -455,6 +550,7 @@ export function builtinClash(kind: ScaffoldKind, name: string): string | undefin
     effect: r.effects, 'audio-effect': r.effects, transition: r.transitions, generator: r.generators, template: r.templates, check: r.checks, importer: r.importers, exporter: r.exporters,
   };
   if (maps[kind]?.has(name)) return `a built-in ${kind} is already called "${name}"`;
+  if (kind === 'provider' && [...(r.providers?.values() ?? [])].some((m) => m.has(name))) return `a built-in provider is already called "${name}"`;
   if (kind === 'command' && listCommands().some((c) => c.op.split('.')[0] === name || c.group === name)) return `built-in commands already use the "${name}." prefix`;
   return undefined;
 }

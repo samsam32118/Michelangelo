@@ -1,0 +1,13 @@
+{"michelangelo": 1,
+"project": {"name": "Iris demo", "plugins": {"iris": "^0.1.0"}},
+"comps": [
+{"id": "main", "size": [1280, 720], "fps": 30, "length": 180}
+],
+"tracks": [
+{"id": "V1", "comp": "main"}
+],
+"clips": [
+{"id": "red", "track": "V1", "at": 0, "len": 90, "color": "#ff0000"},
+{"id": "blue", "track": "V1", "at": 90, "len": 90, "color": "#0000ff", "transition": {"in": {"type": "iris", "len": 30}}}
+]
+}

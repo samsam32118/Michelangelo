@@ -1,0 +1,14 @@
+{"michelangelo": 1,
+"project": {"name": "Title card"},
+"comps": [
+{"id": "main", "size": [1920, 1080], "fps": 30, "length": 90, "bg": "#101820"}
+],
+"tracks": [
+{"id": "BG", "comp": "main"},
+{"id": "T1", "comp": "main"}
+],
+"clips": [
+{"id": "bg", "track": "BG", "at": 0, "len": 90, "color": "#101820"},
+{"id": "title", "track": "T1", "at": 0, "len": 90, "text": "Launch Day", "style": "title", "x": [[0, -600, "outCubic"], [15, 960]], "opacity": [[0, 1], [74, 1], [89, 0]]}
+]
+}

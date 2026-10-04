@@ -159,7 +159,7 @@ defineCommand({
       const at = Math.max(0, k.s);
       // keep the file's timing exactly; when cues overlap, the later one is shown while both are active
       const next = kept[i + 1];
-      if (next && next.s < k.e) ctx.note(`cues ${i + 1} and ${i + 2} overlap by ${k.e - next.s} frame(s); cue ${i + 2} replaces cue ${i + 1} on screen while both are active.`);
+      if (next && next.s < k.e) ctx.note(`cues ${i + 1} and ${i + 2} overlap by ${k.e - next.s} frame(s) in the file; timings kept as written (cue ${i + 2} replaces cue ${i + 1} on screen while both are active; nothing to fix).`);
       const len = Math.max(1, k.e - at);
       const out: { at: number; len: number; text: string; words?: number[]; speaker?: string } = { at, len, text: k.q.text };
       if (k.q.speaker) out.speaker = k.q.speaker;

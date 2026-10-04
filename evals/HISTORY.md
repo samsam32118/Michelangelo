@@ -5,3 +5,10 @@ Main and held-out sets are reported separately. One row per run (`node evals/run
 | date | label | set | model | tasks | passed | success | mean score | mean turns | mean tokens | mean wall s | shell timeouts | failed edits | violations | notes |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
 | 2026-10-04 | m1-slice | main | claude-opus-5-5 | 30 | 25 | 83.3 % | 0.9056 | 14 | 533k | 99.2 | 0 | 0 | 0 | M1 vertical slice baseline (audit isolation) |
+| 2026-10-04 | m2-fixes | main | claude-opus-5-5 | 30 | 27 | 90 % | 0.9556 | 11.2 | 426k | 51.5 | 0 | 0 | 0 | baseline 0.0556, delta 0.9; 38 permission denials; M2 after fix round 1 (audit isolation) |
+| 2026-10-04 | m2-fixes | heldout | claude-opus-5-5 | 10 | 5 | 50 % | 0.8433 | 22.4 | 984.6k | 133.6 | 0 | 0 | 1 | baseline 0.04, delta 0.8033; 37 permission denials; M2 held-out (audit isolation) |
+
+Notes:
+- m1-slice: the held-out set was not run at M1 (first held-out run is m2-fixes).
+- After m2-fixes, the beat-cut grader was corrected to accept cuts aligned with the beats as heard in the output
+  (an agent may trim the silent lead-in); regraded, m2-fixes main would be 28/30. The table keeps the original grade.

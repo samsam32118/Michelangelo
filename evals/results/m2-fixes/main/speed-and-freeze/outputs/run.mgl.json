@@ -1,0 +1,18 @@
+{"michelangelo": 1,
+"project": {"name": "Run"},
+"assets": [
+{"id": "counter", "src": "media/counter.mp4"}
+],
+"comps": [
+{"id": "main", "size": [1280, 720], "fps": 30, "length": "auto"}
+],
+"tracks": [
+{"id": "V1", "comp": "main"}
+],
+"clips": [
+{"id": "run", "track": "V1", "at": 0, "len": 30, "asset": "counter"},
+{"id": "run-2", "track": "V1", "at": 30, "len": 30, "asset": "counter", "in": 30, "speed": 2, "clock": 30},
+{"id": "run-3-hold", "track": "V1", "at": 60, "len": 30, "asset": "counter", "in": 90, "speed": 0, "muted": true, "clock": 90},
+{"id": "run-3", "track": "V1", "at": 90, "len": 150, "asset": "counter", "in": 90, "clock": 90}
+]
+}

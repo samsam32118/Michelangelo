@@ -1,0 +1,564 @@
+{
+ "label": "m2-fixes",
+ "set": "heldout",
+ "model": "claude-opus-5-5",
+ "date": "2026-10-04T04:39:06.862Z",
+ "dryRun": false,
+ "sandbox": false,
+ "isolation": "audit",
+ "packageVersion": "0.1.0",
+ "timeoutScale": 1,
+ "tasks": 10,
+ "passed": 5,
+ "successRate": 0.5,
+ "meanScore": 0.8433,
+ "meanTurns": 22.4,
+ "meanTokens": 984574,
+ "totalTokens": 9845741,
+ "totalOutputTokens": 76426,
+ "totalCostUsd": 6.29,
+ "meanWallSec": 133.6,
+ "timeouts": 0,
+ "bashTimeouts": 0,
+ "failedEdits": 0,
+ "permissionDenials": 37,
+ "violations": 1,
+ "fatalViolations": 0,
+ "violationFails": 0,
+ "meanBaselineScore": 0.04,
+ "meanDeltaScore": 0.8033,
+ "baselineTasks": 10,
+ "topErrors": [
+  [
+   "E_UNKNOWN_TOPIC",
+   2
+  ],
+  [
+   "E_ARG",
+   1
+  ]
+ ],
+ "topVerbs": [
+  [
+   "docs",
+   53
+  ],
+  [
+   "render",
+   27
+  ],
+  [
+   "check",
+   25
+  ],
+  [
+   "look",
+   20
+  ],
+  [
+   "plugin",
+   16
+  ],
+  [
+   "edit",
+   13
+  ],
+  [
+   "show",
+   9
+  ],
+  [
+   "new",
+   5
+  ]
+ ],
+ "results": [
+  {
+   "task": "audiogram-square",
+   "pass": false,
+   "score": 0.75,
+   "wallSec": 127.562,
+   "timedOut": false,
+   "timeoutMin": 25,
+   "expectsWeak": true,
+   "baselineScore": 0,
+   "exitCode": 0,
+   "outputs": 3,
+   "dirRemoved": true,
+   "deltaScore": 0.75,
+   "checks": 4,
+   "harnessError": false,
+   "metrics": {
+    "turns": 25,
+    "inputTokens": 42,
+    "outputTokens": 7946,
+    "cacheReadTokens": 1083166,
+    "cacheCreationTokens": 43649,
+    "costUsd": 0.7260902000000001,
+    "toolCalls": 24,
+    "toolCounts": {
+     "Bash": 17,
+     "Write": 1,
+     "Read": 3,
+     "Edit": 3
+    },
+    "bashTimeouts": 0,
+    "failedEdits": 0,
+    "permissionDenials": 3,
+    "errorCodes": {},
+    "verbs": {
+     "docs": 1,
+     "new": 1,
+     "show": 1,
+     "check": 1,
+     "look": 5,
+     "edit": 1,
+     "render": 1
+    },
+    "violations": 1,
+    "fatalViolations": 0,
+    "resultSubtype": "success",
+    "isError": false,
+    "apiMs": 101402,
+    "results": 1
+   }
+  },
+  {
+   "task": "caption-reflow-sidecar",
+   "pass": false,
+   "score": 0.8,
+   "wallSec": 167.331,
+   "timedOut": false,
+   "timeoutMin": 15,
+   "expectsWeak": false,
+   "baselineScore": 0,
+   "exitCode": 0,
+   "outputs": 5,
+   "dirRemoved": true,
+   "deltaScore": 0.8,
+   "checks": 5,
+   "harnessError": false,
+   "metrics": {
+    "turns": 21,
+    "inputTokens": 36,
+    "outputTokens": 9026,
+    "cacheReadTokens": 937868,
+    "cacheCreationTokens": 44347,
+    "costUsd": 0.7242556,
+    "toolCalls": 20,
+    "toolCounts": {
+     "Bash": 15,
+     "Write": 3,
+     "Read": 2
+    },
+    "bashTimeouts": 0,
+    "failedEdits": 0,
+    "permissionDenials": 3,
+    "errorCodes": {
+     "E_UNKNOWN_TOPIC": 1
+    },
+    "verbs": {
+     "docs": 9,
+     "render": 11,
+     "check": 4,
+     "edit": 2,
+     "look": 2
+    },
+    "violations": 0,
+    "fatalViolations": 0,
+    "resultSubtype": "success",
+    "isError": false,
+    "apiMs": 103594,
+    "results": 1
+   }
+  },
+  {
+   "task": "delivery-pack",
+   "pass": true,
+   "score": 1,
+   "wallSec": 79.218,
+   "timedOut": false,
+   "timeoutMin": 20,
+   "expectsWeak": false,
+   "baselineScore": 0.2,
+   "exitCode": 0,
+   "outputs": 3,
+   "dirRemoved": true,
+   "deltaScore": 0.8,
+   "checks": 5,
+   "harnessError": false,
+   "metrics": {
+    "turns": 11,
+    "inputTokens": 22,
+    "outputTokens": 3057,
+    "cacheReadTokens": 448925,
+    "cacheCreationTokens": 20639,
+    "costUsd": 0.31736400000000003,
+    "toolCalls": 10,
+    "toolCounts": {
+     "Bash": 9,
+     "Read": 1
+    },
+    "bashTimeouts": 0,
+    "failedEdits": 0,
+    "permissionDenials": 3,
+    "errorCodes": {},
+    "verbs": {
+     "docs": 1,
+     "check": 2,
+     "doctor": 2,
+     "render": 4
+    },
+    "violations": 0,
+    "fatalViolations": 0,
+    "resultSubtype": "success",
+    "isError": false,
+    "apiMs": 42964,
+    "results": 1
+   }
+  },
+  {
+   "task": "follow-the-box",
+   "pass": true,
+   "score": 1,
+   "wallSec": 128.168,
+   "timedOut": false,
+   "timeoutMin": 25,
+   "expectsWeak": true,
+   "baselineScore": 0,
+   "exitCode": 0,
+   "outputs": 3,
+   "dirRemoved": true,
+   "deltaScore": 1,
+   "checks": 4,
+   "harnessError": false,
+   "metrics": {
+    "turns": 27,
+    "inputTokens": 40,
+    "outputTokens": 7971,
+    "cacheReadTokens": 983440,
+    "cacheCreationTokens": 37323,
+    "costUsd": 0.6560229999999999,
+    "toolCalls": 26,
+    "toolCounts": {
+     "Bash": 17,
+     "Read": 4,
+     "Write": 4,
+     "Edit": 1
+    },
+    "bashTimeouts": 0,
+    "failedEdits": 0,
+    "permissionDenials": 4,
+    "errorCodes": {},
+    "verbs": {
+     "docs": 1,
+     "new": 1,
+     "edit": 2,
+     "show": 1,
+     "check": 4,
+     "look": 6,
+     "render": 2
+    },
+    "violations": 0,
+    "fatalViolations": 0,
+    "resultSubtype": "success",
+    "isError": false,
+    "apiMs": 101645,
+    "results": 1
+   }
+  },
+  {
+   "task": "highlight-reel-script",
+   "pass": false,
+   "score": 0.333,
+   "wallSec": 120.645,
+   "timedOut": false,
+   "timeoutMin": 25,
+   "expectsWeak": false,
+   "baselineScore": 0,
+   "exitCode": 0,
+   "outputs": 4,
+   "dirRemoved": true,
+   "deltaScore": 0.333,
+   "checks": 6,
+   "harnessError": false,
+   "metrics": {
+    "turns": 17,
+    "inputTokens": 30,
+    "outputTokens": 6791,
+    "cacheReadTokens": 720712,
+    "cacheCreationTokens": 36174,
+    "costUsd": 0.5706834000000001,
+    "toolCalls": 16,
+    "toolCounts": {
+     "Bash": 12,
+     "Write": 1,
+     "Read": 2,
+     "Edit": 1
+    },
+    "bashTimeouts": 0,
+    "failedEdits": 0,
+    "permissionDenials": 2,
+    "errorCodes": {},
+    "verbs": {
+     "docs": 8,
+     "show": 1,
+     "look": 2
+    },
+    "violations": 0,
+    "fatalViolations": 0,
+    "resultSubtype": "success",
+    "isError": false,
+    "apiMs": 75300,
+    "results": 1
+   }
+  },
+  {
+   "task": "hum-cleanup",
+   "pass": false,
+   "score": 0.75,
+   "wallSec": 293.535,
+   "timedOut": false,
+   "timeoutMin": 20,
+   "expectsWeak": true,
+   "baselineScore": 0,
+   "exitCode": 0,
+   "outputs": 8,
+   "dirRemoved": true,
+   "deltaScore": 0.75,
+   "checks": 4,
+   "harnessError": false,
+   "metrics": {
+    "turns": 49,
+    "inputTokens": 80,
+    "outputTokens": 18965,
+    "cacheReadTokens": 2323876,
+    "cacheCreationTokens": 50653,
+    "costUsd": 1.2508292000000003,
+    "toolCalls": 48,
+    "toolCounts": {
+     "Bash": 38,
+     "Write": 8,
+     "Edit": 1,
+     "Read": 1
+    },
+    "bashTimeouts": 0,
+    "failedEdits": 0,
+    "permissionDenials": 10,
+    "errorCodes": {
+     "E_ARG": 1,
+     "E_UNKNOWN_TOPIC": 1
+    },
+    "verbs": {
+     "docs": 8,
+     "new": 1,
+     "plugin": 8,
+     "edit": 4,
+     "check": 4,
+     "render": 4,
+     "look": 1
+    },
+    "violations": 0,
+    "fatalViolations": 0,
+    "resultSubtype": "success",
+    "isError": false,
+    "apiMs": 224424,
+    "results": 1
+   }
+  },
+  {
+   "task": "podcast-angle-switch",
+   "pass": true,
+   "score": 1,
+   "wallSec": 122.126,
+   "timedOut": false,
+   "timeoutMin": 20,
+   "expectsWeak": false,
+   "baselineScore": 0,
+   "exitCode": 0,
+   "outputs": 4,
+   "dirRemoved": true,
+   "deltaScore": 1,
+   "checks": 6,
+   "harnessError": false,
+   "metrics": {
+    "turns": 21,
+    "inputTokens": 36,
+    "outputTokens": 6497,
+    "cacheReadTokens": 817546,
+    "cacheCreationTokens": 30377,
+    "costUsd": 0.5377982,
+    "toolCalls": 20,
+    "toolCounts": {
+     "Bash": 14,
+     "Read": 5,
+     "Write": 1
+    },
+    "bashTimeouts": 0,
+    "failedEdits": 0,
+    "permissionDenials": 4,
+    "errorCodes": {},
+    "verbs": {
+     "docs": 3,
+     "new": 1,
+     "show": 2,
+     "check": 2,
+     "look": 1,
+     "render": 1
+    },
+    "violations": 0,
+    "fatalViolations": 0,
+    "resultSubtype": "success",
+    "isError": false,
+    "apiMs": 72748,
+    "results": 1
+   }
+  },
+  {
+   "task": "quote-card-plugin",
+   "pass": true,
+   "score": 1,
+   "wallSec": 99.965,
+   "timedOut": false,
+   "timeoutMin": 30,
+   "expectsWeak": false,
+   "baselineScore": 0.2,
+   "exitCode": 0,
+   "outputs": 10,
+   "dirRemoved": true,
+   "deltaScore": 0.8,
+   "checks": 5,
+   "harnessError": false,
+   "metrics": {
+    "turns": 24,
+    "inputTokens": 40,
+    "outputTokens": 6961,
+    "cacheReadTokens": 973777,
+    "cacheCreationTokens": 36692,
+    "costUsd": 0.6288924,
+    "toolCalls": 23,
+    "toolCounts": {
+     "Bash": 16,
+     "Write": 2,
+     "Read": 3,
+     "Edit": 2
+    },
+    "bashTimeouts": 0,
+    "failedEdits": 0,
+    "permissionDenials": 4,
+    "errorCodes": {},
+    "verbs": {
+     "docs": 9,
+     "plugin": 8,
+     "edit": 3,
+     "show": 1,
+     "check": 1,
+     "render": 2,
+     "look": 1
+    },
+    "violations": 0,
+    "fatalViolations": 0,
+    "resultSubtype": "success",
+    "isError": false,
+    "apiMs": 73692,
+    "results": 1
+   }
+  },
+  {
+   "task": "stats-bar-chart",
+   "pass": false,
+   "score": 0.8,
+   "wallSec": 64.616,
+   "timedOut": false,
+   "timeoutMin": 20,
+   "expectsWeak": false,
+   "baselineScore": 0,
+   "exitCode": 0,
+   "outputs": 4,
+   "dirRemoved": true,
+   "deltaScore": 0.8,
+   "checks": 5,
+   "harnessError": false,
+   "metrics": {
+    "turns": 14,
+    "inputTokens": 24,
+    "outputTokens": 4468,
+    "cacheReadTokens": 518696,
+    "cacheCreationTokens": 26966,
+    "costUsd": 0.4101222,
+    "toolCalls": 13,
+    "toolCounts": {
+     "Bash": 10,
+     "Write": 1,
+     "Edit": 1,
+     "Read": 1
+    },
+    "bashTimeouts": 0,
+    "failedEdits": 0,
+    "permissionDenials": 1,
+    "errorCodes": {},
+    "verbs": {
+     "docs": 7,
+     "new": 1,
+     "show": 3,
+     "check": 3,
+     "look": 1,
+     "render": 1
+    },
+    "violations": 0,
+    "fatalViolations": 0,
+    "resultSubtype": "success",
+    "isError": false,
+    "apiMs": 48107,
+    "results": 1
+   }
+  },
+  {
+   "task": "youtube-chapters",
+   "pass": true,
+   "score": 1,
+   "wallSec": 132.534,
+   "timedOut": false,
+   "timeoutMin": 20,
+   "expectsWeak": false,
+   "baselineScore": 0,
+   "exitCode": 0,
+   "outputs": 4,
+   "dirRemoved": true,
+   "deltaScore": 1,
+   "checks": 4,
+   "harnessError": false,
+   "metrics": {
+    "turns": 15,
+    "inputTokens": 26,
+    "outputTokens": 4744,
+    "cacheReadTokens": 602248,
+    "cacheCreationTokens": 31865,
+    "costUsd": 0.47157160000000004,
+    "toolCalls": 14,
+    "toolCounts": {
+     "Bash": 12,
+     "Write": 1,
+     "Read": 1
+    },
+    "bashTimeouts": 0,
+    "failedEdits": 0,
+    "permissionDenials": 3,
+    "errorCodes": {},
+    "verbs": {
+     "docs": 6,
+     "check": 4,
+     "look": 1,
+     "edit": 1,
+     "render": 1
+    },
+    "violations": 0,
+    "fatalViolations": 0,
+    "resultSubtype": "success",
+    "isError": false,
+    "apiMs": 54034,
+    "results": 1
+   }
+  }
+ ]
+}

@@ -12,7 +12,7 @@ export default defineEffect({
     color: color('#00ff00'),
     tolerance: z.number().min(0).max(1).default(0.3).describe('chroma distance keyed fully transparent'),
     softness: z.number().min(0).max(1).default(0.1).describe('chroma distance over which alpha ramps back to opaque'),
-    spill: z.number().min(0).max(1).default(0.5).describe('how much key-colour spill to remove from kept pixels'),
+    spill: z.number().min(0).max(1).default(1).describe('how much key-colour spill to remove from kept pixels (1 = cap the key channel at the other two)'),
   }),
   draw({ src, dst, params: p }) {
     const [kr, kg, kb] = rgbaOf(src, p.color);

@@ -124,7 +124,7 @@ export interface AudioPlan {
   /** total samples */
   length: number;
   segments: AudioSegment[];
-  buses: { id: string; gainDb: number; muted: boolean; to: string; duck?: { by: string; db: number; attack: number; release: number }; loudness?: { lufs: number; peak: number } }[];
+  buses: { id: string; gainDb: number; muted: boolean; to: string; duck?: { by: string; db: number; attack: number; release: number }; loudness?: { lufs: number; peak: number }; filters?: FilterSpec[] }[];
 }
 
 export interface AudioSegment {
@@ -143,6 +143,8 @@ export interface AudioSegment {
   /** fade in/out lengths in samples */
   fadeIn: number;
   fadeOut: number;
+  /** audio-stage effect filters of the clip, in order (applied after trim/speed, before gain) */
+  filters?: FilterSpec[];
 }
 
 /** Rendering pipeline interface: a GPU renderer can be added as a plugin implementing this. */

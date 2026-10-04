@@ -251,6 +251,8 @@ export function makeSchemas<T extends TimeSchema>(Time: T) {
     loudness: z.strictObject({ lufs: z.number(), peak: z.number().optional() }).optional(),
     /** the bus this one feeds (default master) */
     to: Id.optional(),
+    /** audio effects on the bus mix (effects with an audio stage), in order */
+    fx: z.array(Effect).optional(),
   });
 
   const Marker = z.strictObject({
@@ -342,6 +344,6 @@ export const KEY_ORDER: Record<TableName, string[]> = {
   clips: ['id', 'track', 'at', 'len', ...CLIP_SOURCES, 'in', 'speed', 'loop', 'fit', 'crop', 'style', 'animate', 'x', 'y', 'anchor', 'scale', 'rotate', 'opacity',
     'blend', 'parent', 'matte', 'remap', 'link', 'gain', 'fade', 'muted', 'fx', 'masks', 'transition', 'clock', 'hidden', 'locked', 'tags', 'note'],
   cues: ['id', 'clip', 'at', 'len', 'text', 'words', 'speaker'],
-  buses: ['id', 'to', 'gain', 'muted', 'duck', 'loudness'],
+  buses: ['id', 'to', 'gain', 'muted', 'duck', 'loudness', 'fx'],
   markers: ['id', 'comp', 'at', 'len', 'note'],
 };

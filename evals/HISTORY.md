@@ -16,3 +16,4 @@ Notes:
   saw them. The task contents were not read, but the names reveal themes, so held-out set v1 (`evals/heldout`)
   is treated as an exposed regression set from now on. A new held-out set v2 (`evals/heldout2`) was written by
   a separate agent, and the runner now hides held-out ids behind anonymous aliases in all public output.
+| 2026-10-04 | m2b-heldout2-baseline | heldout2 | claude-opus-5-5 | 10 | 8 | 80 % | 0.9667 | 23.3 | 1M | 125.3 | 0 | 0 | 0 | baseline 0, delta 0.9667; 40 permission denials; held-out v2 first run, build after M2 fixes (audit isolation) |

@@ -16,7 +16,7 @@ export { defineCommand } from '../core/commands/registry.js';
 export type { CommandDef, TemplateDef, TemplateOutput, CommandContext } from '../core/commands/registry.js';
 export type { FilterSpec } from '../render/types.js';
 
-export const PLUGIN_API_VERSION = '1.0.0';
+export const PLUGIN_API_VERSION = '1.1.0';
 
 /** A CanvasRenderingContext2D-compatible drawing context (Skia today; a GPU renderer provides the same contract). */
 export type Canvas2D = SKRSContext2D;
@@ -59,6 +59,11 @@ export interface EffectDef<S extends z.ZodObject = z.ZodObject> {
   source?(params: ParamsOf<S>): FilterSpec[];
   /** extra margin in px the effect draws outside the layer box (glow, shadow) */
   margin?(params: ParamsOf<S>): number;
+  /**
+   * audio stage (API 1.1): ffmpeg audio filters applied to the clip's sound (or a bus's mix when the effect is on a
+   * bus). An effect with only `audio` is an audio effect: adding it to a clip without sound is an error.
+   */
+  audio?(params: ParamsOf<S>): FilterSpec[];
 }
 
 export interface TransitionDef<S extends z.ZodObject = z.ZodObject> {
@@ -75,7 +80,20 @@ export interface GeneratorDef<S extends z.ZodObject = z.ZodObject> {
   params: S;
   /** the layer box size (default: the comp size) */
   size?(params: ParamsOf<S>, comp: { width: number; height: number }): [number, number];
-  draw(args: { dst: Surface; params: ParamsOf<S> } & FrameInfo): void;
+  draw(args: { dst: Surface; params: ParamsOf<S>; audio?: AudioLevels } & FrameInfo): void;
+  /** (API 1.1) the asset id whose sound this generator visualises (waveforms, audiograms); the renderer then passes `audio` */
+  audioSource?(params: ParamsOf<S>): string | undefined;
+}
+
+/** Sound levels for audio-reactive generators: per-frame RMS (0..1) and spectrum bands of the source asset. */
+export interface AudioLevels {
+  /** RMS level 0..1 per comp frame of the source, indexed by the clip's source frame */
+  rms: Float32Array;
+  /** `bands` values 0..1 per frame (low → high frequency), row-major: frame × bands */
+  spectrum: Float32Array;
+  bands: number;
+  /** the source frame shown now (clip in + local frame × speed) */
+  frame: number;
 }
 
 export interface Finding {

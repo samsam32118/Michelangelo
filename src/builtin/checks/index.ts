@@ -381,7 +381,8 @@ const loudness = defineCheck({
   id: 'loudness', stage: 'audio', describe: 'integrated loudness more than 2 LU from the target',
   run(ctx) {
     const a = ctx.audio, I = a?.loudness.integrated;
-    if (!a || I === undefined || !Number.isFinite(I) || I < -70) return [];
+    // a silent mix (no audible audio at all; ebur128 floors at -70) has no loudness to fix
+    if (!a || I === undefined || !Number.isFinite(I) || I <= -60) return [];
     const target = masterOf(ctx.project)?.loudness?.lufs ?? PLATFORM_LUFS[ctx.platform] ?? -16;
     if (Math.abs(I - target) <= 2) return [];
     return [{ rule: 'loudness', severity: 'warning', message: `mix is ${I.toFixed(1)} LUFS, ${Math.abs(I - target).toFixed(1)} LU ${I > target ? 'over' : 'under'} the ${target} LUFS target`, fix: `mgl edit <file> audio.normalize lufs=${target}` }];

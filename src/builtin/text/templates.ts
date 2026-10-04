@@ -64,8 +64,9 @@ const intro = defineTemplate({
     const clips: Clip[] = [
       { id: 'bg', track: 'bg', at, len, color: p.bg },
       { id: 'bar', track: 'bar', at, len, shape: { type: 'rect', size: [r(S.w * 0.5), r(12 * u)], radius: r(6 * u), fill: p.accent }, x: r(S.cx), y: r(titleY - boxH / 2 - 30 * u), scale: keys([0, [0, 1], 'outCubic'], [anim, [1, 1]]) },
-      { id: 'dot', track: 'dot', at, len, shape: { type: 'ellipse', size: [r(160 * u), r(160 * u)], fill: p.accent }, opacity: 0.25, x: r(S.x1 - 100 * u), y: r(S.y0 + 100 * u), scale: keys([0, 0, 'outBack'], [anim, 1]) },
-      { id: 'title', track: 'title', at, len, text: p.title, style: { base: 'title', size, box: [r(S.w * 0.9), boxH], maxLines: 2 }, x: r(S.cx), y: titleY, animate: { in: 'pop', out: 'fade', by: 'word' } },
+      // the dot keeps growing and the title slowly pushes in, so the card keeps moving after its entrance
+      { id: 'dot', track: 'dot', at, len, shape: { type: 'ellipse', size: [r(160 * u), r(160 * u)], fill: p.accent }, opacity: 0.25, x: r(S.x1 - 100 * u), y: r(S.y0 + 100 * u), scale: keys([0, 0, 'outBack'], [anim, 1], [len - 1, 1.4]) },
+      { id: 'title', track: 'title', at, len, text: p.title, style: { base: 'title', size, box: [r(S.w * 0.9), boxH], maxLines: 2 }, x: r(S.cx), y: titleY, scale: keys([0, 1], [len - 1, 1.08]), animate: { in: 'pop', out: 'fade', by: 'word' } },
     ];
     if (p.subtitle) {
       const sub = r(56 * u), subH = r(sub * 1.3 * 2);

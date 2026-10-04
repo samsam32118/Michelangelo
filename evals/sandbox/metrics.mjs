@@ -1,7 +1,7 @@
 // Metrics from a `claude -p --output-format stream-json --verbose` transcript (one JSON event per line).
 import { readFileSync, existsSync } from 'node:fs';
 
-const TIMEOUT_RE = /Command timed out|timed out after \d|Timeout(?:Error)?:|exceeded the (?:maximum )?(?:time|timeout)/i;
+const TIMEOUT_RE = /Command timed out|timed out after \d|did not complete within its \d+s? timeout|Timeout(?:Error)?:|exceeded the (?:maximum )?(?:time|timeout)/i;
 const EDIT_FAIL_RE = /String to replace not found|Found \d+ matches of the string|File has not been read yet|has been (?:modified|changed) since (?:it was )?(?:last )?read|old_string and new_string are (?:exactly )?the same|No changes to make/i;
 const ERR_CODE_RE = /\bE_[A-Z][A-Z0-9_]+\b/g;
 const RAISED_RE = /^error (E_[A-Z][A-Z0-9_]+)\b|"code":\s*"(E_[A-Z][A-Z0-9_]+)"|MglError[^\n]*?\b(E_[A-Z][A-Z0-9_]+)\b/gm;
@@ -66,11 +66,13 @@ export function metricsFrom(events, { runDir = '', forbidden = [], home = '/home
     if (e.type === 'result') {
       m.resultSubtype = e.subtype ?? null;
       m.isError = !!e.is_error;
-      if (typeof e.num_turns === 'number') m.turns = e.num_turns;
-      if (typeof e.total_cost_usd === 'number') m.costUsd = e.total_cost_usd;
-      if (typeof e.duration_api_ms === 'number') m.apiMs = e.duration_api_ms;
+      // a session can end more than once (a background task's notification wakes it again): sum every result
+      m.results = (m.results ?? 0) + 1;
+      if (typeof e.num_turns === 'number') m.turns += e.num_turns;
+      if (typeof e.total_cost_usd === 'number') m.costUsd = (m.costUsd ?? 0) + e.total_cost_usd;
+      if (typeof e.duration_api_ms === 'number') m.apiMs = (m.apiMs ?? 0) + e.duration_api_ms;
       const u = e.usage;
-      if (u) { m.inputTokens = u.input_tokens ?? 0; m.outputTokens = u.output_tokens ?? 0; m.cacheReadTokens = u.cache_read_input_tokens ?? 0; m.cacheCreationTokens = u.cache_creation_input_tokens ?? 0; }
+      if (u) { m.inputTokens += u.input_tokens ?? 0; m.outputTokens += u.output_tokens ?? 0; m.cacheReadTokens += u.cache_read_input_tokens ?? 0; m.cacheCreationTokens += u.cache_creation_input_tokens ?? 0; }
     }
   }
   if (!m.turns) m.turns = assistantTurns;

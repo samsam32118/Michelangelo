@@ -137,8 +137,9 @@ async function renderLayer(dc: DrawCtx, node: LayerNode, toTarget: Matrix): Prom
   setT(s, layerT);
   await drawSource(dc, s, node, k);
   s.ctx.setTransform(1, 0, 0, 1, 0, 0);
-  let out = runEffects(dc, s, node.fx, node.localFrame, node.seed);
-  if (node.masks.length) applyMasks(out, node.masks, multiply(layerT, invert(node.matrix)), layerT);
+  // masks cut the layer before its effects (as in After Effects), so a shadow or glow can extend past the mask
+  if (node.masks.length) applyMasks(s, node.masks, multiply(layerT, invert(node.matrix)), layerT);
+  const out = runEffects(dc, s, node.fx, node.localFrame, node.seed);
   const place = multiply(multiply(toTarget, node.matrix), invert(layerT));
   return { surface: out, place };
 }

@@ -135,7 +135,7 @@ describe('colour', () => {
   it('picks the input matrix from metadata and size; tone-maps HDR when zscale exists', async () => {
     const ffi = await getFfmpeg();
     const base = { kind: 'video' as const, duration: 1, hasAudio: false, hasVideo: true, size: 1, pixFmt: 'yuv420p' };
-    expect(buildVideoFilter({ ...base, width: 1920, height: 1080 }, ffi, {})).toContain('in_color_matrix=bt709');
+    expect(buildVideoFilter({ ...base, width: 1920, height: 1080 }, ffi, {})).toContain('in_color_matrix=bt601'); // untagged follows ffmpeg's default whatever the size
     expect(buildVideoFilter({ ...base, width: 640, height: 480 }, ffi, {})).toContain('in_color_matrix=bt601');
     expect(buildVideoFilter({ ...base, width: 640, height: 480, colorSpace: 'bt709', colorRange: 'pc' }, ffi, {})).toMatch(/in_color_matrix=bt709:in_range=full/);
     const notes: string[] = [];

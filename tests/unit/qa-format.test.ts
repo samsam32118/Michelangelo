@@ -36,7 +36,7 @@ describe('format', () => {
 
   it('no findings, silence and missing loudness', () => {
     expect(formatFindings([], { file: 'v.json' })).toEqual(['QA no issues']);
-    expect(formatSound({ integrated: -Infinity, truePeak: -Infinity, lra: 0, silences: [], beats: 0, duration: 1 })).toBe('sound -inf LUFS, peak -inf dBTP, LRA 0.0 · no silences');
+    expect(formatSound({ integrated: -Infinity, truePeak: -Infinity, lra: 0, silences: [], beats: 0, duration: 1 })).toBe('sound: silent (no audible audio in the mix)');
     expect(findingLine({ rule: 'x', severity: 'info', message: 'm' }, 7, { file: 'f' })).toBe('  7 info m');
   });
 });

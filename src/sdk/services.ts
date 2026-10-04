@@ -40,7 +40,7 @@ export function makeServices(projectDir: string, registry?: PluginRegistry, opts
     },
     async analyzeAudio(src, o) {
       const r = await (await media()).analyzeAudio(confined(projectDir, src), o);
-      return { silences: r.silences, duration: r.duration };
+      return { silences: r.silences, duration: r.duration, beats: r.beats, ...(r.bpm ? { bpm: r.bpm } : {}) };
     },
     async trackMotion(src, o) {
       const { trackMotion } = await import('../media/index.js');

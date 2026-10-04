@@ -143,9 +143,10 @@ defineCommand({
     if (!kept.length) fail('E_CAPTIONS', `${p.file} has no cues${raw.length ? ' after the offset' : ''}.`, raw.length ? 'use a smaller negative offset.' : 'check the file: each cue needs a "start --> end" line and text.');
     const cues = kept.map((k, i) => {
       const at = Math.max(0, k.s);
+      // keep the file's timing exactly; when cues overlap, the later one is shown while both are active
       const next = kept[i + 1];
-      const end = next ? Math.min(k.e, Math.max(0, next.s)) : k.e;
-      const len = Math.max(1, end - at);
+      if (next && next.s < k.e) ctx.note(`cues ${i + 1} and ${i + 2} overlap by ${k.e - next.s} frame(s); cue ${i + 2} replaces cue ${i + 1} on screen while both are active.`);
+      const len = Math.max(1, k.e - at);
       const out: { at: number; len: number; text: string; words?: number[]; speaker?: string } = { at, len, text: k.q.text };
       if (k.q.speaker) out.speaker = k.q.speaker;
       if (withWords) {

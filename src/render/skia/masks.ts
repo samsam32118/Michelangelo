@@ -3,12 +3,13 @@ import { Path2D } from '@napi-rs/canvas';
 import type { Surface } from '../../plugin/api.js';
 import type { Matrix, ResolvedMask } from '../types.js';
 
-function maskPath(m: ResolvedMask): Path2D {
+/** `radius` is in comp px; `k` converts comp px to the drawing space of the path. */
+function maskPath(m: ResolvedMask, k = 1): Path2D {
   const p = new Path2D();
   if (m.shape === 'path') return new Path2D(m.d ?? '');
   const [x, y, w, h] = m.box ?? [0, 0, 0, 0];
   if (m.shape === 'ellipse') p.ellipse(x + w / 2, y + h / 2, Math.abs(w / 2), Math.abs(h / 2), 0, 0, 2 * Math.PI);
-  else if (m.radius) p.roundRect(x, y, w, h, Math.min(m.radius, Math.abs(w) / 2, Math.abs(h) / 2));
+  else if (m.radius) p.roundRect(x, y, w, h, Math.min(m.radius * k, Math.abs(w) / 2, Math.abs(h) / 2));
   else p.rect(x, y, w, h);
   return p;
 }
@@ -29,12 +30,14 @@ export function applyMasks(target: Surface, masks: ResolvedMask[], compT: Matrix
     const c = piece.ctx;
     const t = m.space === 'clip' ? layerT : compT;
     const alpha = m.opacity ?? 1;
-    const feather = (m.feather ?? 0) * scaleOf(t);
+    // feather and radius are comp px whatever space the mask's box is in (a scaled clip keeps its rounded corners)
+    const feather = (m.feather ?? 0) * scaleOf(compT);
+    const k = scaleOf(compT) / (scaleOf(t) || 1);
     if (m.invert) { c.fillStyle = `rgba(255,255,255,${alpha})`; c.fillRect(0, 0, piece.width, piece.height); c.globalCompositeOperation = 'destination-out'; c.fillStyle = '#fff'; }
     else c.fillStyle = `rgba(255,255,255,${alpha})`;
     if (feather > 0) c.filter = `blur(${feather / 2}px)`;
     c.setTransform(t[0], t[1], t[2], t[3], t[4], t[5]);
-    c.fill(maskPath(m));
+    c.fill(maskPath(m, k));
     c.setTransform(1, 0, 0, 1, 0, 0);
     c.filter = 'none';
     const mode = m.mode ?? 'add';

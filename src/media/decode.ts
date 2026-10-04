@@ -109,8 +109,9 @@ function matrixOf(info: MediaInfoExt): string | undefined {
     case 'smpte240m': return 'smpte240m';
     case 'fcc': return 'fcc';
   }
-  // untagged: HD and larger are BT.709, SD is BT.601
-  return (info.height ?? 0) >= 720 || (info.width ?? 0) >= 1280 ? 'bt709' : 'bt601';
+  // untagged: follow ffmpeg's own convention (swscale's default, BT.601), so a file made or checked with ffmpeg
+  // round-trips without a colour shift
+  return 'bt601';
 }
 
 export function isHdr(info: MediaInfoExt): boolean { return info.colorTransfer === 'smpte2084' || info.colorTransfer === 'arib-std-b67'; }

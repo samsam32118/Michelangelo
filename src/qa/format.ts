@@ -38,6 +38,7 @@ const issues = (n: number) => (n ? `QA ${n} issue${n > 1 ? 's' : ''}` : 'QA no i
 
 export function formatSound(s: SoundSummary): string {
   const fin = (v: number, d = 1) => (Number.isFinite(v) ? v.toFixed(d) : '-inf');
+  if (!(s.integrated > -60)) return 'sound: silent (no audible audio in the mix)';
   const parts = [`sound ${fin(s.integrated)} LUFS, peak ${fin(s.truePeak)} dBTP, LRA ${fin(s.lra)}`];
   if (s.silences.length) {
     const sil = s.silences.slice(0, 6).map((x) => `${x.start.toFixed(2)}–${x.end.toFixed(2)}`).join(', ');

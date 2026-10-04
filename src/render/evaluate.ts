@@ -557,7 +557,8 @@ function textAnimation(cx: Ctx, c: Clip, lf: number, l: TextLayout): TextAnimati
 // ---------------------------------------------------------------- captions
 
 function captionsAt(cx: Ctx, c: Clip, t: number): { text: string; style: ResolvedTextStyle; words: CaptionWord[]; cueId: string } | null {
-  const q = (cx.ix.cuesByClip.get(c.id) ?? []).find((x) => t >= x.at && t < x.at + x.len);
+  // the latest-starting active cue wins when cues overlap
+  const q = (cx.ix.cuesByClip.get(c.id) ?? []).findLast((x) => t >= x.at && t < x.at + x.len);
   if (!q) return null;
   const style = textStyle(cx, c);
   const all = q.text.split(/\s+/).filter(Boolean);

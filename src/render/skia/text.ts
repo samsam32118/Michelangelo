@@ -3,7 +3,6 @@ import type { SKRSContext2D } from '@napi-rs/canvas';
 import type { CaptionWord, ResolvedTextStyle, TextAnimationState, TextLayout, TextLayouter, UnitState } from '../types.js';
 import { applyFont } from '../text.js';
 
-const DEFAULT_HIGHLIGHT = '#ffd400';
 
 interface Unit { text: string; x: number; baseline: number; cx: number; cy: number; color?: string }
 
@@ -93,7 +92,8 @@ export function drawTextLayer(ctx: SKRSContext2D, layouter: TextLayouter, src: {
   applyFont(ctx, st, l.size);
   ctx.textAlign = 'left';
   ctx.textBaseline = 'alphabetic';
-  const highlight = st.highlight ?? DEFAULT_HIGHLIGHT;
+  // only styles that ask for it (karaoke) highlight the spoken word
+  const highlight = st.highlight ?? st.color;
   if (src.words && src.words.length === l.words.length) {
     l.words.forEach((w, i) => {
       const cw = src.words![i]!;

@@ -70,6 +70,9 @@ export interface AudioAnalysis {
   /** silence ranges in seconds */
   silences: { start: number; end: number }[];
   duration: number;
+  /** onset/beat times in seconds, and a tempo estimate */
+  beats?: number[];
+  bpm?: number;
 }
 
 export interface CommandContext {

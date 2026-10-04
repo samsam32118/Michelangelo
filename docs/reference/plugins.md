@@ -22,8 +22,8 @@ mgl plugin test plugins/voice-chain
 ```
 
 1. `mgl plugin new <kind> <name>` scaffolds `plugins/<name>/` next to the project (kinds: effect,
-   audio-effect, transition, generator, template, command, check, importer, exporter) with a working example,
-   a passing test, an eval task and a README.
+   audio-effect, transition, generator, template, command, check, importer, exporter, provider) with a working
+   example, a passing test, an eval task and a README.
 2. Edit `plugins/<name>/src/index.ts`. Keep to erasable TypeScript (no enums, namespaces or parameter
    properties): Node runs it directly.
 3. `mgl plugin test plugins/<name>` checks the manifest, loads the definition in a child process, checks the
@@ -94,8 +94,8 @@ defineProvider({ kind: 'transcribe', id, describe, transcribe({ file, lang? }) â
   preferred) at `out`, a temporary path inside the project's `media/generated/` that the core renames on success.
   The core never downloads models: a provider plugin fetches or bundles what it needs and says so in its README.
   Example: `examples/plugins/flite-voice` in the repository (ffmpeg's flite engine, zero downloads), and the
-  20-line version in audio.md. `mgl doctor <file>` lists the providers a project has. Until the manifest knows a
-  `provider` kind, a provider-only plugin also needs one item of a listed kind (e.g. a `<name>.voices` command).
+  20-line version in audio.md. `mgl doctor <file>` lists the providers a project has. `mgl plugin new provider
+  <name>` scaffolds a working speak provider (manifest kind `provider`; a provider-only plugin is fine).
 - Commands are named `<plugin>.<verb>`, have a zod schema, a doc sentence and an example, and change the
   project only through `ctx` (so they are undoable and dry-runnable).
 

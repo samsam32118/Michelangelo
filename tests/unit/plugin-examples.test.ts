@@ -6,7 +6,7 @@ import { loadRegistry } from '../../src/plugin/loader.js';
 import { testProject } from '../../src/plugin/testing.js';
 import { REPO, tempProjectDir } from './plugin-fixtures.js';
 
-const EXAMPLES = ['glitch', 'clock-wipe', 'confetti', 'lower-third-pro', 'on-air', 'flite-voice'];
+const EXAMPLES = ['glitch', 'clock-wipe', 'confetti', 'lower-third-pro', 'on-air', 'flite-voice', 'collage-kit'];
 let dir: string;
 const results = new Map<string, PluginTestResult>();
 

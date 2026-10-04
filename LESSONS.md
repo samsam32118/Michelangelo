@@ -60,3 +60,16 @@ Sources read (2026-10-03): `docs/AGENT-PLATFORM-PLAN.md` and `docs/spikes/render
 | Clip-local keyframe times past the clip end silently never play | agent.md "Units" | `check` reports keyframes outside the clip as a warning with the line |
 | Accreted optional fields for every feature on one `ClipBase` interface (grade, cornerPin, reflection, qa, role, syncTo, ...) | `types.ts` | Features beyond the core are effects/generators with typed params (plugins), not new top-level clip fields |
 | Built-ins and plugins on different seams early on (iteration 2 `install(ctx)` wrapped later into plugins) | PLUGINS.md | Core effects use only the public plugin API from day one, enforced by a test |
+
+## Lessons learned building Michelangelo (2026-10-03/04)
+
+| Lesson | Evidence | What changed |
+|---|---|---|
+| Skia in Node removes the compositing bottleneck entirely | 11 ms per 1080×1920 frame vs 210–270 ms for FrameCraft's SwiftShader WebGL; final renders at 1.0–1.6× real time vs 6.4× | Native Skia + ffmpeg as the only render path |
+| Untagged video must follow the convention of the tool that made it | Untagged HD decoded as BT.709 shifted greens badly (G PSNR 19 dB vs source); ffmpeg's own convention (BT.601) round-trips at 40 dB | Untagged → BT.601; outputs always tagged BT.709 |
+| Real agent evals find different bugs than reviews | The first eval run found the colour shift, mask-before-effects order, overlapping SRT cues being trimmed, a default caption highlight, a static intro; the adversarial review found 51 other defects (frame-exactness at fractional speed, link groups, trust hashing) | Run both at every milestone |
+| An agent's own scratch work looks like a sandbox escape | The first violation detector flagged the agent's scratchpad under /tmp | Violations are scoped to the repo, the eval tree and other sandboxes |
+| A session can "end" twice | A background task's notification woke a finished `claude -p` session, so the last result reported 1 turn | Metrics sum every result event |
+| Untouched sandboxes can score | Invariant checks ("logo not moved") pass before the agent does anything | Every run reports a baseline score and the delta |
+| Templates must pass the library's own QA | The lower third rendered its name at 40 px on Shorts (QA minimum 48 px) and the QA fix did nothing against a fixed text box | Templates use minimum text sizes; the fix drops the box; QA-convergence is tested |
+| Safety policy shapes the eval harness | Copying the agent's credentials to a separate Unix user, privileged namespaces, and `bypassPermissions` agents were all refused by the environment's policy | Audit isolation with an allowlisted agent; DESIGN §16.1 |

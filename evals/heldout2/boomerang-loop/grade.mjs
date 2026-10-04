@@ -28,6 +28,7 @@ export async function grade(dir) {
   g.check('normal speed (median step <= 1.5 frames)', steps.length > 100 && med <= 1.5, `median step ${med}, ${steps.length} steps`);
   const pr = namedProject(dir, 'boomerang.mgl.json', { inputs: ['jump.mp4'], size: [1080, 1080] });
   const inp = await inputsUnchanged(dir, ['jump.mp4']);
-  g.check('boomerang.mgl.json valid, 1080x1080, uses jump.mp4; input unchanged', pr.ok && inp.ok, `${pr.detail}; ${inp.detail}`);
+  g.check('input unchanged', inp.ok, inp.detail);
+  g.check('[lib] boomerang.mgl.json valid, 1080x1080, uses jump.mp4', pr.ok, pr.detail);
   return g.result();
 }

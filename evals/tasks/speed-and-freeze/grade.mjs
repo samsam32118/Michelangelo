@@ -39,6 +39,6 @@ export async function grade(dir) {
     const fast = cs.some((c) => Number(c.speed) === 2), held = cs.some((c) => Number(c.speed) === 0);
     return (fast && held) || cs.some((c) => isKeyframes(c.remap)) || 'no 2x clip and held (speed 0) clip, nor a remap';
   } });
-  g.check('the project has the edit: a 2x clip and a freeze (speed 0) or a time remap on the counter', !!proj.p, proj.p ? proj.f : proj.why);
+  g.check('[lib] the project has the edit: a 2x clip and a freeze (speed 0) or a time remap on the counter', !!proj.p, proj.p ? proj.f : proj.why);
   return g.result();
 }

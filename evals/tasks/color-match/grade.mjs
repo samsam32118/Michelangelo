@@ -31,10 +31,10 @@ export async function grade(dir) {
   const a = (p?.clips ?? []).find((c) => c.id === 'a');
   const fx = Array.isArray(b?.fx) ? b.fx.filter((x) => x && typeof x.type === 'string') : [];
   const kept = !!p && !validateRaw(p).length && !!b && !b.hidden && (b.opacity === undefined || b.opacity === 1) && p.assets.some((x) => x.id === 'shot-b' && x.src === 'media/b.mp4') && a?.asset === 'shot-a' && !a.fx;
-  g.check('B keeps its source (shot B still referenced, visible; A untouched) and has a colour correction (fx)', kept && fx.length > 0,
+  g.check('[lib] B keeps its source (shot B still referenced, visible; A untouched) and has a colour correction (fx)', kept && fx.length > 0,
     b ? `B clip "${b.id}" fx ${JSON.stringify(b.fx ?? [])}` : 'no clip uses shot B');
   // the correction is in the project: a render of it (not the agent's own stills) shows B matching A
-  await g.checkAsync('a render of match.mgl.json: shot B (1 s into it) within 5 % of shot A in mean R/B, and still shot B', async () => {
+  await g.checkAsync('[lib] a render of match.mgl.json: shot B (1 s into it) within 5 % of shot A in mean R/B, and still shot B', async () => {
     if (!kept) return { pass: false, detail: 'project does not keep shot B' };
     const rate = compRate(mainComp(p));
     const t = (c) => (toFrames(c.at, rate) + Math.min(30, toFrames(c.len, rate) - 1)) / rate;

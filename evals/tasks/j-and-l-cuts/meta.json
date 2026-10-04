@@ -9,9 +9,13 @@
   "fixtures": [
     "dialog.mgl.json (two video clips with linked audio clips; A has 440 Hz tone, B 660 Hz)"
   ],
+  "deliverables": [
+    "dialog.mgl.json"
+  ],
+  "library_only": true,
   "checks": [
-    "picture cut frame unchanged",
-    "440 Hz present for 1 s after the picture cut in a rendered wav, then 660 Hz",
-    "no gap or overlap errors in check"
+    "[lib] picture cut frame unchanged (a ends and b starts at frame 120)",
+    "[lib] 440 Hz for 1 s after the picture cut in a rendered wav, then 660 Hz",
+    "[lib] no gap or overlap problems (file valid; V1 and the audio track contiguous)"
   ]
 }

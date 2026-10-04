@@ -27,7 +27,7 @@ export async function grade(dir) {
   })(), (() => { try { return readFileSync(join(dir, 'out/chapters.txt'), 'utf8').trim().split(/\r?\n/).join(' | ').slice(0, 300); } catch { return 'missing'; } })());
 
   const pj = L.readProject(join(dir, 'lesson.mgl.json'));
-  g.check('lesson.mgl.json: 5 markers on comp main at the chapter frames (+/- 1); project still valid with the lesson clip', (() => {
+  g.check('[lib] lesson.mgl.json: 5 markers on comp main at the chapter frames (+/- 1); project still valid with the lesson clip', (() => {
     if (!pj || L.validateRaw(pj).length) return false;
     const fps = L.compFps(L.tables(pj, 'comps').find((c) => c.id === 'main'));
     const ms = L.tables(pj, 'markers').filter((m) => m.comp === 'main').map((m) => L.toFrames(m.at, fps)).sort((a, b) => a - b);

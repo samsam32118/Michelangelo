@@ -1,6 +1,10 @@
 {
   "id": "before-after-split",
-  "tags": ["compositing", "text", "corporate"],
+  "tags": [
+    "compositing",
+    "text",
+    "corporate"
+  ],
   "timeout_min": 20,
   "expects_weak": false,
   "fixtures": [
@@ -12,8 +16,12 @@
     "left half (below the label band) matches the centre crop of before.mp4 at 2/4/6 s (SSIM >= 0.7, better than squashed or letterboxed alternatives) and is grey",
     "right half matches the centre crop of after.mp4 at 2/4/6 s (SSIM >= 0.7, better than alternatives) and is saturated",
     "a near-white vertical divider 3-14 px wide around x = 960 at 2/4/6 s",
-    "label graphics in the top band of both halves at 2/4/6 s; text clips BEFORE and AFTER in the project",
+    "label graphics in the top band of both halves at 2/4/6 s",
     "audio is after.mp4's speech (envelope correlation >= 0.8), the 440 Hz decoy is > 20 dB down",
-    "split.mgl.json validates, 1920x1080, uses before.mp4 and after.mp4; inputs unchanged"
+    "inputs unchanged",
+    "[lib] split.mgl.json validates, 1920x1080, uses before.mp4 and after.mp4; text clips BEFORE and AFTER in the project"
+  ],
+  "deliverables": [
+    "out/split.mp4"
   ]
 }

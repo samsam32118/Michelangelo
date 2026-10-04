@@ -62,6 +62,7 @@ export async function grade(dir) {
 
   const pr = namedProject(dir, 'progress.mgl.json', { inputs: ['tutorial.mp4'], size: [1920, 1080] });
   const inp = await inputsUnchanged(dir, ['tutorial.mp4']);
-  g.check('progress.mgl.json valid, 1920x1080, uses tutorial.mp4; input unchanged', pr.ok && inp.ok, `${pr.detail}; ${inp.detail}`);
+  g.check('input unchanged', inp.ok, inp.detail);
+  g.check('[lib] progress.mgl.json valid, 1920x1080, uses tutorial.mp4', pr.ok, pr.detail);
   return g.result();
 }

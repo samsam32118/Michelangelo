@@ -9,8 +9,13 @@
   "fixtures": [
     "match.mgl.json (A: neutral testsrc2; B: same footage with colorbalance warm shift)"
   ],
+  "deliverables": [
+    "*.png"
+  ],
+  "library_only": false,
   "checks": [
-    "mean R/B ratio of B still within 5 % of A still",
-    "B not just replaced by A (B source still referenced)"
+    "mean R/B ratio of the B still within 5 % of the A still",
+    "[lib] B keeps its source (shot B still referenced, visible; A untouched) and has a colour correction (fx)",
+    "[lib] a render of match.mgl.json: shot B (1 s into it) within 5 % of shot A in mean R/B, and still shot B"
   ]
 }

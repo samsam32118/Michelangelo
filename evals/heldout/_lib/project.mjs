@@ -1,10 +1,19 @@
 // Project files read as raw JSON (never through Michelangelo), a small structural validator, and a writer
 // for fixtures in the one-entity-per-line layout (DESIGN.md §4.1).
 import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
-import { dirname, basename } from 'node:path';
+import { dirname, basename, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 const TABLES = ['assets', 'styles', 'comps', 'tracks', 'clips', 'cues', 'buses', 'markers'];
-const TOP = new Set(['michelangelo', '$schema', 'project', ...TABLES]);
+/** Top-level keys allowed: every property of schema/v1.json (falls back to the known list if it cannot be read). */
+const TOP = (() => {
+  const keys = new Set(['michelangelo', '$schema', 'project', ...TABLES]);
+  try {
+    const schema = JSON.parse(readFileSync(join(dirname(fileURLToPath(import.meta.url)), '../../../schema/v1.json'), 'utf8'));
+    for (const k of Object.keys(schema?.properties ?? {})) keys.add(k);
+  } catch { /* keep the fallback */ }
+  return keys;
+})();
 const SOURCES = ['asset', 'text', 'shape', 'color', 'comp', 'captions', 'adjustment', 'gen'];
 const ID = /^[A-Za-z0-9][A-Za-z0-9_.-]*$/;
 

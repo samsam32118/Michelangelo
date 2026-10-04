@@ -8,8 +8,12 @@
   "fixtures": [
     "trim.mgl.json (3 clips from counter.mp4 back to back)"
   ],
+  "deliverables": [
+    "trim.mgl.json"
+  ],
+  "library_only": true,
   "checks": [
-    "a.len +12, b.at +12, b.in +12, b.len -12; c.at and c.len unchanged, c.in +30",
-    "rendered counter at c start = old + 30"
+    "[lib] a.len +12, b.at +12, b.in +12, b.len -12; c.at and c.len unchanged, c.in +30",
+    "[lib] rendered counter at c start = old + 30 (and clip a still showing 0.1 s after the old cut)"
   ]
 }

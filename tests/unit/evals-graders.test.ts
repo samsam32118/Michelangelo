@@ -34,12 +34,12 @@ const ff = (args: string[]) => execFileSync('ffmpeg', ['-hide_banner', '-logleve
 
 beforeAll(async () => {
   await inPool(TASKS, 4, async (t) => { await setupTask(t, 'empty'); });
-}, 170_000);
+}, 300_000);
 afterAll(() => rmSync(root, { recursive: true, force: true }));
 
 describe('eval tasks: files and fixtures', () => {
-  it('has 30 main tasks, each with task.md, meta.json, setup.mjs and grade.mjs', () => {
-    expect(TASKS.length).toBe(30);
+  it('has 33 main tasks, each with task.md, meta.json, setup.mjs and grade.mjs', () => {
+    expect(TASKS.length).toBe(33);
     for (const t of TASKS) for (const f of ['task.md', 'meta.json', 'setup.mjs', 'grade.mjs']) expect(existsSync(join(EVALS, 'tasks', t, f)), `${t}/${f}`).toBe(true);
   });
 
@@ -67,6 +67,27 @@ describe('eval tasks: files and fixtures', () => {
   });
 });
 
+describe('deliverable and library-only checks (DESIGN §17.2)', () => {
+  it('meta.json lists the deliverables, the grader\'s check names verbatim, and library_only when every check is [lib]', async () => {
+    for (const t of TASKS) {
+      const meta = JSON.parse(readFileSync(join(EVALS, 'tasks', t, 'meta.json'), 'utf8'));
+      expect(Array.isArray(meta.deliverables) && meta.deliverables.length > 0, `${t}: deliverables`).toBe(true);
+      const r = await grade(t, dirOf(t));
+      expect(meta.checks, `${t}: meta.checks`).toEqual(r.checks.map((c: any) => c.name));
+      const libOnly = r.checks.every((c: any) => c.name.startsWith('[lib] '));
+      expect(!!meta.library_only, `${t}: library_only`).toBe(libOnly);
+      expect(r.deliverable.checks, t).toBe(r.checks.filter((c: any) => !c.name.startsWith('[lib] ')).length);
+    }
+  }, 120_000);
+
+  it('graders that read a project, a plugin or a render of the project mark those checks [lib]', () => {
+    for (const t of TASKS) {
+      const src = readFileSync(join(EVALS, 'tasks', t, 'grade.mjs'), 'utf8');
+      if (/readProject|findProjectUsing|renderStill|renderProject|readManifest|parseLoose/.test(src)) expect(src, t).toContain("'[lib] ");
+    }
+  });
+});
+
 describe('graders fail on untouched sandboxes', () => {
   it.each(TASKS)('%s', async (t) => {
     const r = await grade(t, dirOf(t));
@@ -79,7 +100,22 @@ describe('graders fail on untouched sandboxes', () => {
 
 const NEEDS_CLI = new Set(['slip-roll', 'fix-caption-logo-overlap', 'j-and-l-cuts', 'gif-export']);
 /** Always run; the others run too when a CLI build exists or EVALS_FULL=1. */
-const CORE_REFS = new Set(['captions-from-srt', 'loudness-normalize', 'duck-music-under-vo', 'fix-broken-file', 'csv-variants-sdk', 'edit-200-clips']);
+const CORE_REFS = new Set(['captions-from-srt', 'loudness-normalize', 'duck-music-under-vo', 'fix-broken-file', 'csv-variants-sdk', 'edit-200-clips',
+  'nested-comp', 'script-only-short', 'polish-music-sfx', 'talking-head-youtube']);
+/** Remove what only the library would make (projects, plugins, .mgl/): setup's projects back, new ones deleted. */
+function stripLibrary(t: string, dir: string) {
+  const setup = JSON.parse(readFileSync(join(dir, '.setup.json'), 'utf8'));
+  const walk = (rel: string) => {
+    for (const e of readdirSync(join(dir, rel), { withFileTypes: true })) {
+      const r = rel ? `${rel}/${e.name}` : e.name;
+      if (e.isDirectory()) { if (['plugins', '.mgl'].includes(e.name) && !rel) rmSync(join(dir, r), { recursive: true, force: true }); else if (!['node_modules', '.golden'].includes(e.name)) walk(r); continue; }
+      if (!e.name.endsWith('.mgl.json')) continue;
+      if (r in setup.hashes) writeFileSync(join(dir, r), readFileSync(join(dirOf(t), r)));
+      else rmSync(join(dir, r));
+    }
+  };
+  walk('');
+}
 const REFS = TASKS.filter((t) => existsSync(join(EVALS, 'tasks', t, 'reference.mjs')));
 describe('reference solutions (plain ffmpeg / JSON) pass', () => {
   it('there are at least 6 reference solutions that need no Michelangelo', () => {
@@ -93,7 +129,13 @@ describe('reference solutions (plain ffmpeg / JSON) pass', () => {
     expect(r.pass, JSON.stringify(r.checks, null, 1)).toBe(true);
     expect(r.score).toBe(1);
     for (const f of readdirSync(dir).filter((f) => f.endsWith('.mgl.json'))) expect(parseProjectText(readFileSync(join(dir, f), 'utf8')).problems.filter((p) => p.severity === 'error')).toEqual([]);
-  }, 90_000);
+    // the deliverable checks pass on the outputs alone: without the project edit, plugins or .mgl/ (the "without" arm)
+    const meta = JSON.parse(readFileSync(join(EVALS, 'tasks', t, 'meta.json'), 'utf8'));
+    if (meta.library_only) return;
+    stripLibrary(t, dir);
+    const d = await grade(t, dir);
+    expect(d.deliverable.pass, JSON.stringify(d.checks.filter((c: any) => !c.pass), null, 1)).toBe(true);
+  }, 150_000);
 });
 
 describe('black and silent fake outputs fail', () => {
@@ -142,6 +184,50 @@ describe('black and silent fake outputs fail', () => {
     expect(r.pass).toBe(false);
     expect(r.checks[1].pass).toBe(false);
     expect(r.checks[2].pass).toBe(false);
+  }, 60_000);
+
+  it('script-only-short: a black, silent 24 s vertical video fails motion, sound and text', async () => {
+    const dir = await setupTask('script-only-short', 'fake');
+    mkdirSync(join(dir, 'out'));
+    ff(['-f', 'lavfi', '-i', 'color=black:size=1080x1920:rate=30:duration=24', '-f', 'lavfi', '-i', 'anullsrc=r=48000:cl=stereo:d=24', '-shortest', '-c:v', 'libx264', '-preset', 'ultrafast', '-pix_fmt', 'yuv420p', '-c:a', 'aac', join(dir, 'out/short.mp4')]);
+    const r = await grade('script-only-short', dir);
+    expect(r.checks[0].pass).toBe(true);
+    expect(r.checks.slice(1).filter((c: any) => c.pass)).toEqual([]);
+  }, 60_000);
+
+  it('polish-music-sfx: the unchanged edit fails the sound checks; a steady bed without effects fails the effects check', async () => {
+    const dir = await setupTask('polish-music-sfx', 'fake');
+    mkdirSync(join(dir, 'out'));
+    cpSync(join(dir, 'edit.mp4'), join(dir, 'out/final.mp4'));
+    let r = await grade('polish-music-sfx', dir);
+    expect(r.checks[0].pass, r.checks[0].detail).toBe(true);
+    for (const i of [1, 2, 3]) expect(r.checks[i].pass, r.checks[i].name).toBe(false);
+    ff(['-i', join(dir, 'edit.mp4'), '-f', 'lavfi', '-i', "aevalsrc='0.05*sin(2*PI*220*t)+0.05*sin(2*PI*277*t)':s=48000:c=stereo:d=20", '-filter_complex', '[0:a][1:a]amix=inputs=2:normalize=0,volume=8dB[a]',
+      '-map', '0:v', '-map', '[a]', '-c:v', 'copy', '-c:a', 'aac', '-t', '20', join(dir, 'out/final.mp4')]);
+    r = await grade('polish-music-sfx', dir);
+    expect(r.checks[1].pass, r.checks[1].detail).toBe(true);
+    expect(r.checks[2].pass, r.checks[2].detail).toBe(false);
+  }, 90_000);
+
+  it('talking-head-youtube: the untouched interview as the output fails the edit checks', async () => {
+    const dir = await setupTask('talking-head-youtube', 'fake');
+    mkdirSync(join(dir, 'out'));
+    cpSync(join(dir, 'interview.mp4'), join(dir, 'out/final.mp4'));
+    const r = await grade('talking-head-youtube', dir);
+    const by = (re: RegExp) => r.checks.find((c: any) => re.test(c.name));
+    expect(by(/phrases kept/).pass).toBe(true);
+    for (const re of [/^out\/final.mp4/, /no silence/, /burned captions/, /lower third/, /intro title/, /^chapters/]) expect(by(re).pass, by(re).name).toBe(false);
+  }, 90_000);
+
+  it('nested-comp: three discs at three sizes that do not rotate fail the rotation check', async () => {
+    const dir = await setupTask('nested-comp', 'fake');
+    mkdirSync(join(dir, 'out'));
+    ff(['-f', 'lavfi', '-i', 'color=c=0x202830:s=1920x1080:r=30:d=6', '-filter_complex',
+      "[0:v]drawbox=x=100:y=400:w=300:h=300:color=red:t=fill,drawbox=x=600:y=300:w=450:h=450:color=red:t=fill:enable='gte(t,2)',drawbox=x=1200:y=200:w=620:h=620:color=red:t=fill:enable='gte(t,4)',format=yuv420p[v]",
+      '-map', '[v]', '-c:v', 'libx264', '-preset', 'ultrafast', join(dir, 'out/badges.mp4')]);
+    const r = await grade('nested-comp', dir);
+    expect(r.checks[1].pass, r.checks[1].detail).toBe(true);
+    expect(r.checks[2].pass, r.checks[2].detail).toBe(false);
   }, 60_000);
 
   it('fix-broken-file: deleting the problem clips (losing a clip) fails', async () => {
@@ -204,7 +290,8 @@ describe('per-word-animation and csv-variants-sdk', () => {
 "clips": [{"id": "t", "track": "T1", "at": 0, "len": 90, "text": "Make every second count", "animate": {"in": "pop", "stagger": 15}}]
 }`);
     const r = await grade('per-word-animation', dir);
-    expect(r.checks[0].pass, r.checks[0].detail).toBe(true);
+    const c = r.checks.find((x: any) => x.name.startsWith('[lib] 1080x1920 project'));
+    expect(c?.pass, c?.detail).toBe(true);
   }, 90_000);
 
   it('csv-variants-sdk: a script edited after the PNGs still counts; variant projects with wrong prices fail', async () => {

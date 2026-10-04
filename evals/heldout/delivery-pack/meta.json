@@ -16,5 +16,10 @@
     "both renders: not black, not static (frames at 2 s and 6 s differ, SSIM < 0.5), audio not silent; frame at 6 s SSIM >= 0.9 between webm and mov",
     "out/thumb.jpg: 1280x720 JPEG; SSIM >= 0.85 vs master.mov frame at 4 s scaled to 1280x720; not a single colour",
     "spot.mgl.json byte-identical to the fixture"
+  ],
+  "deliverables": [
+    "out/master.mov",
+    "out/web.webm",
+    "out/thumb.jpg"
   ]
 }

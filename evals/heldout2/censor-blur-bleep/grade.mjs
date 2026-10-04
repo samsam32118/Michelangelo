@@ -82,6 +82,7 @@ export async function grade(dir) {
 
   const pr = namedProject(dir, 'censored.mgl.json', { inputs: ['street.mp4'], size: [1920, 1080] });
   const inp = await inputsUnchanged(dir, ['street.mp4']);
-  g.check('censored.mgl.json valid, 1920x1080, uses street.mp4; input unchanged', pr.ok && inp.ok, `${pr.detail}; ${inp.detail}`);
+  g.check('input unchanged', inp.ok, inp.detail);
+  g.check('[lib] censored.mgl.json valid, 1920x1080, uses street.mp4', pr.ok, pr.detail);
   return g.result();
 }

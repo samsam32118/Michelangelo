@@ -117,3 +117,10 @@ export function bestMatch(a, b, from = 0, to = a.length - b.length) {
   }
   return best;
 }
+
+/** For references: the second-pass loudnorm filter (measured on `file`, linear) reaching I LUFS with true peak TP. */
+export async function loudnormFilter(file, { I = -14, TP = -1.5, LRA = 20 } = {}) {
+  const log = await ffmpegLog(['-i', file, '-vn', '-af', `loudnorm=I=${I}:TP=${TP}:LRA=${LRA}:print_format=json`, '-f', 'null', '-']);
+  const m = JSON.parse(log.slice(log.lastIndexOf('{'), log.lastIndexOf('}') + 1));
+  return `loudnorm=I=${I}:TP=${TP}:LRA=${LRA}:measured_I=${m.input_i}:measured_TP=${m.input_tp}:measured_LRA=${m.input_lra}:measured_thresh=${m.input_thresh}:offset=${m.target_offset}:linear=true`;
+}

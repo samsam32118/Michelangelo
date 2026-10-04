@@ -20,12 +20,12 @@ export async function grade(dir) {
   const texts = (p) => textClips(p).map((c) => c.text);
   const perRow = rows.map(([, name, price]) => variants.find((v) => texts(v.p).some((t) => t.includes(name)) && texts(v.p).some((t) => t.includes(price))));
   const projectsOk = perRow.every(Boolean) && new Set(perRow.map((v) => v.f)).size === rows.length;
-  g.check('made with the library: a script importing michelangelo, or 10 valid variant projects each with its name and price', scripts.length > 0 || projectsOk,
+  g.check('[lib] made with the library: a script importing michelangelo, or 10 valid variant projects each with its name and price', scripts.length > 0 || projectsOk,
     `scripts: ${scripts.join(', ') || 'none'}; variant projects with name and price: ${perRow.filter(Boolean).length}/10`);
   if (variants.length >= rows.length) {
     // when the variants were saved as projects, their prices must be the CSV's
     const missing = rows.filter((r, i) => !perRow[i]).map((r) => r[0]);
-    g.check('variant projects carry each product\'s price and name', !missing.length, missing.length ? `no project with the name and price of ${missing.join(', ')}` : '10/10');
+    g.check('[lib] variant projects carry each product\'s price and name', !missing.length, missing.length ? `no project with the name and price of ${missing.join(', ')}` : '10/10');
   }
   await g.checkAsync('name glyph region differs between variants (and has text)', async () => {
     if (!imgs.every(Boolean)) return { pass: false, detail: 'missing PNGs' };

@@ -1,5 +1,6 @@
 // Project files read as RAW JSON (never through Michelangelo): parsing, time conversion, queries, validation.
 import { readFileSync, readdirSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 
 /** Walk text, copying strings verbatim; `other(i)` handles the rest and returns [emitted, next index]. */
 function scan(text, other) {
@@ -144,20 +145,49 @@ export const easingsOf = (v) => (isKeyframes(v) ? v.map((k) => k[2]).filter((e) 
 // ---------------------------------------------------------------------------------------------
 // Independent validation of the file format (DESIGN §4): keys, references, overlaps, cues.
 // ---------------------------------------------------------------------------------------------
-const KEYS = {
-  root: ['michelangelo', '$schema', 'project', 'assets', 'comps', 'tracks', 'clips', 'cues', 'styles', 'buses', 'markers'],
-  project: ['name', 'plugins', 'platform', 'main'],
-  assets: ['id', 'src', 'kind', 'note'],
-  comps: ['id', 'size', 'fps', 'length', 'bg', 'note'],
-  tracks: ['id', 'comp', 'audio', 'bus', 'hidden', 'muted', 'locked', 'note'],
-  clips: ['id', 'track', 'at', 'len', 'asset', 'text', 'shape', 'color', 'comp', 'captions', 'adjustment', 'gen', 'in', 'speed', 'gain', 'fade', 'muted', 'loop', 'fit', 'crop',
-    'style', 'animate', 'x', 'y', 'anchor', 'scale', 'rotate', 'opacity', 'blend', 'parent', 'matte', 'remap', 'link', 'fx', 'masks', 'transition', 'clock', 'hidden', 'locked', 'tags', 'note'],
-  cues: ['id', 'clip', 'at', 'len', 'text', 'words', 'speaker'],
-  styles: ['id', 'font', 'size', 'weight', 'italic', 'color', 'align', 'lineHeight', 'letterSpacing', 'stroke', 'strokeWidth', 'shadow', 'shadowBlur', 'shadowOffset', 'bg', 'bgPadding',
-    'bgRadius', 'maxWidth', 'uppercase', 'highlight', 'maxWords', 'maxLines', 'box', 'base'],
-  buses: ['id', 'gain', 'muted', 'duck', 'loudness', 'to'],
-  markers: ['id', 'comp', 'at', 'len', 'note'],
-};
+/**
+ * Allowed keys per entity, derived from the published JSON Schema (schema/v1.json, generated from the library's
+ * input schemas), so the graders accept every valid Michelangelo project. MGL_EVAL_SCHEMA overrides the path.
+ * Shape: {root: [...], project: [...] | null, <table>: [...] | null} (null = any key allowed).
+ */
+export const SCHEMA_FILE = process.env.MGL_EVAL_SCHEMA || fileURLToPath(new URL('../../schema/v1.json', import.meta.url));
+let keysCache;
+export function schemaKeys(schema) {
+  const resolve = (node, depth = 0) => {
+    if (!node || typeof node !== 'object' || depth > 16) return node;
+    if (typeof node.$ref === 'string' && node.$ref.startsWith('#/')) {
+      const target = node.$ref.slice(2).split('/').map((x) => x.replace(/~1/g, '/').replace(/~0/g, '~')).reduce((o, k) => o?.[k], schema);
+      return resolve(target, depth + 1);
+    }
+    return node;
+  };
+  /** Keys an object schema allows, or null when it allows any (no closed property list). */
+  const objKeys = (node, depth = 0) => {
+    node = resolve(node);
+    if (!node || typeof node !== 'object' || depth > 16) return null;
+    const variants = node.anyOf ?? node.oneOf;
+    if (Array.isArray(variants) || Array.isArray(node.allOf)) {
+      const parts = [...(variants ?? []), ...(node.allOf ?? [])].map((v) => objKeys(v, depth + 1));
+      const own = node.properties ? Object.keys(node.properties) : [];
+      if (variants && parts.slice(0, variants.length).some((x) => x === null)) return null;
+      return [...new Set([...own, ...parts.filter(Boolean).flat()])];
+    }
+    if (node.additionalProperties !== false || node.patternProperties) return null;
+    return Object.keys(node.properties ?? {});
+  };
+  const props = resolve(schema)?.properties ?? {};
+  const keys = { root: objKeys(schema) };
+  for (const [k, v] of Object.entries(props)) {
+    const r = resolve(v);
+    if (r?.type === 'array' || r?.items) keys[k] = objKeys(r.items);
+    else if (r?.type === 'object' || r?.properties) keys[k] = objKeys(r);
+  }
+  return keys;
+}
+function KEYS() {
+  if (!keysCache) keysCache = schemaKeys(JSON.parse(readFileSync(SCHEMA_FILE, 'utf8')));
+  return keysCache;
+}
 const SOURCES = ['asset', 'text', 'shape', 'color', 'comp', 'captions', 'adjustment', 'gen'];
 
 /** Validate a raw project: returns a list of error strings (empty = valid). */
@@ -165,8 +195,11 @@ export function validateRaw(p) {
   const errs = [];
   if (!p || typeof p !== 'object' || Array.isArray(p)) return ['not a JSON object'];
   if (p.michelangelo !== 1) errs.push('"michelangelo" must be 1');
-  for (const k of Object.keys(p)) if (!KEYS.root.includes(k)) errs.push(`unknown top-level key "${k}"`);
-  if (p.project) for (const k of Object.keys(p.project)) if (!KEYS.project.includes(k)) errs.push(`unknown project key "${k}"`);
+  const K = KEYS();
+  const allowed = (list, k) => list === null || list === undefined || list.includes(k);
+  if (K.root) for (const k of Object.keys(p)) if (!K.root.includes(k)) errs.push(`unknown top-level key "${k}"`);
+  if (p.project !== undefined && (!p.project || typeof p.project !== 'object' || Array.isArray(p.project))) errs.push('"project" must be an object');
+  else if (p.project) for (const k of Object.keys(p.project)) if (!allowed(K.project, k)) errs.push(`unknown project key "${k}"`);
   if (!Array.isArray(p.comps) || !p.comps.length) errs.push('no comps');
   const ids = new Set();
   for (const t of ['assets', 'styles', 'comps', 'tracks', 'clips', 'cues', 'buses', 'markers']) {
@@ -177,7 +210,7 @@ export function validateRaw(p) {
       if (typeof e.id !== 'string' || !/^[A-Za-z0-9][A-Za-z0-9_.-]*$/.test(e.id)) errs.push(`${t}: bad id ${JSON.stringify(e.id)}`);
       else if (ids.has(e.id)) errs.push(`duplicate id "${e.id}"`);
       else ids.add(e.id);
-      for (const k of Object.keys(e)) if (!KEYS[t].includes(k)) errs.push(`${t} "${e.id}": unknown key "${k}"`);
+      for (const k of Object.keys(e)) if (!allowed(K[t], k)) errs.push(`${t} "${e.id}": unknown key "${k}"`);
     }
   }
   if (errs.length) return errs;

@@ -8,7 +8,7 @@ const share = (img, pred) => { const m = mask(img, pred); let n = 0; for (const 
 export async function grade(dir) {
   const g = grader();
   const pdir = join(dir, 'plugins/iris');
-  await g.checkAsync('plugin test passes (plugins/iris, manifest api ^1)', async () => {
+  await g.checkAsync('[lib] plugin test passes (plugins/iris, manifest api ^1)', async () => {
     const m = readManifest(pdir);
     if (!m) return { pass: false, detail: 'plugins/iris/package.json missing' };
     const t = await runPluginTests(pdir);
@@ -17,7 +17,7 @@ export async function grade(dir) {
   const p = readProject(join(dir, 'two.mgl.json'));
   const clip = (id) => (p?.clips ?? []).find((c) => c.id === id);
   const tr = clip('blue')?.transition?.in ?? clip('red')?.transition?.out;
-  g.check('two.mgl.json uses the iris transition between the clips, 1 s long; clips unchanged', !!p?.project?.plugins && 'iris' in p.project.plugins && tr?.type === 'iris' && toFrames(tr.len, 30) === 30
+  g.check('[lib] two.mgl.json uses the iris transition between the clips, 1 s long; clips unchanged', !!p?.project?.plugins && 'iris' in p.project.plugins && tr?.type === 'iris' && toFrames(tr.len, 30) === 30
     && clip('red')?.at === 0 && toFrames(clip('red')?.len, 30) === 90 && toFrames(clip('blue')?.at, 30) === 90, p ? `transition ${JSON.stringify(tr ?? null)}` : 'two.mgl.json missing');
   const out = join(dir, 'out/iris.mp4');
   const info = await probe(out);

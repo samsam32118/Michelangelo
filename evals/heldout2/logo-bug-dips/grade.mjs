@@ -93,6 +93,7 @@ export async function grade(dir) {
 
   const pr = namedProject(dir, 'bug.mgl.json', { inputs: [...CLIPS.map((c) => c.f), 'logo.png'], size: [1280, 720] });
   const inp = await inputsUnchanged(dir, [...CLIPS.map((c) => c.f), 'logo.png']);
-  g.check('bug.mgl.json valid, 1280x720, uses the clips and logo.png; inputs unchanged', pr.ok && inp.ok, `${pr.detail}; ${inp.detail}`);
+  g.check('inputs unchanged', inp.ok, inp.detail);
+  g.check('[lib] bug.mgl.json valid, 1280x720, uses the clips and logo.png', pr.ok, pr.detail);
   return g.result();
 }

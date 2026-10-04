@@ -9,9 +9,14 @@
   "fixtures": [
     "master.mov (prores_ks 1920x1080 30fps, testsrc), film24.mp4 (24 fps, smptebars)"
   ],
+  "deliverables": [
+    "out/edit.mp4"
+  ],
+  "library_only": false,
   "checks": [
     "out/edit.mp4 1920x1080 30 fps, 6.0 s +-1 frame (cut-centred transition: lengths add up)",
-    "frame at 1 s matches testsrc, at 5.5 s matches smptebars (SSIM)",
-    "crossfade: frame at the midpoint is a blend (pixel values between both sources)"
+    "frame at 1 s matches testsrc, at 5.5 s matches smptebars (SSIM > 0.6)",
+    "crossfade: the frame at the cut (3.0 s) is a blend of both sources",
+    "[lib] a 1920x1080 30 fps project uses master.mov and film24.mp4 with a transition"
   ]
 }

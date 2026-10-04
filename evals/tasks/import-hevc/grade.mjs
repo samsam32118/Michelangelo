@@ -47,6 +47,6 @@ export async function grade(dir) {
     if (Math.abs(inS - 2) > 2 / 30 + 1e-6) return `phone clip starts at source ${round(inS, 2)} s`;
     return textClips(pp).some((c) => /day\s*1/i.test(c.text)) || 'no "Day 1" text clip';
   } });
-  g.check('a 1080x1920 project plays phone.mov from 2 s with a "Day 1" text clip', !!proj.p, proj.p ? proj.f : proj.why);
+  g.check('[lib] a 1080x1920 project plays phone.mov from 2 s with a "Day 1" text clip', !!proj.p, proj.p ? proj.f : proj.why);
   return g.result();
 }

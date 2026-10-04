@@ -1,6 +1,12 @@
 {
   "id": "photo-montage",
-  "tags": ["stills", "motion", "transitions", "audio", "social"],
+  "tags": [
+    "stills",
+    "motion",
+    "transitions",
+    "audio",
+    "social"
+  ],
   "timeout_min": 20,
   "expects_weak": false,
   "fixtures": [
@@ -13,6 +19,10 @@
     "every photo pushes in: marker distance grows by >= 4% between 0.6 s after and 0.6 s before its transitions",
     "crossfades: within +-0.4 s of 4, 8, 12, 16 s some frame is a blend of the two photos (colour 20-80% along the line between them)",
     "music under the whole slideshow (chord tones present at 10 s); fade-out: last 0.4 s >= 12 dB below 15-16 s, 19.0-19.5 s >= 3 dB below, 17.0-17.8 s within 4 dB",
-    "montage.mgl.json validates, 1920x1080, uses all five photos and music.wav; inputs unchanged"
+    "inputs unchanged",
+    "[lib] montage.mgl.json validates, 1920x1080, uses all five photos and music.wav"
+  ],
+  "deliverables": [
+    "out/montage.mp4"
   ]
 }

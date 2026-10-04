@@ -9,14 +9,14 @@ export async function grade(dir) {
   const p = readProject(join(dir, 'title.mgl.json'));
   const c = (p?.clips ?? []).find((x) => x.id === 'title');
   const len = c ? toFrames(c.len, 30) : 0;
-  g.check('x keyframes start off-screen-left and end at centre by frame 15 with an out easing', (() => {
+  g.check('[lib] x keyframes start off-screen-left and end at centre by frame 15 with an out easing', (() => {
     if (!c || !isKeyframes(c.x)) return false;
     const k = c.x.map((kf) => [toFrames(kf[0], 30), kf[1], kf[2]]);
     const centreAt = k.find((kf) => Math.abs(kf[1] - 960) <= 2);
     const firstSeg = k[0][2];
     return k[0][0] <= 0 && k[0][1] <= 0 && !!centreAt && centreAt[0] <= 16 && outEasing(firstSeg) && Math.abs(valueAt(c.x, 45, 0) - 960) <= 2;
   })(), c ? `x ${JSON.stringify(c.x)}` : 'title clip missing');
-  g.check('opacity reaches 0 at the last frame (after holding at 1)', (() => {
+  g.check('[lib] opacity reaches 0 at the last frame (after holding at 1)', (() => {
     if (!c || !isKeyframes(c.opacity) || c.hidden) return false;
     return valueAt(c.opacity, len - 1, 1) <= 0.1 && valueAt(c.opacity, len - 17, 0) >= 0.95 && valueAt(c.opacity, 45, 0) >= 0.95 && toFrames(c.at, 30) === 0 && len === info.len;
   })(), c ? `opacity ${JSON.stringify(c.opacity)}, len ${len}` : 'missing');

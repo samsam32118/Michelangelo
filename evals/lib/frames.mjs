@@ -270,3 +270,49 @@ export function dilate(m, width, height, r) {
   }
   return out;
 }
+
+/**
+ * OCR-free text detector. Text lines are rows with many strong luma steps (glyph strokes) packed together:
+ * a row of the box is a "text row" when it has >= minEdges edge runs (|L(x+1) - L(x-1)| > edge), with the runs no
+ * further apart than maxSpan of the box width on average; consecutive text rows (gaps <= 1) form a band of
+ * minRows..maxRows rows. Smooth backgrounds, gradients and soft shapes have no such rows.
+ * Returns {bands: [{y, h, x0, x1}], mask (Uint8Array over the image: edge pixels inside bands), count (mask pixels)}.
+ */
+export function textBands(img, { box: b, edge = 0.2, minEdges = 6, minRows = 3, maxRows, maxSpan = 0.6 } = {}) {
+  const [bx, by, bw, bh] = box(img, b);
+  const W = img.width, d = img.data;
+  const L = (x, y) => { const i = (y * W + x) * 4; return 0.2126 * d[i] + 0.7152 * d[i + 1] + 0.0722 * d[i + 2]; };
+  const thr = edge * 255;
+  const rows = [];
+  for (let y = by; y < by + bh; y++) {
+    let runs = 0, inRun = false, first = -1, last = -1;
+    for (let x = Math.max(1, bx); x < Math.min(W - 1, bx + bw); x++) {
+      const e = Math.abs(L(x + 1, y) - L(x - 1, y)) > thr;
+      if (e && !inRun) { runs++; if (first < 0) first = x; }
+      if (e) last = x;
+      inRun = e;
+    }
+    rows.push(runs >= minEdges && last - first <= Math.max(maxSpan * bw, (runs / minEdges) * 0.25 * bw) ? [first, last] : null);
+  }
+  const maxH = maxRows ?? Math.max(minRows, Math.round(bh * 0.25));
+  const bands = [];
+  for (let i = 0; i < rows.length;) {
+    if (!rows[i]) { i++; continue; }
+    let j = i, x0 = rows[i][0], x1 = rows[i][1];
+    while (j + 1 < rows.length && (rows[j + 1] || (j + 2 < rows.length && rows[j + 2]))) { j++; if (rows[j]) { x0 = Math.min(x0, rows[j][0]); x1 = Math.max(x1, rows[j][1]); } }
+    const h = j - i + 1;
+    if (h >= minRows && h <= maxH) bands.push({ y: by + i, h, x0, x1 });
+    i = j + 1;
+  }
+  const m = new Uint8Array(W * img.height);
+  let count = 0;
+  for (const band of bands) for (let y = band.y; y < band.y + band.h; y++) for (let x = Math.max(1, band.x0); x <= Math.min(W - 2, band.x1); x++) if (Math.abs(L(x + 1, y) - L(x - 1, y)) > thr) { m[y * W + x] = 1; count++; }
+  return { bands, mask: m, count };
+}
+
+/** Similarity of two masks: |A xor B| / |A or B| (0 = identical; 1 when one is empty and the other not). */
+export function maskXor(a, b) {
+  let x = 0, u = 0;
+  for (let i = 0; i < a.length; i++) { if (a[i] || b[i]) u++; if (a[i] !== b[i]) x++; }
+  return u ? x / u : 0;
+}

@@ -4,7 +4,23 @@ import { frameAt, lumaStats, frameDiff } from './frames.mjs';
 import { loudness } from './audio.mjs';
 import { round } from './util.mjs';
 
-/** A recorder: check(name, pass, detail) and await checkAsync(name, fn → {pass, detail} | boolean). */
+/**
+ * Library-only checks (DESIGN §17.2): a check that needs a Michelangelo project file or another library artefact is
+ * named with this prefix; the "without" arm is graded on the other (deliverable) checks only.
+ */
+export const LIB_PREFIX = '[lib] ';
+export const isLibCheck = (name) => String(name).startsWith(LIB_PREFIX);
+/** Deliverable-only view of a result: {pass, score, checks} over the checks not marked library-only. */
+export function deliverableResult(checks) {
+  const own = checks.filter((c) => !isLibCheck(c.name));
+  const passed = own.filter((c) => c.pass).length;
+  return { pass: own.length > 0 && passed === own.length, score: own.length ? round(passed / own.length, 4) : 0, checks: own.length };
+}
+
+/**
+ * A recorder: check(name, pass, detail) and await checkAsync(name, fn → {pass, detail} | boolean). result() adds
+ * `deliverable` ({pass, score, checks}: the same over the checks without the "[lib] " prefix).
+ */
 export function grader() {
   const checks = [];
   const check = (name, pass, detail = '') => { checks.push({ name, pass: !!pass, detail: String(detail) }); return !!pass; };
@@ -19,7 +35,7 @@ export function grader() {
     },
     result() {
       const passed = checks.filter((c) => c.pass).length;
-      return { pass: checks.length > 0 && passed === checks.length, score: checks.length ? round(passed / checks.length, 4) : 0, checks };
+      return { pass: checks.length > 0 && passed === checks.length, score: checks.length ? round(passed / checks.length, 4) : 0, checks, deliverable: deliverableResult(checks) };
     },
   };
 }

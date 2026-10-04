@@ -22,6 +22,6 @@ export async function grade(dir) {
     const gains = (pp.buses ?? []).some((b) => b?.gain !== undefined) || (pp.clips ?? []).some((c) => c.gain !== undefined);
     return target || platform || gains || 'no loudness target (-14 LUFS), platform or gain change in the project';
   } });
-  g.check('the mix project (speech + tones) carries the normalisation: a -14 LUFS loudness target, platform or gains', !!proj.p, proj.p ? proj.f : proj.why);
+  g.check('[lib] the mix project (speech + tones) carries the normalisation: a -14 LUFS loudness target, platform or gains', !!proj.p, proj.p ? proj.f : proj.why);
   return g.result();
 }

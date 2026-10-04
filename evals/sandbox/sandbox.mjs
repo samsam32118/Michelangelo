@@ -5,10 +5,14 @@ import { createHash } from 'node:crypto';
 import { homedir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { run } from '../lib/util.mjs';
+import { CANVAS_PKG } from './arms.mjs';
 
 export const USER = process.env.MGL_EVAL_USER || 'mgleval';
 export const HOME = `/home/${USER}`;
 export const TEMPLATE = join(HOME, 'template');
+/** The "without" arm's template (DESIGN §17.2): no Michelangelo, no skill; @napi-rs/canvas installed. */
+export const TEMPLATE_WITHOUT = join(HOME, 'template-without');
+export const templateFor = (arm = 'with') => (arm === 'without' ? TEMPLATE_WITHOUT : TEMPLATE);
 
 const sh = async (cmd, args, opts = {}) => {
   const r = await run(cmd, args, { timeoutMs: 1_200_000, ...opts });
@@ -116,6 +120,31 @@ export async function buildTemplate(tarball, { log = () => {} } = {}) {
   return rec;
 }
 
+/**
+ * The "without" template: a package.json and @napi-rs/canvas (pinned) installed with npm (offline first), nothing
+ * else: no michelangelo package, no .claude skill. Skips the install when it is already there. Returns its record.
+ */
+export async function buildBareTemplate({ dir = TEMPLATE_WITHOUT, pkg = CANVAS_PKG, log = () => {}, chown = isRoot() } = {}) {
+  const recFile = join(dir, '.mgl-eval.json');
+  const prev = existsSync(recFile) ? JSON.parse(readFileSync(recFile, 'utf8')) : null;
+  if (prev?.arm === 'without' && prev.canvas === pkg && existsSync(join(dir, 'node_modules/@napi-rs/canvas/package.json'))) { log('without-template up to date'); return prev; }
+  rmSync(dir, { recursive: true, force: true });
+  mkdirSync(dir, { recursive: true });
+  writeFileSync(join(dir, 'package.json'), JSON.stringify({ name: 'eval-sandbox', private: true, type: 'module' }, null, 2) + '\n');
+  let offline = true;
+  const args = ['install', '--no-audit', '--no-fund', '--loglevel', 'error', '--save-exact', pkg];
+  if ((await run('npm', [...args, '--offline'], { cwd: dir, timeoutMs: 600_000 })).code !== 0) {
+    offline = false;
+    log(`offline install of ${pkg} failed; installing online once`);
+    await sh('npm', args, { cwd: dir });
+  }
+  const version = JSON.parse(readFileSync(join(dir, 'node_modules/@napi-rs/canvas/package.json'), 'utf8')).version;
+  const rec = { arm: 'without', canvas: pkg, canvasVersion: version, offline, skill: false, installedAt: new Date().toISOString() };
+  writeFileSync(recFile, JSON.stringify(rec, null, 2));
+  if (chown) { await sh('chown', ['-R', 'root:root', dir]); await sh('chmod', ['-R', 'a+rX,go-w', dir]); }
+  return rec;
+}
+
 export const templateCli = () => join(TEMPLATE, 'node_modules/michelangelo/dist/cli/main.js');
 
 // ------------------------------------------------------------------------------------------------
@@ -126,7 +155,7 @@ export const PASS_ENV = ['ANTHROPIC_API_KEY', 'ANTHROPIC_AUTH_TOKEN', 'CLAUDE_CO
   'CLAUDE_CODE_USE_BEDROCK', 'CLAUDE_CODE_USE_VERTEX', 'AWS_REGION', 'HTTPS_PROXY', 'HTTP_PROXY', 'NO_PROXY', 'https_proxy', 'http_proxy', 'no_proxy', 'LANG'];
 
 /** Prepare the eval user's HOME; returns the env for the agent process. */
-export async function prepareHome({ passEnv = [], credentials = true, log = () => {} } = {}) {
+export async function prepareHome({ passEnv = [], credentials = true, seedCache = true, log = () => {} } = {}) {
   const claudeDir = join(HOME, '.claude');
   rmSync(claudeDir, { recursive: true, force: true });
   mkdirSync(claudeDir, { recursive: true });
@@ -142,7 +171,9 @@ export async function prepareHome({ passEnv = [], credentials = true, log = () =
     if (f && existsSync(f)) { const dst = join(HOME, `.ca-${k.toLowerCase()}.pem`); copyFileSync(f, dst); chmodSync(dst, 0o644); env[k] = dst; }
   }
   const cache = join(homedir(), '.cache/michelangelo');
-  if (existsSync(cache)) cpSync(cache, join(HOME, '.cache/michelangelo'), { recursive: true });
+  // the "without" arm gets no Michelangelo cache either
+  rmSync(join(HOME, '.cache/michelangelo'), { recursive: true, force: true });
+  if (seedCache && existsSync(cache)) cpSync(cache, join(HOME, '.cache/michelangelo'), { recursive: true });
   await sh('chown', ['-R', `${USER}:${USER}`, claudeDir, ...(existsSync(join(HOME, '.cache')) ? [join(HOME, '.cache')] : [])]);
   log(`HOME ${HOME}: credentials file ${creds ? 'copied' : 'absent'}; env passed: ${Object.keys(env).filter((k) => [...PASS_ENV, ...passEnv].includes(k)).join(', ') || 'none'}`);
   return { env, creds };
@@ -166,12 +197,12 @@ export function unstash(dir, stashDir) {
   }
 }
 
-/** Copy the template install (node_modules, package.json, the skill) into a fresh run dir. */
-export function populateFromTemplate(dir) {
-  if (!existsSync(TEMPLATE)) return false;
-  for (const n of readdirSync(TEMPLATE)) {
+/** Copy a template install (node_modules, package.json, the skill for "with") into a fresh run dir. */
+export function populateFromTemplate(dir, template = TEMPLATE) {
+  if (!existsSync(template)) return false;
+  for (const n of readdirSync(template)) {
     if (n === 'michelangelo.tgz' || n === '.mgl-eval.json') continue;
-    cpSync(join(TEMPLATE, n), join(dir, n), { recursive: true, verbatimSymlinks: true });
+    cpSync(join(template, n), join(dir, n), { recursive: true, verbatimSymlinks: true });
   }
   return true;
 }

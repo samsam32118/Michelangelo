@@ -18,7 +18,7 @@ export async function grade(dir) {
     detail = `${f}: ${cues.length} cues, word times ${cues.map((q) => (q.words ? q.words.length : 0)).join('/')}`;
     return good;
   });
-  g.check('cues carry word timings matching the VTT within 1 frame (texts unchanged)', ok, detail);
+  g.check('[lib] cues carry word timings matching the VTT within 1 frame (texts unchanged)', ok, detail);
 
   await g.checkAsync('out/still.png 1080x1920; the caption at 4.2 s shows 2 dominant text colours (highlighted word)', async () => {
     const f = join(dir, 'out/still.png');

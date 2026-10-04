@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // Re-summarise a results dir:
-//   node evals/report.mjs evals/results/<label>/<set> [--history] [--transcripts <dir>] [--baseline] [--collect]
+//   node evals/report.mjs evals/results/<label>/<set>[-without] [--history] [--transcripts <dir>] [--baseline] [--collect]
 // Reads each <task>/result.json (and recomputes metrics from <task>/transcript.jsonl when present, with the current
 // violation rules), then rewrites summary.json + summary.md. Pass/fail stay as graded at run time (a violation
 // failure recorded by the runner is kept; old results are not re-judged).
@@ -19,6 +19,7 @@ import { readTranscript, metricsFrom } from './sandbox/metrics.mjs';
 import { summarise, writeSummary, appendHistory, publicResult } from './sandbox/summary.mjs';
 import { FORBIDDEN, DEFAULT_PRIVATE_DIR, fatalPaths, gradeIn, keepOutputs } from './run.mjs';
 import { isAlias, isHiddenSet } from './sandbox/alias.mjs';
+import { applyArm, armOfDir, setOfDir } from './sandbox/arms.mjs';
 
 const EVALS = dirname(fileURLToPath(import.meta.url));
 const REPO = resolve(EVALS, '..');
@@ -34,13 +35,13 @@ export function inferHome(transcriptFiles) {
 }
 
 /** Grade a freshly set-up, untouched sandbox of a main-set task; returns its score. */
-export async function baselineScore(task, { env = {} } = {}) {
+export async function baselineScore(task, { env = {}, arm = 'with' } = {}) {
   const tdir = join(EVALS, 'tasks', task);
   const dir = mkdtempSync(join(tmpdir(), `mgl-eval-base-${task}-`));
   try {
     await (await import(pathToFileURL(join(tdir, 'setup.mjs')).href)).setup(dir);
     const g = await gradeIn(join(tdir, 'grade.mjs'), dir, env);
-    return g.score ?? 0;
+    return applyArm(g, arm).score ?? 0;
   } finally { rmSync(dir, { recursive: true, force: true }); }
 }
 
@@ -49,7 +50,9 @@ export async function report(dir, { history = false, transcripts, baseline = fal
   privateDir = resolve(privateDir);
   if (!existsSync(dir)) throw new Error(`${dir} does not exist. fix: pass evals/results/<label>/<set>.`);
   const prev = existsSync(join(dir, 'summary.json')) ? JSON.parse(readFileSync(join(dir, 'summary.json'), 'utf8')) : {};
-  const set = prev.set ?? dir.split('/').pop();
+  // a "without" arm's dir is <set>-without (DESIGN §17.2): the set (and so its held-out status) is the name before it
+  const set = prev.set ?? setOfDir(dir.split('/').pop());
+  const arm = prev.arm ?? armOfDir(dir.split('/').pop());
   // a held-out set is hidden unless this is its private copy (which keeps the real ids, checks and transcripts)
   const isPrivate = dir === privateDir || dir.startsWith(privateDir + '/');
   const hidden = isHiddenSet(set) && !isPrivate;
@@ -90,7 +93,7 @@ export async function report(dir, { history = false, transcripts, baseline = fal
     const todo = results.filter((r) => typeof r.baselineScore !== 'number' && existsSync(join(EVALS, 'tasks', r.task, 'setup.mjs')));
     let next = 0;
     await Promise.all(Array.from({ length: Math.min(parallel, todo.length) }, async () => {
-      while (next < todo.length) { const r = todo[next++]; r.baselineScore = await baselineScore(r.task, { env }); }
+      while (next < todo.length) { const r = todo[next++]; r.baselineScore = await baselineScore(r.task, { env, arm }); }
     }));
   }
   if (collect || baseline) {
@@ -104,7 +107,7 @@ export async function report(dir, { history = false, transcripts, baseline = fal
     }
   }
   const s = summarise(results, { label: prev.label ?? dir.split('/').at(-2), set, model: prev.model ?? '?', date: prev.date ?? new Date().toISOString(), dryRun: !!prev.dryRun, sandbox: prev.sandbox,
-    isolation: prev.isolation ?? (prev.sandbox ? 'user' : 'audit'), packageVersion: prev.packageVersion, timeoutScale: prev.timeoutScale, ...(home ? { agentHome: home } : {}), resummarisedAt: new Date().toISOString() });
+    isolation: prev.isolation ?? (prev.sandbox ? 'user' : 'audit'), packageVersion: prev.packageVersion, timeoutScale: prev.timeoutScale, arm, ...(prev.machineRate !== undefined ? { machineRate: prev.machineRate } : {}), ...(prev.vision !== undefined ? { vision: prev.vision } : {}), ...(home ? { agentHome: home } : {}), resummarisedAt: new Date().toISOString() });
   writeSummary(dir, s, { hideChecks: hidden });
   if (history) appendHistory(join(EVALS, 'HISTORY.md'), s, 're-summarised');
   return s;

@@ -1,6 +1,10 @@
 {
   "id": "progress-bar",
-  "tags": ["motion", "keyframes", "youtube"],
+  "tags": [
+    "motion",
+    "keyframes",
+    "youtube"
+  ],
   "timeout_min": 15,
   "expects_weak": false,
   "fixtures": [
@@ -12,6 +16,10 @@
     "bar is 8-18 px tall and touches the bottom edge",
     "picture above the bar unchanged (SSIM >= 0.9 vs tutorial.mp4 at 2/5/8 s)",
     "audio unchanged (envelope correlation with tutorial.mp4 >= 0.9)",
-    "progress.mgl.json validates, 1920x1080, uses tutorial.mp4; input unchanged"
+    "input unchanged",
+    "[lib] progress.mgl.json validates, 1920x1080, uses tutorial.mp4"
+  ],
+  "deliverables": [
+    "out/progress.mp4"
   ]
 }

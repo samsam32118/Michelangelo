@@ -40,7 +40,7 @@ export async function grade(dir) {
   const pdir = join(dir, 'plugins/quote-card');
   const mgl = mglBin(dir);
 
-  await g.checkAsync('plugins/quote-card: manifest api ^1 with kind template; `mgl plugin test plugins/quote-card` exits 0', async () => {
+  await g.checkAsync('[lib] plugins/quote-card: manifest api ^1 with kind template; `mgl plugin test plugins/quote-card` exits 0', async () => {
     let m;
     try { m = JSON.parse(readFileSync(join(pdir, 'package.json'), 'utf8')); } catch { return { pass: false, detail: 'plugins/quote-card/package.json missing or not JSON' }; }
     const api = String(m?.michelangelo?.api ?? '').trim(), kinds = [].concat(m?.michelangelo?.kinds ?? []);
@@ -52,7 +52,7 @@ export async function grade(dir) {
 
   const pj = L.readProject(join(dir, 'reel.mgl.json'));
   const inst = pj && !L.validateRaw(pj).length ? instances(pj) : [null, null];
-  g.check('reel.mgl.json names the plugin and has quote-card entities at frames 30-150 and 180-300 with the quotes.json text', (() => {
+  g.check('[lib] reel.mgl.json names the plugin and has quote-card entities at frames 30-150 and 180-300 with the quotes.json text', (() => {
     if (!pj || L.validateRaw(pj).length) return false;
     const named = Object.keys(pj.project?.plugins ?? {}).some((k) => /(^|\/)quote-card$/.test(k));
     return named && inst.every((it, i) => it && Math.abs(it.at - SPANS[i][0]) <= 1 && Math.abs(it.end - SPANS[i][1]) <= 1
@@ -83,7 +83,7 @@ export async function grade(dir) {
     return { pass: ok, detail: `card areas ${c1.area}/${c2.area} px, edge density ${L.round(c1.edges, 3)}/${L.round(c2.edges, 3)}; q1 vs q2 differ on ${L.round(both ? diff / both : 0, 3)} of the card` };
   });
 
-  await g.checkAsync('nothing of the cards before 1 s: no accent colour at 0.5 s', async () => {
+  await g.checkAsync('[lib] nothing of the cards before 1 s: no accent colour at 0.5 s', async () => {
     if (!pj || L.validateRaw(pj).length) return { pass: false, detail: 'project missing or invalid' };
     const at15 = L.tables(pj, 'clips').filter((c) => { const s = L.clipSpan(pj, c); return !s.audioTrack && s.at <= 15 && s.end > 15; });
     const leaks = at15.filter((c) => isQuoteCard(c) || strings(c).some((s) => /22c55e|ef4444/i.test(s)));

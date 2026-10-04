@@ -7,7 +7,7 @@ export async function grade(dir) {
   const tall = readProject(join(dir, 'tall.mgl.json'));
   const main = tall && mainComp(tall);
   const wideSame = sha256(join(dir, 'wide.mgl.json')) === hashes['wide.mgl.json'];
-  g.check('tall.mgl.json comp 1080x1920 (valid, keeps the title); wide.mgl.json unchanged',
+  g.check('[lib] tall.mgl.json comp 1080x1920 (valid, keeps the title); wide.mgl.json unchanged',
     !!main && main.size[0] === 1080 && main.size[1] === 1920 && !validateRaw(tall).length && textClips(tall).some((c) => /orbit/i.test(c.text)) && wideSame,
     `${main ? main.size.join('x') : 'tall.mgl.json missing'}${tall ? `; ${validateRaw(tall)[0] ?? 'valid'}` : ''}; wide ${wideSame ? 'unchanged' : 'MODIFIED'}`);
 

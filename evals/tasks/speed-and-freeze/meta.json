@@ -8,8 +8,13 @@
   "fixtures": [
     "run.mgl.json; counter.mp4 (a big frame counter burned in, 30 fps)"
   ],
+  "deliverables": [
+    "out/run.mp4"
+  ],
+  "library_only": false,
   "checks": [
-    "decoded counter values (digit template matching on burned-in counter) follow: 1x, then 2x steps, then constant for 30 frames, then 1x",
-    "duration consistent"
+    "decoded counter values follow 1x, then 2x steps, then constant for 30 frames, then 1x",
+    "duration consistent (frame count matches the edit: 90 + the 1x tail to the end of the original range)",
+    "[lib] the project has the edit: a 2x clip and a freeze (speed 0) or a time remap on the counter"
   ]
 }

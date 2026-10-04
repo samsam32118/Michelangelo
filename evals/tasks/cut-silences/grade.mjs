@@ -11,13 +11,14 @@ export async function grade(dir) {
   const n = info.silences.length;
   const tol = Math.max(0.4, 0.08 * n);
   const proj = readProject(join(dir, 'tight.mgl.json'));
-  await g.checkAsync(`out/tight.wav duration = original minus removed silences (+-${round(tol, 2)} s); tight.mgl.json valid; interview.wav unchanged`, async () => {
+  await g.checkAsync(`out/tight.wav duration = original minus removed silences (+-${round(tol, 2)} s); interview.wav unchanged`, async () => {
     if (!p) return { pass: false, detail: 'out/tight.wav missing' };
     const ne = await assertNotEmpty(out, { video: false, audio: true });
     const same = sha256(join(dir, 'interview.wav')) === hashes['interview.wav'];
-    const valid = proj && !validateRaw(proj).length;
-    return { pass: Math.abs(p.duration - info.expected) <= tol && ne.pass && same && !!valid, detail: `${round(p.duration, 2)} s (expected ${round(info.expected, 2)}); ${ne.detail}; project ${valid ? 'valid' : proj ? validateRaw(proj)[0] : 'missing'}${same ? '' : '; interview.wav MODIFIED'}` };
+    return { pass: Math.abs(p.duration - info.expected) <= tol && ne.pass && same, detail: `${round(p.duration, 2)} s (expected ${round(info.expected, 2)}); ${ne.detail}${same ? '' : '; interview.wav MODIFIED'}` };
   });
+  const valid = !!proj && !validateRaw(proj).length;
+  g.check('[lib] tight.mgl.json exists and is valid', valid, valid ? 'valid' : proj ? validateRaw(proj)[0] : 'tight.mgl.json missing or not JSON');
   await g.checkAsync('silencedetect -40 dB d=0.6 finds no silence', async () => {
     if (!p) return { pass: false, detail: 'missing' };
     const s = await silences(out, { db: -40, minDuration: 0.6 });

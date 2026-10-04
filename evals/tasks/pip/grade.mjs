@@ -62,6 +62,6 @@ export async function grade(dir) {
     const cam = (pp.clips ?? []).find((c) => srcOf.get(c.asset)?.endsWith('cam.mp4'));
     return (!!cam && ['scale', 'x', 'y', 'anchor', 'crop'].some((k) => cam[k] !== undefined)) || 'the cam clip is not scaled or placed';
   } });
-  g.check('a 1920x1080 project uses screen.mp4 and cam.mp4, with the cam clip scaled and placed', !!proj.p, proj.p ? proj.f : proj.why);
+  g.check('[lib] a 1920x1080 project uses screen.mp4 and cam.mp4, with the cam clip scaled and placed', !!proj.p, proj.p ? proj.f : proj.why);
   return g.result();
 }

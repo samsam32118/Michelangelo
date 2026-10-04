@@ -33,8 +33,15 @@ function findProject(dir) {
 export async function grade(dir) {
   const g = grader();
   const found = findProject(dir);
-  g.check('1080x1920 project with a per-word text animation (animate by word) or per-word clips', !!found, found ? found.f : 'no matching project');
-  await g.checkAsync('still at 0.6 s (out/w.png) shows fewer glyph columns than the project rendered at 2.5 s', async () => {
+  await g.checkAsync('out/w.png is 1080x1920 and shows text (>= 5 glyph columns at 270 px)', async () => {
+    const w = join(dir, 'out/w.png');
+    const pi = existsSync(w) ? await probe(w) : undefined;
+    if (!pi) return { pass: false, detail: 'out/w.png missing' };
+    const cols = glyphColumns(await frameAt(w, 0, { width: 270, height: 480 }));
+    return { pass: pi.width === 1080 && pi.height === 1920 && cols >= 5, detail: `${pi.width}x${pi.height}, ${cols} glyph columns` };
+  });
+  g.check('[lib] 1080x1920 project with a per-word text animation (animate by word) or per-word clips', !!found, found ? found.f : 'no matching project');
+  await g.checkAsync('[lib] still at 0.6 s (out/w.png) shows fewer glyph columns than the project rendered at 2.5 s', async () => {
     const w = join(dir, 'out/w.png');
     if (!existsSync(w) || !found) return { pass: false, detail: !found ? 'no project' : 'out/w.png missing' };
     const pi = await probe(w);
@@ -47,7 +54,7 @@ export async function grade(dir) {
     // 0.6 s the first words are already in)
     return { pass: pi.width === 1080 && pi.height === 1920 && ca >= 5 && ca < cb * 0.85 && cb > 30 && (ne.pass || cb > 30), detail: `glyph columns ${ca} at 0.6 s vs ${cb} at 2.5 s; ${ne.detail}` };
   });
-  await g.checkAsync('look contact sheet exists (.mgl/**/sheet.png), long edge <= 1568', async () => {
+  await g.checkAsync('[lib] look contact sheet exists (.mgl/**/sheet.png), long edge <= 1568', async () => {
     const sheets = findFiles(dir, /^sheet\.png$/, { includeMgl: true }).filter((f) => f.startsWith('.mgl/'));
     if (!sheets.length) return { pass: false, detail: 'no .mgl/**/sheet.png' };
     const pi = await probe(join(dir, sheets[0]));

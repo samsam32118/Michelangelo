@@ -77,6 +77,7 @@ export async function grade(dir) {
   const inputs = [1, 2, 3, 4, 5].map((k) => `photos/${k}.jpg`).concat('music.wav');
   const pr = namedProject(dir, 'montage.mgl.json', { inputs, size: [1920, 1080] });
   const inp = await inputsUnchanged(dir, inputs);
-  g.check('montage.mgl.json valid, 1920x1080, uses all photos and music.wav; inputs unchanged', pr.ok && inp.ok, `${pr.detail}; ${inp.detail}`);
+  g.check('inputs unchanged', inp.ok, inp.detail);
+  g.check('[lib] montage.mgl.json valid, 1920x1080, uses all photos and music.wav', pr.ok, pr.detail);
   return g.result();
 }

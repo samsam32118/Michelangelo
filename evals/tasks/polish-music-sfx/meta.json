@@ -1,0 +1,28 @@
+{
+  "id": "polish-music-sfx",
+  "tags": [
+    "audio",
+    "sound-design",
+    "export",
+    "weak"
+  ],
+  "timeout_min": 25,
+  "expects_weak": true,
+  "fixtures": [
+    "edit.mgl.json (4 shots, 1280x720, with cuts at 4.2, 9.1, 13.7 s, a title at 1.3-3.6 s, a voice-over at 10.2 s)",
+    "edit.mp4 (its render with plain ffmpeg; only the voice-over is audible)",
+    "media/shot1-4.mp4, media/vo.wav"
+  ],
+  "deliverables": [
+    "out/final.mp4"
+  ],
+  "library_only": false,
+  "checks": [
+    "out/final.mp4: 1280x720 H.264 + AAC, 20 s +-0.2, the same picture as edit.mp4 (SSIM > 0.8 at 2, 6, 11, 17 s), sound not silent",
+    "music bed throughout: in every 1 s window >= 80 % of 50 ms frames above -50 dBFS",
+    "a transient sound effect within 3 frames of each cut and of the title (10 ms RMS peak >= 6 dB above the surrounding median)",
+    "mixed for YouTube: -14 +-1 LUFS integrated, true peak <= -1 dBTP",
+    "voice not masked: 300-3400 Hz energy during the voice-over >= 6 dB above the bed alone (5.5-8.5 s, 14.6-18.1 s)",
+    "[lib] the project (the edit's shots) has a music clip of >= 18 s and a short effect clip at each cut and at the title"
+  ]
+}

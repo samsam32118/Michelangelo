@@ -80,6 +80,7 @@ export async function grade(dir) {
   });
   const pr = namedProject(dir, 'zoom.mgl.json', { inputs: ['screencast.mp4'], size: [1920, 1080], pred: (p) => (p.clips ?? []).some((c) => ['scale', 'x', 'y', 'anchor'].some((k) => isKeyframes(c[k]))) || 'no clip with keyframed scale/x/y/anchor' });
   const inp = await inputsUnchanged(dir, ['screencast.mp4']);
-  g.check('zoom.mgl.json valid, uses screencast.mp4, keyframed zoom; input unchanged', pr.ok && inp.ok, `${pr.detail}; ${inp.detail}`);
+  g.check('input unchanged', inp.ok, inp.detail);
+  g.check('[lib] zoom.mgl.json valid, uses screencast.mp4, keyframed zoom', pr.ok, pr.detail);
   return g.result();
 }

@@ -21,7 +21,7 @@ export async function grade(dir) {
   const { info, hashes } = readSetup(dir);
   const p = readProject(join(dir, 'talk.mgl.json'));
   const srt = info.cues;
-  g.check('project has 12 cues; each cue start/end within 1 frame of the SRT; texts unchanged', (() => {
+  g.check('[lib] project has 12 cues; each cue start/end within 1 frame of the SRT; texts unchanged', (() => {
     if (!p) return false;
     const cues = projectCues(p);
     const tol = 1 / 30 + 0.002;
@@ -39,8 +39,7 @@ export async function grade(dir) {
   };
   const at = info0 ? await Promise.all(mids.map(measure)) : [];
   const gap = info0 ? await measure(info.gap) : null;
-  g.check('caption text box in the bottom third, white with a black outline', at.length === 3 && at.every((m) => m && m.share >= 0.8 && m.white >= 0.1 && m.black >= 0.05)
-    && p && !(p.clips ?? []).some((c) => c.captions && (c.hidden || c.opacity === 0)),
+  g.check('caption text box in the bottom third, white with a black outline', at.length === 3 && at.every((m) => m && m.share >= 0.8 && m.white >= 0.1 && m.black >= 0.05),
   at.map((m) => (m ? `bottom share ${round(m.share, 2)} white ${round(m.white, 2)} black ${round(m.black, 2)}` : 'no frame')).join('; ') || 'no draft');
   await g.checkAsync('out/draft.mp4 30 s +-0.2, glyph pixels in the bottom third at 3 cue midpoints and none at the gap; not empty; talk.mp4 unchanged', async () => {
     if (!info0) return { pass: false, detail: 'out/draft.mp4 missing' };

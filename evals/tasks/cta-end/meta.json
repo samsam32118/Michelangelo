@@ -8,10 +8,15 @@
   "fixtures": [
     "vlog.mgl.json (1080x1920, 15 s)"
   ],
+  "deliverables": [
+    "*.mp4"
+  ],
+  "library_only": false,
   "checks": [
-    "a CTA clip spans 12-15 s",
-    "its rendered box at 13.5 s is within the Shorts safe zone",
-    "scale or animate keyframes with a back/bounce/elastic easing or pop preset",
+    "[lib] a CTA clip (\"Subscribe\") spans 12-15 s; project valid",
+    "its rendered box at 13.5 s is inside the Shorts safe zone",
+    "[lib] scale or animate keyframes with a back/bounce/elastic easing, or a pop/bounce preset",
+    "draft: an overlay (the CTA) is present at 12.4 s and 14.8 s and absent at 6 s and 11.6 s",
     "draft mp4 rendered, 15 s"
   ]
 }

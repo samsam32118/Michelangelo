@@ -13,7 +13,7 @@ export async function grade(dir) {
     return { pass: Math.abs(p.duration - 30) <= 0.1 && ne.pass, detail: `${round(p.duration)} s; ${ne.detail}` };
   });
   if (!p) {
-    for (const n of ['music level kept outside the voice (+-1.5 dB) and not muted under it', 'music >= 8 dB lower during 8-18 s', 'speech present at 10 s']) g.check(n, false, 'no output');
+    for (const n of ['music level at 1-4 s and 25-29 s within +-1.5 dB of the original bed; not muted during 8-18 s (>= -30 dB)', 'music during 8-18 s is >= 8 dB below its level at 1-4 s and 25-29 s', 'speech present (300-3400 Hz energy) at 10 s']) g.check(n, false, 'no output');
     return g.result();
   }
   const lv = (f, start, duration) => bandEnergy(f, info.tones, { start, duration });
@@ -34,6 +34,6 @@ export async function grade(dir) {
     const split = bed.length > 1 && new Set(bed.map((c) => JSON.stringify(c.gain ?? 0))).size > 1;
     return duck || keyed || split || 'no duck on a bus, gain keyframes or lowered part of the bed';
   } });
-  g.check('the project ducks the bed: a bus duck, gain keyframes or a lowered part of the bed clip', !!proj.p, proj.p ? proj.f : proj.why);
+  g.check('[lib] the project ducks the bed: a bus duck, gain keyframes or a lowered part of the bed clip', !!proj.p, proj.p ? proj.f : proj.why);
   return g.result();
 }

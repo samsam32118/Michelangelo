@@ -18,6 +18,9 @@
     "at the midpoint of every speakers.csv segment the frame matches the right camera: SSIM >= 0.8 vs the reference frame of that source at the same time (host vs guest are mutually SSIM < 0.4)",
     "every picture cut lands within 3 frames of a segment boundary (cuts detected by SSIM drop between consecutive frames)",
     "audio is room.wav only: spectral energy at 1 kHz and 440 Hz tones is > 25 dB below the speech band; cross-correlation with room.wav peaks at lag 0 +/- 1 frame",
-    "podcast.mgl.json loads and validates; has clips referencing both camera assets and one audio clip referencing room.wav"
+    "[lib] podcast.mgl.json loads and validates; has clips referencing both camera assets and one audio clip referencing room.wav"
+  ],
+  "deliverables": [
+    "out/podcast.mp4"
   ]
 }

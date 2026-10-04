@@ -104,19 +104,20 @@ export async function grade(dir) {
   // 1. the script exists, imports michelangelo, and re-runs on a shorter list (run last; originals restored)
   results.script = await rerun(dir, hl);
 
-  g.check('make-reel.mjs imports michelangelo; re-running it on highlights.json minus one entry gives a reel one moment shorter', results.script.pass, results.script.detail);
+  g.check('make-reel.mjs re-runs on highlights.json minus one entry and gives a reel one moment shorter', results.script.rerun, results.script.detail);
+  g.check('[lib] make-reel.mjs imports michelangelo and its re-run writes reel.mgl.json with one media clip fewer', results.script.pass, results.script.detail);
   g.check('out/reel.mp4: 1920x1080, duration = sum of moments - 4 x 0.5 s (+/- 2 frames), not black, not static, audio not silent', results.render.pass, results.render.detail);
   g.check('each midpoint matches its source at in + offset (SSIM >= 0.8 outside the label); crossfades are blends', results.match.pass, results.match.detail);
   g.check('dominant audio tone at each midpoint matches its source', results.audio.pass, results.audio.detail);
   g.check('lower-left label at each midpoint; label differs between consecutive moments', results.labels.pass, results.labels.detail);
-  g.check('reel.mgl.json validates with 5 media clips', results.project.pass, results.project.detail);
+  g.check('[lib] reel.mgl.json validates with 5 media clips', results.project.pass, results.project.detail);
   return g.result();
 }
 
 async function rerun(dir, hl) {
   const script = join(dir, 'make-reel.mjs');
-  if (!existsSync(script)) return { pass: false, detail: 'make-reel.mjs missing' };
-  if (!IMPORT_RE.test(readFileSync(script, 'utf8'))) return { pass: false, detail: 'make-reel.mjs does not import michelangelo' };
+  if (!existsSync(script)) return { pass: false, rerun: false, detail: 'make-reel.mjs missing' };
+  const imports = IMPORT_RE.test(readFileSync(script, 'utf8'));
   const keep = ['highlights.json', 'reel.mgl.json', 'out/reel.mp4'], bak = join(dir, '.grade-backup');
   rmSync(bak, { recursive: true, force: true });
   mkdirSync(join(bak, 'out'), { recursive: true });
@@ -129,8 +130,8 @@ async function rerun(dir, hl) {
     const p = await L.probe(join(dir, 'out/reel.mp4'));
     const pj = L.readProject(join(dir, 'reel.mgl.json'));
     const want = total(short), n = pj ? mediaClips(pj).length : 0;
-    const ok = r.code === 0 && !r.timedOut && p && Math.abs(p.duration - want) <= 2 / 30 + 0.02 && n === 4;
-    return { pass: ok, detail: `exit ${r.code}${r.timedOut ? ' (timed out)' : ''}; reel ${p ? L.round(p.duration, 3) : 'missing'} s (want ${want}); ${n} media clips${r.code ? `; ${r.stderr.trim().split('\n').slice(-2).join(' | ').slice(0, 200)}` : ''}` };
+    const rerunOk = r.code === 0 && !r.timedOut && !!p && Math.abs(p.duration - want) <= 2 / 30 + 0.02;
+    return { pass: imports && rerunOk && n === 4, rerun: rerunOk, detail: `${imports ? '' : 'does not import michelangelo; '}exit ${r.code}${r.timedOut ? ' (timed out)' : ''}; reel ${p ? L.round(p.duration, 3) : 'missing'} s (want ${want}); ${n} media clips${r.code ? `; ${r.stderr.trim().split('\n').slice(-2).join(' | ').slice(0, 200)}` : ''}` };
   } finally {
     for (const f of keep) { rmSync(join(dir, f), { force: true }); if (existsSync(join(bak, f))) renameSync(join(bak, f), join(dir, f)); }
     rmSync(bak, { recursive: true, force: true });

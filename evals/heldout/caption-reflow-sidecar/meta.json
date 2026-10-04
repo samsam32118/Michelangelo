@@ -16,5 +16,8 @@
     "concatenated cue words equal the original cue words in order (case and punctuation-insensitive)",
     "each new cue lies within the time span of the original cue its words came from (+/- 2 frames)",
     "out/vlog.mp4: not black, not static, audio not silent; caption band (lower 40 %) glyph density higher than the bg-only reference at 3 sampled cue midpoints"
+  ],
+  "deliverables": [
+    "out/vlog.mp4"
   ]
 }

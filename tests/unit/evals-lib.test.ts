@@ -1,6 +1,6 @@
 // The eval grading library (evals/lib): raw project reading, time forms, captions, pixel and audio measurements.
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
@@ -38,6 +38,23 @@ describe('project (raw JSON)', () => {
     bad.clips[0].opacity = 1; delete bad.clips[0].opactiy;
     expect(L.validateRaw(bad).join('\n')).toMatch(/V9[\s\S]*overlap|overlap[\s\S]*V9/);
   });
+  it('derives the allowed keys from schema/v1.json: every key the published schema allows is accepted (buses[].fx)', () => {
+    const schema = JSON.parse(readFileSync(resolve(__dirname, '../../schema/v1.json'), 'utf8'));
+    const keys = L.schemaKeys(schema);
+    expect(keys.root).toEqual(Object.keys(schema.properties));
+    for (const t of ['assets', 'styles', 'comps', 'tracks', 'clips', 'cues', 'buses', 'markers']) expect(keys[t], t).toEqual(Object.keys(schema.properties[t].items.properties));
+    expect(keys.buses).toContain('fx');
+    const p = { michelangelo: 1, comps: [{ id: 'main', size: [100, 100], fps: 30 }], tracks: [{ id: 'A1', comp: 'main', audio: true, bus: 'music' }],
+      buses: [{ id: 'music', gain: -3, fx: [{ type: 'eq', low: 2 }] }] };
+    expect(L.validateRaw(p)).toEqual([]);
+    expect(parseProjectText(JSON.stringify(p)).problems.filter((x) => x.severity === 'error')).toEqual([]);
+    (p.buses[0] as any).fz = 1;
+    expect(L.validateRaw(p).join('\n')).toMatch(/unknown key "fz"/);
+    // $ref, anyOf and open objects in a schema
+    const k2 = L.schemaKeys({ properties: { a: { type: 'array', items: { $ref: '#/$defs/A' } }, b: { type: 'array', items: { anyOf: [{ properties: { x: {} }, additionalProperties: false }, { properties: { y: {} }, additionalProperties: false }] } }, c: { type: 'array', items: { type: 'object' } } },
+      additionalProperties: false, $defs: { A: { type: 'object', properties: { id: {}, z: {} }, additionalProperties: false } } });
+    expect(k2).toEqual({ root: ['a', 'b', 'c'], a: ['id', 'z'], b: ['x', 'y'], c: null });
+  });
   it('formats one entity per line, and the library loads the result', () => {
     const p = { michelangelo: 1, comps: [{ id: 'main', size: [1080, 1920], fps: 30, length: 90 }], tracks: [{ id: 'T1', comp: 'main' }], clips: [{ id: 't', track: 'T1', at: 0, len: 90, text: 'a, b], "c"' }] };
     const text = L.formatProject(p);
@@ -70,6 +87,31 @@ describe('captions', () => {
 });
 
 describe('pixels', () => {
+  it('textBands finds stroke-dense text lines and ignores gradients and soft shapes', () => {
+    // "glyphs": 12 vertical strokes, 3 px wide, rows 40-55, on a horizontal gradient with a soft disc
+    const im = img(200, 100, (x, y) => {
+      const disc = Math.max(0, Math.min(1, (30 - Math.hypot(x - 150, y - 30)) / 10));
+      const base = 40 + x * 0.5 + disc * 120;
+      const stroke = y >= 40 && y < 56 && x >= 20 && x < 116 && x % 8 < 3;
+      return stroke ? [255, 255, 255] : [base, base, base];
+    });
+    const r = L.textBands(im);
+    expect(r.bands.length).toBe(1);
+    expect(r.bands[0]).toMatchObject({ y: 40, h: 16 });
+    expect(r.bands[0].x0).toBe(23); // the first stroke is x = 24..26
+    expect(L.textBands(im, { box: [0, 0, 200, 38] }).bands).toEqual([]);
+    expect(L.maskXor(r.mask, r.mask)).toBe(0);
+    expect(L.maskXor(r.mask, new Uint8Array(r.mask.length))).toBe(1);
+  });
+  it('grader results carry the deliverable-only view (checks without the [lib] prefix)', () => {
+    const g = L.grader();
+    g.check('out/x.mp4 exists', true);
+    g.check('[lib] project has the edit', false);
+    const r = g.result();
+    expect(r.pass).toBe(false);
+    expect(r.deliverable).toEqual({ pass: true, score: 1, checks: 1 });
+    expect(L.isLibCheck('[lib] a')).toBe(true);
+  });
   it('measures colours, components, clusters, levels and glyph density', () => {
     const im = img(100, 50, (x, y) => (x >= 10 && x < 30 && y >= 10 && y < 30 ? [255, 0, 0] : x >= 60 && x < 70 && y >= 5 && y < 15 ? [0, 0, 255] : [0, 0, 0]));
     expect(L.meanColor(im, [10, 10, 20, 20])).toEqual([255, 0, 0]);

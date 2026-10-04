@@ -11,8 +11,13 @@
     "photos/*.png (8 solid-colour images with numbers)",
     "beat.wav (click track 120 BPM, first beat at 0.5 s)"
   ],
+  "deliverables": [
+    "out/beat.mp4"
+  ],
+  "library_only": false,
   "checks": [
-    "cut times in the render (frame-colour changes) within 2 frames of the beats 0.5, 1.0, ... 4.0 s",
-    "8 distinct colours appear in order"
+    "cut times (frame-colour changes) within 2 frames of the beats (as heard in the output; fixture beats 0.5, 1.0, ... 4.0 s); 1080x1080",
+    "8 distinct colours appear in order",
+    "[lib] the project (1080x1080, the 8 photos and beat.wav) starts each photo clip on its beat"
   ]
 }

@@ -9,9 +9,13 @@
   "fixtures": [
     "layers.mgl.json (bottom testsrc2, top smptebars, light leak = orange gradient video)"
   ],
+  "deliverables": [
+    "*.png"
+  ],
+  "library_only": false,
   "checks": [
-    "top clip has an ellipse mask with feather > 0",
-    "light leak clip blend = screen",
-    "still: centre matches smptebars colours (+ screen), corners match testsrc (+ screen); screen => no pixel darker than the base"
+    "[lib] top clip has a centred ellipse mask with feather > 0 (not hidden, opacity unchanged)",
+    "[lib] light leak clip blend = screen",
+    "still: centre = smptebars screen leak, corners = testsrc2 screen leak, nothing darker than the base"
   ]
 }

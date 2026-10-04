@@ -4,6 +4,14 @@
 //                      [--timeout-scale 1] [--max-turns 200] [--dry-run] [--no-sandbox] [--no-build] [--pass-env A,B]
 //                      [--no-history] [--note text] [--restore] [--claude <cmd>] [--no-template] [--no-credentials]
 //                      [--keep-dirs] [--no-baseline] [--private-dir <dir>] [--results-dir <dir>] [--sets-dir <dir>]
+//                      [--arm with|without] [--machine-rate 0.10] [--vision] [--judge-model <model>]
+// --arm (DESIGN §17.2): "with" (default) installs the packed library and its skill; "without" installs no Michelangelo
+//   (a template with @napi-rs/canvas only; ffmpeg, Node and Python as always) and its results go to
+//   <results>/<label>/<set>-without. Checks named "[lib] ..." are library-only: not counted in "without"; tasks with
+//   meta.json `library_only: true` (no deliverable checks) are not run in "without".
+// --machine-rate: $ per hour of agent wall clock for the machine cost (default 0.10). --vision: after grading, judge
+//   the deliverable(s) with evals/vision (contact sheets + sound summary, `claude -p` with Read only, run once;
+//   the --claude command is used for it too); the judge's cost is recorded apart from the run's cost.
 // --private-dir: held-out transcripts, results and the alias key (default $MGL_EVAL_PRIVATE_DIR or /root/mgl-eval-private);
 //   a held-out set's private results go to <private-dir>/<label>/<set>. --sets-dir: where the task sets live (tests).
 // --dry-run: no agent; setup + grade on the untouched sandboxes (must all fail), to test the harness.
@@ -22,6 +30,8 @@ import * as S from './sandbox/sandbox.mjs';
 import { readTranscript, metricsFrom, applyViolationPolicy } from './sandbox/metrics.mjs';
 import { summarise, writeSummary, appendHistory, publicResult } from './sandbox/summary.mjs';
 import { aliasOf, loadAliasKey, isHiddenSet } from './sandbox/alias.mjs';
+import { PREAMBLES, applyArm, armSetDir, checkArm, costOf, DEFAULT_MACHINE_RATE } from './sandbox/arms.mjs';
+import { visionScore } from './vision/vision.mjs';
 
 export { aliasOf };
 
@@ -38,7 +48,8 @@ export const fatalPaths = ({ privateDir = DEFAULT_PRIVATE_DIR, resultsDir, setsD
 
 export function parseArgs(argv) {
   const o = { set: 'main', tasks: null, parallel: 2, model: 'claude-opus-5-5', label: null, timeoutScale: 1, maxTurns: 200, dryRun: false, sandbox: true, build: true, passEnv: [], history: true, note: '', restore: false,
-    privateDir: DEFAULT_PRIVATE_DIR, resultsDir: join(EVALS, 'results'), setsDir: EVALS, claude: 'claude', template: true, credentials: true, keepDirs: false, baseline: true };
+    privateDir: DEFAULT_PRIVATE_DIR, resultsDir: join(EVALS, 'results'), setsDir: EVALS, claude: 'claude', template: true, credentials: true, keepDirs: false, baseline: true,
+    arm: 'with', machineRate: DEFAULT_MACHINE_RATE, vision: false, judgeModel: null };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i], next = () => { const v = argv[++i]; if (v === undefined) throw new Error(`${a} needs a value. fix: e.g. ${a} 2`); return v; };
     switch (a) {
@@ -64,6 +75,10 @@ export function parseArgs(argv) {
       case '--no-credentials': o.credentials = false; break;
       case '--keep-dirs': o.keepDirs = true; break;
       case '--no-baseline': o.baseline = false; break;
+      case '--arm': o.arm = checkArm(next()); break;
+      case '--machine-rate': o.machineRate = Number(next()); if (!(o.machineRate >= 0)) throw new Error('--machine-rate: a number of $ per hour, e.g. 0.10.'); break;
+      case '--vision': o.vision = true; break;
+      case '--judge-model': o.judgeModel = next(); break;
       default: throw new Error(`unknown option ${a}. fix: see the usage at the top of evals/run.mjs.`);
     }
   }
@@ -71,15 +86,19 @@ export function parseArgs(argv) {
   // --no-sandbox with real agents = "audit" isolation: the agent runs as the current user in a fresh directory with a
   // fresh HOME; it is not prevented from reading the repository, but every access outside its run dir is recorded
   // as a violation from the transcript and reported (DESIGN.md §16 #1 records why).
+  o.judgeModel ??= o.model;
   o.label ??= `${new Date().toISOString().slice(0, 10)}-${o.dryRun ? 'dry' : 'run'}`;
   if (!/^[A-Za-z0-9._-]+$/.test(o.label)) throw new Error(`--label "${o.label}": use letters, digits, ".", "_" and "-".`);
   return o;
 }
 
-const PREAMBLE = `You are working in a sandbox: your current directory holds the task's files. The Michelangelo video library is installed here: run its CLI with \`npx mgl\` (start with \`npx mgl docs\`) and import it in Node scripts as 'michelangelo'. Its skill is in .claude/skills/michelangelo/SKILL.md (docs next to it). Use only this installed package and its docs; do not look for its source code elsewhere. Write outputs where the task says (paths are relative to this directory). Nobody will answer questions: decide and finish the task.
+/** Is a task library-only (meta.json `library_only: true`: no deliverable checks, so not run in the "without" arm)? */
+export function isLibraryOnly(taskDir) {
+  try { return JSON.parse(readFileSync(join(taskDir, 'meta.json'), 'utf8')).library_only === true; } catch { return false; }
+}
 
-Task:
-`;
+/** The prompt preamble of an arm (the task text follows it). */
+export const preambleFor = (arm = 'with') => PREAMBLES[arm];
 
 /**
  * Kill every process whose working directory is inside dir (the agent's leftovers, e.g. a `mgl render --detach`
@@ -223,24 +242,32 @@ export async function main(argv = process.argv.slice(2)) {
   const aliasKey = hidden ? loadAliasKey(o.privateDir) : null;
   const fatal = fatalPaths(o);
   const all = readdirSync(setRoot).filter((d) => existsSync(join(setRoot, d, 'task.md'))).sort();
-  const tasks = o.tasks ? o.tasks.filter((t) => { if (!all.includes(t)) throw new Error(`unknown task "${t}" in the ${o.set} set. fix: one of ${hidden ? '(see evals/heldout)' : all.join(', ')}.`); return true; }) : all;
-  const outRoot = join(o.resultsDir, o.label, o.set);
-  const privRoot = hidden ? join(o.privateDir, o.label, o.set) : outRoot;
+  const asked = o.tasks ? o.tasks.filter((t) => { if (!all.includes(t)) throw new Error(`unknown task "${t}" in the ${o.set} set. fix: one of ${hidden ? '(see evals/heldout)' : all.join(', ')}.`); return true; }) : all;
+  // meta.library_only tasks (the deliverable is the project file itself) have no deliverable checks: not run in "without"
+  const excluded = o.arm === 'without' ? asked.filter((t) => isLibraryOnly(join(setRoot, t))) : [];
+  const tasks = asked.filter((t) => !excluded.includes(t));
+  const setDir = armSetDir(o.set, o.arm);
+  const outRoot = join(o.resultsDir, o.label, setDir);
+  const privRoot = hidden ? join(o.privateDir, o.label, setDir) : outRoot;
   mkdirSync(outRoot, { recursive: true });
   mkdirSync(privRoot, { recursive: true });
-  log(`${o.set}: ${tasks.length} task(s), label ${o.label}, ${o.dryRun ? 'DRY RUN' : `model ${o.model}`}, parallel ${o.parallel}${o.sandbox ? `, sandbox user ${S.USER}` : ', no sandbox'}`);
+  if (excluded.length) log(`arm without: ${excluded.length} library-only task(s) not run${hidden ? '' : ` (${excluded.join(', ')})`}`);
+  log(`${o.set}: ${tasks.length} task(s), label ${o.label}, ${o.dryRun ? 'DRY RUN' : `model ${o.model}`}, parallel ${o.parallel}, arm ${o.arm}${o.vision ? ', vision on' : ''}${o.sandbox ? `, sandbox user ${S.USER}` : ', no sandbox'}`);
 
   let template = null, agentEnv = {};
   if (o.sandbox) {
     const u = await S.ensureUser();
     log(`user ${S.USER} uid ${u.uid}${u.created ? ' (created)' : ''}`);
   }
-  if (!o.dryRun && o.template) {
+  if (!o.dryRun && o.template && o.arm === 'without') {
+    template = await S.buildBareTemplate({ log });
+    log(`template ${S.TEMPLATE_WITHOUT}: no Michelangelo; ${template.canvas} (${template.offline ? 'offline install' : 'online install'}), no skill`);
+  } else if (!o.dryRun && o.template) {
     const tgz = await S.packRepo(REPO, join(tmpdir(), 'mgl-eval-pack'), { build: o.build, log });
     template = await S.buildTemplate(tgz, { log });
     log(`template ${S.TEMPLATE}: michelangelo ${template.version} (${template.offline ? 'offline install' : 'online install'}), skill ${template.skill ? 'copied' : 'MISSING'}`);
   }
-  if (!o.dryRun) agentEnv = o.sandbox ? (await S.prepareHome({ passEnv: o.passEnv, credentials: o.credentials, log })).env
+  if (!o.dryRun) agentEnv = o.sandbox ? (await S.prepareHome({ passEnv: o.passEnv, credentials: o.credentials, seedCache: o.arm === 'with', log })).env
     : { HOME: mkdtempSync(join(tmpdir(), 'mgl-eval-home-')), DISABLE_AUTOUPDATER: '1' };
   const gradeEnv = { MGL_EVAL_RUN_AS: o.sandbox ? S.USER : '', ...(existsSync(S.templateCli()) ? { MGL_EVAL_MGL: S.templateCli() } : {}) };
   const unlock = o.sandbox ? S.lockRepo(REPO) : () => {};
@@ -256,12 +283,12 @@ export async function main(argv = process.argv.slice(2)) {
       const shown = hidden ? aliasOf(task, aliasKey) : task;
       const resDir = join(outRoot, shown), privDir = join(privRoot, task);
       rmSync(resDir, { recursive: true, force: true }); mkdirSync(resDir, { recursive: true }); mkdirSync(privDir, { recursive: true });
-      const dir = o.sandbox ? join(S.HOME, 'runs', o.label, o.set, task) : mkdtempSync(join(tmpdir(), `mgl-eval-${task}-`));
+      const dir = o.sandbox ? join(S.HOME, 'runs', o.label, setDir, task) : mkdtempSync(join(tmpdir(), `mgl-eval-${task}-`));
       rmSync(dir, { recursive: true, force: true }); mkdirSync(dir, { recursive: true });
-      const r = { task, pass: false, score: 0, checks: [], metrics: {}, wallSec: 0, timedOut: false, dir, timeoutMin: meta.timeout_min, expectsWeak: !!meta.expects_weak };
+      const r = { task, arm: o.arm, pass: false, score: 0, checks: [], metrics: {}, wallSec: 0, timedOut: false, dir, timeoutMin: meta.timeout_min, expectsWeak: !!meta.expects_weak };
       if (!o.dryRun) r.agentHome = agentEnv.HOME;
       try {
-        if (!o.dryRun && o.template) S.populateFromTemplate(dir);
+        if (!o.dryRun && o.template) S.populateFromTemplate(dir, S.templateFor(o.arm));
         const { setup } = await import(join(tdir, 'setup.mjs'));
         await setup(dir);
         copyFileSync(join(tdir, 'task.md'), join(dir, 'task.md'));
@@ -269,12 +296,12 @@ export async function main(argv = process.argv.slice(2)) {
           // the baseline: what the untouched sandbox already scores (graded on a copy, so grading leaves no trace)
           const b = copyForBaseline(dir);
           if (o.sandbox) await S.chownTree(b);
-          try { r.baselineScore = (await gradeIn(join(tdir, 'grade.mjs'), b, gradeEnv)).score ?? 0; } finally { rmSync(b, { recursive: true, force: true }); }
+          try { r.baselineScore = applyArm(await gradeIn(join(tdir, 'grade.mjs'), b, gradeEnv), o.arm).score ?? 0; } finally { rmSync(b, { recursive: true, force: true }); }
         }
         S.stash(dir, join(privDir, 'stash'));
         if (o.sandbox) await S.chownTree(dir);
         if (!o.dryRun) {
-          const prompt = PREAMBLE + readFileSync(join(tdir, 'task.md'), 'utf8');
+          const prompt = preambleFor(o.arm) + readFileSync(join(tdir, 'task.md'), 'utf8');
           const a = await runAgent({ dir, prompt, env: agentEnv, model: o.model, maxTurns: o.maxTurns, timeoutMs: (meta.timeout_min ?? 15) * 60_000 * o.timeoutScale,
             transcript: join(privDir, 'transcript.jsonl'), stderrFile: join(privDir, 'agent.stderr.log'), sandbox: o.sandbox, claude: o.claude });
           Object.assign(r, { timedOut: a.timedOut, wallSec: a.wallSec, exitCode: a.code });
@@ -282,8 +309,13 @@ export async function main(argv = process.argv.slice(2)) {
           await settleProcs(dir); // nothing of the agent's may still write outputs while grading
         }
         S.unstash(dir, join(privDir, 'stash'));
-        const g = await gradeIn(join(tdir, 'grade.mjs'), dir, gradeEnv);
+        const g = applyArm(await gradeIn(join(tdir, 'grade.mjs'), dir, gradeEnv), o.arm);
         Object.assign(r, { pass: g.pass, score: g.score, checks: g.checks });
+        if (g.skippedChecks) r.skippedChecks = g.skippedChecks; // library-only checks, not counted in this arm
+        r.cost = costOf(r, o.machineRate);
+        if (o.vision) {
+          r.vision = await visionScore({ dir, taskMd: readFileSync(join(tdir, 'task.md'), 'utf8'), meta, result: g, claude: o.claude, model: o.judgeModel, keepDir: join(privDir, 'vision') });
+        }
         if (o.dryRun && !o.baseline) delete r.baselineScore;
         else if (o.dryRun) r.baselineScore = g.score; // a dry run grades the untouched sandbox itself
         applyViolationPolicy(r);
@@ -302,7 +334,8 @@ export async function main(argv = process.argv.slice(2)) {
         // the public copy names the task only by its alias (counts only, no check names, paths or reasons)
         writeFileSync(join(resDir, 'result.json'), JSON.stringify({ ...publicResult(r), task: shown }, null, 1));
       }
-      log(`${shown}: ${r.pass ? 'PASS' : 'fail'} score ${r.score}${o.dryRun ? '' : ` turns ${r.metrics.turns ?? 0} ${Math.round(r.wallSec)} s${r.timedOut ? ' TIMEOUT' : ''}`}${r.error ? ' (harness error)' : ''}${r.violationFail ? ' (failed: sandbox violation)' : ''}`);
+      const vis = r.vision ? (typeof r.vision.overall === 'number' ? ` vision ${r.vision.overall}` : r.vision.error ? ' vision error' : ' no vision') : '';
+      log(`${shown}: ${r.pass ? 'PASS' : 'fail'} score ${r.score}${vis}${o.dryRun ? '' : ` $${r.cost?.totalUsd ?? 0} turns ${r.metrics.turns ?? 0} ${Math.round(r.wallSec)} s${r.timedOut ? ' TIMEOUT' : ''}`}${r.error ? ' (harness error)' : ''}${r.violationFail ? ' (failed: sandbox violation)' : ''}`);
       return r;
     });
   } finally {
@@ -315,6 +348,7 @@ export async function main(argv = process.argv.slice(2)) {
   const pubResults = hidden ? results.map((r) => ({ ...r, task: aliasOf(r.task, aliasKey) })) : results;
   const meta = {
     label: o.label, set: o.set, model: o.dryRun ? 'none' : o.model, date: new Date().toISOString(), dryRun: o.dryRun, sandbox: o.sandbox, isolation: o.sandbox ? 'user' : 'audit', packageVersion: template?.version, timeoutScale: o.timeoutScale, agentHome: agentEnv.HOME,
+    arm: o.arm, machineRate: o.machineRate, ...(excluded.length ? { libraryOnlyExcluded: hidden ? excluded.length : excluded } : {}), vision: o.vision, ...(o.vision ? { judgeModel: o.judgeModel } : {}),
   };
   const s = summarise(pubResults, meta);
   writeSummary(outRoot, s, { hideChecks: hidden });

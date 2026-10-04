@@ -1,6 +1,10 @@
 {
   "id": "lav-dual-mono",
-  "tags": ["audio", "mixing", "corporate"],
+  "tags": [
+    "audio",
+    "mixing",
+    "corporate"
+  ],
   "timeout_min": 15,
   "expects_weak": false,
   "fixtures": [
@@ -13,6 +17,10 @@
     "channels balanced within 1.5 dB RMS",
     "integrated loudness -16 +/- 1.2 LUFS",
     "picture unchanged (SSIM >= 0.9 at 2/5/8 s)",
-    "fixed.mgl.json validates, uses interview.mp4; input unchanged"
+    "input unchanged",
+    "[lib] fixed.mgl.json validates, uses interview.mp4"
+  ],
+  "deliverables": [
+    "out/fixed.mp4"
   ]
 }

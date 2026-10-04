@@ -1,6 +1,6 @@
 import { join } from 'node:path';
 import { readFileSync, statSync, existsSync } from 'node:fs';
-import { grader, probe, ssim, round, assertNotEmpty, frameAt, renderStill, projectContentShare, findProjectUsing } from '../../lib/index.mjs';
+import { grader, probe, ssim, round, assertNotEmpty, frameAt, renderStill, projectContentShare, findProjectUsing, mask, maskStats } from '../../lib/index.mjs';
 
 /** Walk the GIF blocks: frame count, total delay (s) and the NETSCAPE2.0 loop count (0 = forever, undefined = plays once). */
 export function gifInfo(buf) {
@@ -43,8 +43,24 @@ export async function grade(dir) {
     const s = await ssim(f, join(dir, 'media/bg.mp4'), { ta: 0, tb: 3, width: 480, height: 270 });
     return { pass: s > 0.6, detail: `SSIM ${round(s, 3)} against the source at 3 s` };
   });
+  // from the GIF alone: the project's "Demo" label (top band, moving right) over the background
+  await g.checkAsync('the GIF shows a label in the top band that moves right between 3 s and 5 s (not the bare background)', async () => {
+    if (!p) return { pass: false, detail: 'missing' };
+    const S = { width: 480, height: 270 }, band = [0, 0, 480, 80];
+    const parts = [];
+    const at = async (t) => {
+      const [o, src] = await Promise.all([frameAt(f, t - 3, S), frameAt(join(dir, 'media/bg.mp4'), t, S)]);
+      if (!o || !src) return null;
+      const m = mask(o, (r, gg, b, x, y) => { const i = (y * 480 + x) * 4; return Math.max(Math.abs(r - src.data[i]), Math.abs(gg - src.data[i + 1]), Math.abs(b - src.data[i + 2])) > 80; }, band);
+      const s = maskStats(m, 480, 270, { minPerLine: 2 });
+      parts.push(`${t} s: ${s.count} px${s.centroid ? ` cx ${round(s.centroid[0], 0)}` : ''}`);
+      return s;
+    };
+    const [a, b] = [await at(3), await at(5)];
+    return { pass: !!a && !!b && a.count >= 40 && b.count >= 40 && b.centroid[0] - a.centroid[0] >= 20, detail: parts.join('; ') };
+  });
   // the GIF is the project's (with its moving "Demo" label), not just the background cut with ffmpeg
-  await g.checkAsync('the GIF shows the project (its moving label) at 3 s and 5 s, like a render of demo.mgl.json', async () => {
+  await g.checkAsync('[lib] the GIF shows the project (its moving label) at 3 s and 5 s, like a render of demo.mgl.json', async () => {
     if (!p) return { pass: false, detail: 'missing' };
     const proj = findProjectUsing(dir, { inputs: ['media/bg.mp4'], files: ['demo.mgl.json'], pred: (pp) => (pp.clips ?? []).some((c) => c.text === 'Demo') || 'the "Demo" label is gone' });
     if (!proj.p) return { pass: false, detail: proj.why };

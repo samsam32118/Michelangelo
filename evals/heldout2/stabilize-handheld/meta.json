@@ -1,6 +1,10 @@
 {
   "id": "stabilize-handheld",
-  "tags": ["effects", "tracking", "weak"],
+  "tags": [
+    "effects",
+    "tracking",
+    "weak"
+  ],
   "timeout_min": 25,
   "expects_weak": true,
   "fixtures": [
@@ -12,6 +16,10 @@
     "shake removed: mean frame-to-frame movement of the magenta marker <= 35% of handheld.mp4's",
     "the ball still travels >= 800 px left to right (not a frozen frame)",
     "zoom between 0.95x and 1.3x (marker spacing vs the scene) and no black edges (<= 1% near-black pixels in the outer 3% border)",
-    "stable.mgl.json validates, 1920x1080, uses handheld.mp4; input unchanged"
+    "input unchanged",
+    "[lib] stable.mgl.json validates, 1920x1080, uses handheld.mp4"
+  ],
+  "deliverables": [
+    "out/stable.mp4"
   ]
 }

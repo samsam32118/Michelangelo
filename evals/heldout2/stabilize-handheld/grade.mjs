@@ -49,6 +49,7 @@ export async function grade(dir) {
   g.check('zoom 0.95-1.3x and no black edges', zoom >= 0.95 && zoom <= 1.3 && tr.length > 0 && blackFrames === 0, `zoom ${round(zoom, 3)}x, frames with black edges ${blackFrames}`);
   const pr = namedProject(dir, 'stable.mgl.json', { inputs: ['handheld.mp4'], size: [1920, 1080] });
   const inp = await inputsUnchanged(dir, ['handheld.mp4']);
-  g.check('stable.mgl.json valid, 1920x1080, uses handheld.mp4; input unchanged', pr.ok && inp.ok, `${pr.detail}; ${inp.detail}`);
+  g.check('input unchanged', inp.ok, inp.detail);
+  g.check('[lib] stable.mgl.json valid, 1920x1080, uses handheld.mp4', pr.ok, pr.detail);
   return g.result();
 }

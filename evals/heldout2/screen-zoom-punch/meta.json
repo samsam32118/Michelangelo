@@ -1,6 +1,11 @@
 {
   "id": "screen-zoom-punch",
-  "tags": ["motion", "keyframes", "tutorial", "youtube"],
+  "tags": [
+    "motion",
+    "keyframes",
+    "tutorial",
+    "youtube"
+  ],
   "timeout_min": 15,
   "expects_weak": false,
   "fixtures": [
@@ -12,6 +17,10 @@
     "at 4.0 / 4.75 / 5.5 s the frame is the top-right quarter scaled 2x (SSIM >= 0.8 and above the full-frame SSIM; mean abs error <= 10 and far below the full frame's)",
     "smooth zooms: >= 2 sampled frames (every 0.1 s) in 2.9-3.9 s and in 5.9-6.9 s match an intermediate zoom 1.1x-1.9x towards the quarter",
     "audio unchanged (envelope correlation >= 0.9)",
-    "zoom.mgl.json validates, 1920x1080, uses screencast.mp4, with keyframed scale/position on some clip; input unchanged"
+    "input unchanged",
+    "[lib] zoom.mgl.json validates, 1920x1080, uses screencast.mp4, with keyframed scale/position on some clip"
+  ],
+  "deliverables": [
+    "out/zoom.mp4"
   ]
 }

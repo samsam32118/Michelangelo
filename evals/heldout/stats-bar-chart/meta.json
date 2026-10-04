@@ -16,5 +16,8 @@
     "bars left to right in CSV order (x of colour centroids increasing); background at the corners within delta E 3 of white",
     "growth is animated and staggered: at 0.1 s all bars < 10 % of final height; at some sampled time between 0.5 and 3 s the first bar is >= 50 % taller (relative to final) than the last bar; frames at 4.5 s and 5.8 s SSIM >= 0.98 (hold)",
     "glyph pixels present below the baseline under each bar at 5 s"
+  ],
+  "deliverables": [
+    "out/chart.mp4"
   ]
 }

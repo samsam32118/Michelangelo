@@ -9,9 +9,14 @@
   "fixtures": [
     "two.mgl.json (red solid 3 s then blue solid 3 s)"
   ],
+  "deliverables": [
+    "out/iris.mp4"
+  ],
+  "library_only": false,
   "checks": [
-    "plugin test passes",
-    "at the transition midpoint frame: centre pixel blue, corner pixel red",
-    "before: all red; after: all blue"
+    "[lib] plugin test passes (plugins/iris, manifest api ^1)",
+    "[lib] two.mgl.json uses the iris transition between the clips, 1 s long; clips unchanged",
+    "at the transition midpoint (3.0 s): centre pixel blue, corner pixel red",
+    "before (2.0 s): all red; after (4.0 s): all blue; duration 6 s"
   ]
 }

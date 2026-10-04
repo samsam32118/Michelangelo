@@ -16,5 +16,8 @@
     "orange box still visible: an #ff7a00 blob (delta E < 10) of area >= 10,000 px is detected at 8 sampled times",
     "label follows: at 8 sampled times a near-white blob (pill) of area >= 1,500 px has its centre within 60 px horizontally of the box centre and 40-200 px above it",
     "label is not static: pill centre moves by > 400 px across the samples"
+  ],
+  "deliverables": [
+    "out/tracked.mp4"
   ]
 }

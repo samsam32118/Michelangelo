@@ -16,9 +16,9 @@ export async function grade(dir) {
     const [cx, cy] = clipSpace ? [(x + w / 2) * 1280, (y + h / 2) * 720] : [x + w / 2, y + h / 2];
     return Math.abs(cx - 640) < 130 && Math.abs(cy - 360) < 72;
   })();
-  g.check('top clip has a centred ellipse mask with feather > 0 (not hidden, opacity unchanged)', !!ell && !!centred && !top.hidden && top.opacity === undefined && !!p && !validateRaw(p).length,
+  g.check('[lib] top clip has a centred ellipse mask with feather > 0 (not hidden, opacity unchanged)', !!ell && !!centred && !top.hidden && top.opacity === undefined && !!p && !validateRaw(p).length,
     top ? `masks ${JSON.stringify(top.masks ?? null)}` : 'top clip missing');
-  g.check('light leak clip blend = screen', leak?.blend === 'screen' && !leak.hidden && (leak.opacity === undefined || leak.opacity >= 0.5), leak ? `blend ${leak.blend}, opacity ${leak.opacity}` : 'leak clip missing');
+  g.check('[lib] light leak clip blend = screen', leak?.blend === 'screen' && !leak.hidden && (leak.opacity === undefined || leak.opacity >= 0.5), leak ? `blend ${leak.blend}, opacity ${leak.opacity}` : 'leak clip missing');
   await g.checkAsync('still: centre = smptebars screen leak, corners = testsrc2 screen leak, nothing darker than the base', async () => {
     const W = 320, H = 180;
     const [base, bars, lk] = await Promise.all(['base', 'bars', 'leak'].map((n) => frameAt(join(dir, `media/${n}.mp4`), 2, { width: W, height: H })));

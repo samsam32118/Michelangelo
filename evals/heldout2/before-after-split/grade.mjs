@@ -72,8 +72,8 @@ export async function grade(dir) {
   const projR = namedProject(dir, 'split.mgl.json', { inputs: ['before.mp4', 'after.mp4'], size: [1920, 1080] });
   const texts = projR.p ? textClips(projR.p).map((c) => c.text.trim().toUpperCase()) : [];
   const shares = ok ? frames.map((f) => [labelShare(f, 'left'), labelShare(f, 'right')]) : [];
-  g.check('labels drawn in the top band of both halves; BEFORE and AFTER text clips', ok && shares.every((s) => s.every((v) => v > 0.004 && v < 0.6)) && texts.includes('BEFORE') && texts.includes('AFTER'),
-    `label pixel shares ${shares.map((s) => s.map((v) => round(v, 3)).join('/')).join(', ')}; text clips: ${texts.join(', ') || 'none'}`);
+  g.check('labels drawn in the top band of both halves', ok && shares.every((s) => s.every((v) => v > 0.004 && v < 0.6)),
+    `label pixel shares ${shares.map((s) => s.map((v) => round(v, 3)).join('/')).join(', ')}`);
 
   await g.checkAsync("audio is after.mp4's speech only", async () => {
     if (!facts.ok) return { pass: false, detail: 'no output' };
@@ -82,6 +82,7 @@ export async function grade(dir) {
     return { pass: corr >= 0.8 && lo[440] <= lb[440] - 20, detail: `envelope corr ${round(corr, 3)}, 440 Hz ${round(lo[440], 1)} dB (before.mp4 ${round(lb[440], 1)} dB)` };
   });
   const inp = await inputsUnchanged(dir, ['before.mp4', 'after.mp4']);
-  g.check('split.mgl.json valid, 1920x1080, uses both clips; inputs unchanged', projR.ok && inp.ok, `${projR.detail}; ${inp.detail}`);
+  g.check('inputs unchanged', inp.ok, inp.detail);
+  g.check('[lib] split.mgl.json valid, 1920x1080, uses both clips; BEFORE and AFTER text clips', projR.ok && texts.includes('BEFORE') && texts.includes('AFTER'), `${projR.detail}; text clips: ${texts.join(', ') || 'none'}`);
   return g.result();
 }

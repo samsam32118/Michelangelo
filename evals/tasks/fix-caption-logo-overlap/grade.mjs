@@ -10,7 +10,7 @@ export async function grade(dir) {
   const orig = { x: info.logo.x, y: info.logo.y };
   const clip = (id) => p?.clips?.find((c) => c.id === id);
 
-  await g.checkAsync('frame at cue c5: caption glyphs and the logo both present and disjoint', async () => {
+  await g.checkAsync('[lib] frame at cue c5: caption glyphs and the logo both present and disjoint', async () => {
     if (!p || validateRaw(p).length) return { pass: false, detail: p ? validateRaw(p)[0] : 'promo.mgl.json missing' };
     const r = await renderStill(dir, 'promo.mgl.json', info.t);
     if (r.error) return { pass: false, detail: r.error };
@@ -27,12 +27,12 @@ export async function grade(dir) {
     const ne = await assertNotEmpty(r.file, { still: true });
     return { pass: logoShare >= 0.95 && white > 1500 && !overlap && ne.pass, detail: `logo ${round(logoShare, 3)} visible, caption white px ${white}, caption box ${bb?.join(',')}, logo box ${lb.join(',')}` };
   });
-  g.check('logo clip x, y, scale, opacity, hidden, blend unchanged', (() => {
+  g.check('[lib] logo clip x, y, scale, opacity, hidden, blend unchanged', (() => {
     const l = clip('logo');
     return !!l && l.x === orig.x && l.y === orig.y && l.fit === 'none' && ['scale', 'opacity', 'hidden', 'blend', 'anchor', 'parent', 'masks', 'crop'].every((k) => l[k] === undefined)
       && l.track === 'LOGO' && !p.tracks.find((t) => t.id === 'LOGO')?.hidden && p.tracks.findIndex((t) => t.id === 'LOGO') > p.tracks.findIndex((t) => t.id === (p.clips.find((c) => c.captions)?.track ?? 'CAP'));
   })(), JSON.stringify(clip('logo') ?? null));
-  g.check('caption clip and style: size not smaller, not hidden, opacity unchanged, scale not < 1', (() => {
+  g.check('[lib] caption clip and style: size not smaller, not hidden, opacity unchanged, scale not < 1', (() => {
     const caps = (p?.clips ?? []).filter((c) => c.captions);
     if (caps.length !== 1) return false;
     const c = caps[0], st = resolveStyle(p, c);
@@ -42,7 +42,7 @@ export async function grade(dir) {
     const track = p.tracks.find((t) => t.id === c.track);
     return size >= 64 && !c.hidden && c.opacity === undefined && minScale >= 1 && !track?.hidden && !c.masks && (st.maxLines ?? 3) >= 3;
   })(), (() => { const c = (p?.clips ?? []).find((x) => x.captions); return c ? `size ${resolveStyle(p, c).size}, scale ${JSON.stringify(c.scale)}, opacity ${c.opacity}` : 'no captions clip'; })());
-  g.check('cue count, texts and timings unchanged', (() => {
+  g.check('[lib] cue count, texts and timings unchanged', (() => {
     if (!p) return false;
     const cues = projectCues(p);
     return cues.length === info.cues.length && info.cues.every(([id, at, len, text], i) => cues[i].text === text && Math.abs(cues[i].start - at / 30) < 1e-6 && Math.abs(cues[i].end - (at + len) / 30) < 1e-6 && same(cues[i].id, id));

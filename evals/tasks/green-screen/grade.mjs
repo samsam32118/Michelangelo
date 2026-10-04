@@ -30,6 +30,6 @@ export async function grade(dir) {
     const pr = (pp.clips ?? []).filter((c) => srcOf.get(c.asset)?.endsWith('presenter.mp4'));
     return pr.some((c) => Array.isArray(c.fx) && c.fx.some((x) => /key/i.test(String(x?.type ?? '')))) || 'the presenter clip has no keying fx';
   } });
-  g.check('a project uses presenter.mp4 and city.mp4 and keys the presenter (a chroma-key fx)', !!proj.p, proj.p ? proj.f : proj.why);
+  g.check('[lib] a project uses presenter.mp4 and city.mp4 and keys the presenter (a chroma-key fx)', !!proj.p, proj.p ? proj.f : proj.why);
   return g.result();
 }

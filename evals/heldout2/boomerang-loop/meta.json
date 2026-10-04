@@ -1,6 +1,11 @@
 {
   "id": "boomerang-loop",
-  "tags": ["editing", "speed", "social", "weak"],
+  "tags": [
+    "editing",
+    "speed",
+    "social",
+    "weak"
+  ],
   "timeout_min": 20,
   "expects_weak": true,
   "fixtures": [
@@ -11,6 +16,10 @@
     ">= 95% of frames decode to a source frame index, all within source frames 28-76 (1.0-2.5 s)",
     "the index sequence is exactly 6 monotone runs: up, down, up, down, up, down, each spanning <= 33 to >= 71",
     "normal speed: median step between frames <= 1.5 source frames",
-    "boomerang.mgl.json validates, 1080x1080, uses jump.mp4; input unchanged"
+    "input unchanged",
+    "[lib] boomerang.mgl.json validates, 1080x1080, uses jump.mp4"
+  ],
+  "deliverables": [
+    "out/boomerang.mp4"
   ]
 }

@@ -1,6 +1,11 @@
 {
   "id": "censor-blur-bleep",
-  "tags": ["effects", "masks", "audio", "social"],
+  "tags": [
+    "effects",
+    "masks",
+    "audio",
+    "social"
+  ],
   "timeout_min": 20,
   "expects_weak": false,
   "fixtures": [
@@ -12,6 +17,10 @@
     "picture outside the tag unchanged (SSIM >= 0.9 at 1 / 4 / 7 s)",
     "3.25-3.75 s: 1 kHz tone present and the original speech gone (least-squares gain vs the source < 0.25)",
     "elsewhere the speech is unchanged (correlation >= 0.9, gain 0.7-1.4 over 0.4-3.0 s and 4.0-7.5 s) and there is no tone",
-    "censored.mgl.json validates, 1920x1080, uses street.mp4; input unchanged"
+    "input unchanged",
+    "[lib] censored.mgl.json validates, 1920x1080, uses street.mp4"
+  ],
+  "deliverables": [
+    "out/censored.mp4"
   ]
 }

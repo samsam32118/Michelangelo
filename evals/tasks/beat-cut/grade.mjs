@@ -54,6 +54,6 @@ export async function grade(dir) {
     const off = starts.map((s, i) => (s === undefined ? Infinity : Math.min(Math.abs(s - info.beats[i]), Math.abs(s - (info.beats[i] + shift)))));
     return off.every((d) => d <= 2 / 30 + 1e-6) || `photo clips start at ${starts.map((s) => (s === undefined ? '-' : round(s, 2))).join(',')} s (${f})`;
   } });
-  g.check('the project (1080x1080, the 8 photos and beat.wav) starts each photo clip on its beat', !!proj.p, proj.p ? proj.f : proj.why);
+  g.check('[lib] the project (1080x1080, the 8 photos and beat.wav) starts each photo clip on its beat', !!proj.p, proj.p ? proj.f : proj.why);
   return g.result();
 }

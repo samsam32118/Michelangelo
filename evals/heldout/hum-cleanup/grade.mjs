@@ -35,8 +35,12 @@ export async function grade(dir) {
     return { pass: Math.abs(d) <= 3 && subs.every((s) => Math.abs(s) <= 6) && env.r >= 0.9, detail: `band ${L.round(d, 2)} dB (sub-bands ${subs.map((s) => L.round(s, 1)).join('/')}); envelope r=${L.round(env.r, 3)} lag ${L.round(env.lag * 1000, 0)} ms` };
   });
 
+  let unchanged = false;
+  try { unchanged = L.sha256(inp) === hashes['voice_hum.wav']; } catch { /* missing */ }
+  g.check('voice_hum.wav unchanged (the input is not overwritten)', unchanged, unchanged ? 'matches the setup hash' : 'changed or missing');
+
   const pj = L.readProject(join(dir, 'clean.mgl.json'));
-  g.check('clean.mgl.json validates and its audio clip(s) reference voice_hum.wav (unchanged), not a processed copy', (() => {
+  g.check('[lib] clean.mgl.json validates and its audio clip(s) reference voice_hum.wav (unchanged), not a processed copy', (() => {
     if (!pj || L.validateRaw(pj).length) return false;
     const humIds = new Set(L.assetsNamed(pj, 'voice_hum.wav').map((a) => a.id));
     const audioExt = /\.(wav|mp3|aac|m4a|flac|ogg|opus)$/i;
@@ -44,8 +48,6 @@ export async function grade(dir) {
     const clips = L.tables(pj, 'clips').filter((c) => c.asset !== undefined && !c.muted);
     const usesHum = clips.some((c) => humIds.has(c.asset));
     const others = clips.filter((c) => !humIds.has(c.asset) && audioExt.test(assets.get(c.asset)?.src ?? ''));
-    let unchanged = false;
-    try { unchanged = L.sha256(inp) === hashes['voice_hum.wav']; } catch { /* missing */ }
     return usesHum && !others.length && unchanged;
   })(), pj ? (L.validateRaw(pj)[0] ?? `assets ${L.tables(pj, 'assets').map((a) => a.src).join(', ')}`) : 'missing or not JSON');
   return g.result();

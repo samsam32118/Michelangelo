@@ -9,10 +9,14 @@
   "fixtures": [
     "big.mgl.json (200 clips, 3 tracks, 25 text clips of which 6 say CHORUS, 17 short V2 clips)"
   ],
+  "deliverables": [
+    "big.mgl.json"
+  ],
+  "library_only": true,
   "checks": [
-    "V2 has no clips < 10 frames and no gaps where they were (later V2 clips shifted)",
-    "other tracks unchanged",
-    "the 6 CHORUS clips have colour #ffcc00; other text clips unchanged",
-    "file valid"
+    "[lib] V2 has no clips < 10 frames and no gaps where they were (later V2 clips shifted)",
+    "[lib] other tracks unchanged (V1 clips identical; T1 positions identical)",
+    "[lib] the 6 CHORUS clips have colour #ffcc00; other text clips unchanged",
+    "[lib] file valid"
   ]
 }

@@ -1,0 +1,1 @@
+`edit.mgl.json` is a finished 20-second edit with cuts and a title (`edit.mp4` is its render). Add a music bed under it and sound effects on the cuts and the title, mixed for YouTube. Keep the picture as it is and render `out/final.mp4`.

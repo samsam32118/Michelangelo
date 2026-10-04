@@ -9,8 +9,14 @@
   "fixtures": [
     "mix.mgl.json (quiet speech + tones ~-24 LUFS)"
   ],
+  "deliverables": [
+    "out/mix.mp3",
+    "out/mix.wav"
+  ],
+  "library_only": false,
   "checks": [
-    "out/mix.wav integrated loudness -14 +-1 LU, true peak <= -1.0 dBTP",
-    "out/mix.mp3 exists, mp3 codec, similar loudness +-1.5"
+    "out/mix.wav integrated loudness -14 +-1 LU, true peak <= -1.0 dBTP, 12 s, content kept",
+    "out/mix.mp3 exists, mp3 codec, loudness -14 +-1.5",
+    "[lib] the mix project (speech + tones) carries the normalisation: a -14 LUFS loudness target, platform or gains"
   ]
 }

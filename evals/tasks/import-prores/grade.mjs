@@ -36,6 +36,6 @@ export async function grade(dir) {
     if (Math.abs(compRate(mainComp(pp)) - 30) > 0.01) return 'main comp is not 30 fps';
     return (pp.clips ?? []).some((c) => c.transition || (Array.isArray(c.fade) && c.fade.some((x) => x && x !== '0'))) || 'no transition or fade';
   } });
-  g.check('a 1920x1080 30 fps project uses master.mov and film24.mp4 with a transition', !!proj.p, proj.p ? proj.f : proj.why);
+  g.check('[lib] a 1920x1080 30 fps project uses master.mov and film24.mp4 with a transition', !!proj.p, proj.p ? proj.f : proj.why);
   return g.result();
 }

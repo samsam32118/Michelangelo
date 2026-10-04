@@ -29,7 +29,7 @@ export async function grade(dir) {
 }
 
 function projectCheck(dir, info) {
-  const name = 'project valid; >= 1 cue per script line; a text clip starts at 0 with len <= 2.5 s';
+  const name = '[lib] project valid; >= 1 cue per script line; a text clip starts at 0 with len <= 2.5 s';
   const files = outputs(dir, /\.mgl\.json$/);
   const notes = [];
   for (const f of files) {

@@ -1,0 +1,1 @@
+Make a 20–30 s vertical Short from this script (`script.txt`), with on-screen text that follows the script, motion throughout, music and a clear hook; render `out/short.mp4`. Nothing else is provided: make or generate every visual and sound yourself.

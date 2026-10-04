@@ -1,6 +1,11 @@
 {
   "id": "av-sync-fix",
-  "tags": ["audio", "editing", "sync", "weak"],
+  "tags": [
+    "audio",
+    "editing",
+    "sync",
+    "weak"
+  ],
   "timeout_min": 20,
   "expects_weak": true,
   "fixtures": [
@@ -11,6 +16,10 @@
     "picture timing unchanged: four flashes, each within 1 frame of its time in interview.mp4",
     "every beep onset is within 45 ms of its flash",
     "speech kept: correlation with interview.mp4's audio (best lag) >= 0.85 over 2-7 s, at the corrected offset (+-1 frame)",
-    "synced.mgl.json validates, uses interview.mp4; input unchanged"
+    "input unchanged",
+    "[lib] synced.mgl.json validates, uses interview.mp4"
+  ],
+  "deliverables": [
+    "out/synced.mp4"
   ]
 }

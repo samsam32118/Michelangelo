@@ -2,14 +2,23 @@
 import { appendFileSync, existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { isAlias } from './alias.mjs';
+import { costOf, costSummary, isHQ, DEFAULT_MACHINE_RATE, HQ_VISION } from './arms.mjs';
 
 const mean = (xs) => (xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : 0);
 const r = (v, d = 2) => (Number.isFinite(v) ? Math.round(v * 10 ** d) / 10 ** d : v);
 const count = (v) => (Array.isArray(v) ? v.length : typeof v === 'number' ? v : 0);
 const k = (n) => (n >= 1e6 ? `${r(n / 1e6, 2)}M` : n >= 1e3 ? `${r(n / 1e3, 1)}k` : String(n ?? 0));
 
-/** results: [{task, pass, score, checks?, metrics, wallSec, timedOut, error?}] */
+/**
+ * results: [{task, pass, score, checks?, skippedChecks?, metrics, wallSec, timedOut, error?, cost?, vision?}].
+ * meta.arm ('with' | 'without'), meta.machineRate ($/h) and meta.vision (judge on) feed the cost lines (DESIGN §17).
+ */
 export function summarise(results, meta) {
+  const machineRate = meta?.machineRate ?? DEFAULT_MACHINE_RATE;
+  for (const x of results) x.cost ??= costOf(x, machineRate);
+  const vision = meta?.vision ?? results.some((x) => x.vision && !x.vision.skipped);
+  const costs = costSummary(results, { machineRate, vision });
+  const judgeUsd = results.reduce((a, x) => a + (x.vision?.judge?.costUsd ?? 0), 0);
   const ok = results.filter((x) => x.pass);
   const withBase = results.filter((x) => typeof x.baselineScore === 'number');
   for (const x of withBase) x.deltaScore = r((x.score ?? 0) - x.baselineScore, 4);
@@ -28,6 +37,12 @@ export function summarise(results, meta) {
     totalOutputTokens: results.reduce((a, x) => a + (x.metrics?.outputTokens ?? 0), 0),
     totalCostUsd: r(results.reduce((a, x) => a + (x.metrics?.costUsd ?? 0), 0), 2),
     meanWallSec: r(mean(results.map((x) => x.wallSec ?? 0)), 1),
+    arm: meta?.arm ?? 'with',
+    ...costs,
+    // the judge's cost is not part of the arm's cost
+    judgeCostUsd: r(judgeUsd, 4),
+    visionErrors: results.filter((x) => x.vision?.error).length,
+    skippedLibChecks: results.reduce((a, x) => a + count(x.skippedChecks), 0),
     timeouts: results.filter((x) => x.timedOut).length,
     bashTimeouts: results.reduce((a, x) => a + (x.metrics?.bashTimeouts ?? 0), 0),
     failedEdits: results.reduce((a, x) => a + (x.metrics?.failedEdits ?? 0), 0),
@@ -47,15 +62,17 @@ export function summarise(results, meta) {
 export function summaryMarkdown(s, { hideChecks = false } = {}) {
   const lines = [
     `# Eval ${s.label} · ${s.set}`, '',
-    `${s.date} · model ${s.model} · ${s.dryRun ? 'DRY RUN (no agent) · ' : ''}package ${s.packageVersion ?? '?'}`, '',
+    `${s.date} · model ${s.model} · arm **${s.arm ?? 'with'}** · ${s.dryRun ? 'DRY RUN (no agent) · ' : ''}${(s.arm ?? 'with') === 'with' ? `package ${s.packageVersion ?? '?'}` : 'no Michelangelo'}`, '',
+    costLine(s), '',
     `**${s.passed}/${s.tasks} passed (${r(s.successRate * 100, 1)} %)**, mean score ${s.meanScore}${s.meanBaselineScore !== undefined ? ` (baseline ${s.meanBaselineScore} on untouched sandboxes, delta ${s.meanDeltaScore})` : ''}, mean turns ${s.meanTurns}, mean tokens ${k(s.meanTokens)} (total ${k(s.totalTokens)}, cost $${s.totalCostUsd}), mean wall ${s.meanWallSec} s, agent timeouts ${s.timeouts}, shell timeouts ${s.bashTimeouts}, failed edits ${s.failedEdits}, permission denials ${s.permissionDenials ?? 0}, violations ${s.violations} (${s.fatalViolations ?? 0} fatal; ${s.violationFails ?? 0} run(s) failed for them).`, '',
-    '| task | pass | score | baseline | delta | turns | tokens | time s | shell timeouts | failed edits | denials | violations | errors | verbs |',
-    '|---|---|---|---|---|---|---|---|---|---|---|---|---|---|',
+    '| task | pass | score | vision | cost $ (model + machine) | baseline | delta | turns | tokens | time s | shell timeouts | failed edits | denials | violations | errors | verbs |',
+    '|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|',
     ...s.results.map((x) => {
       const m = x.metrics ?? {};
       const tok = (m.inputTokens ?? 0) + (m.outputTokens ?? 0) + (m.cacheReadTokens ?? 0) + (m.cacheCreationTokens ?? 0);
       const base = typeof x.baselineScore === 'number' ? [r(x.baselineScore, 2), r((x.score ?? 0) - x.baselineScore, 2)] : ['', ''];
-      return `| ${x.task} | ${x.pass ? 'yes' : x.violationFail ? 'violation' : x.timedOut ? 'timeout' : 'no'} | ${r(x.score ?? 0, 2)} | ${base[0]} | ${base[1]} | ${m.turns ?? 0} | ${k(tok)} | ${r(x.wallSec ?? 0, 0)} | ${m.bashTimeouts ?? 0} | ${m.failedEdits ?? 0} | ${m.permissionDenials ?? 0} | ${count(m.violations)}${count(m.fatalViolations) ? ` (${count(m.fatalViolations)} fatal)` : ''} | ${Object.entries(m.errorCodes ?? {}).map(([c, n]) => `${c}×${n}`).join(' ')} | ${Object.entries(m.verbs ?? {}).map(([c, n]) => `${c}×${n}`).join(' ')} |`;
+      const c = x.cost ?? costOf(x, s.machineRate ?? DEFAULT_MACHINE_RATE);
+      return `| ${x.task} | ${x.pass ? 'yes' : x.violationFail ? 'violation' : x.timedOut ? 'timeout' : 'no'} | ${r(x.score ?? 0, 2)}${count(x.skippedChecks) ? ` (${count(x.skippedChecks)} [lib] skipped)` : ''} | ${visionCell(x)} | ${r(c.totalUsd, 3)} (${r(c.modelUsd, 3)} + ${r(c.machineUsd, 3)}) | ${base[0]} | ${base[1]} | ${m.turns ?? 0} | ${k(tok)} | ${r(x.wallSec ?? 0, 0)} | ${m.bashTimeouts ?? 0} | ${m.failedEdits ?? 0} | ${m.permissionDenials ?? 0} | ${count(m.violations)}${count(m.fatalViolations) ? ` (${count(m.fatalViolations)} fatal)` : ''} | ${Object.entries(m.errorCodes ?? {}).map(([c, n]) => `${c}×${n}`).join(' ')} | ${Object.entries(m.verbs ?? {}).map(([c, n]) => `${c}×${n}`).join(' ')} |`;
     }),
     '',
     `Most common errors: ${s.topErrors.map(([c, n]) => `${c} (${n})`).join(', ') || 'none'}`,
@@ -67,6 +84,16 @@ export function summaryMarkdown(s, { hideChecks = false } = {}) {
       if (x.failReason) lines.push(`- **${x.task}**: ${x.failReason} (graded ${x.gradedPass ? 'pass' : 'fail'}, score ${x.gradedScore})`);
       for (const c of (Array.isArray(x.checks) ? x.checks : []).filter((c) => !c?.pass)) lines.push(`- **${x.task}**: ${c.name} (${c.detail})`);
     }
+    const skipped = s.results.filter((x) => Array.isArray(x.skippedChecks) && x.skippedChecks.length);
+    if (skipped.length) {
+      lines.push('', '## Library-only checks (not counted in this arm)', '');
+      for (const x of skipped) for (const c of x.skippedChecks) lines.push(`- ${x.task}: ${c.name} (${c.pass ? 'would pass' : 'would fail'})`);
+    }
+    const notes = s.results.filter((x) => x.vision && (x.vision.notes || x.vision.error || x.vision.skipped));
+    if (notes.length) {
+      lines.push('', '## Vision notes', '');
+      for (const x of notes) lines.push(`- **${x.task}**${x.vision.deliverables?.length ? ` (${x.vision.deliverables.join(', ')})` : ''}: ${x.vision.error ? `judge error: ${x.vision.error}` : x.vision.skipped ? x.vision.skipped : x.vision.notes}`);
+    }
     const viol = s.results.filter((x) => Array.isArray(x.metrics?.violations) && x.metrics.violations.length);
     if (viol.length) {
       lines.push('', '## Sandbox violations', '', 'Fatal ones (the repository, evals/, another sandbox or scratchpad) are marked **fatal**.', '');
@@ -76,14 +103,27 @@ export function summaryMarkdown(s, { hideChecks = false } = {}) {
   return lines.join('\n') + '\n';
 }
 
+const money = (v) => (v === null || v === undefined ? 'n/a' : `$${r(v, 3)}`);
+const visionCell = (x) => (typeof x.vision?.overall === 'number' ? `${x.vision.overall}${isHQ(x) ? ' HQ' : ''}` : x.vision?.error ? 'error' : '');
+
+/** The cost line of a summary (DESIGN §17.1): mean costs, cost per pass and cost per high-quality deliverable. */
+export function costLine(s) {
+  const n = s.tasks ?? 0;
+  const head = `Cost (machine $${s.machineRate ?? DEFAULT_MACHINE_RATE}/h): mean ${money(s.meanTotalUsd)} per run (model ${money(s.meanModelUsd)} + machine ${money(s.meanMachineUsd)}), total ${money(s.totalUsd)} for ${n} run(s); cost per pass ${money(s.costPerPass)}`;
+  if (!s.vision) return `${head}. Vision scoring was off: cost per pass stands in for **cost per high-quality deliverable**.`;
+  return `${head}; **cost per high-quality deliverable ${money(s.costPerHQ)}** (${s.hqDeliverables ?? 0} run(s) pass with vision >= ${HQ_VISION}; mean vision ${s.meanVision ?? 'n/a'} over ${s.visionScored ?? 0} scored${s.visionErrors ? `, ${s.visionErrors} judge error(s)` : ''}). Judge cost (not counted): ${money(s.judgeCostUsd)}.`;
+}
+
 /**
  * A result as it may appear in a shared (held-out) results dir: counts only, no check names, violation strings,
  * failure reasons, commands or run/home paths.
  */
 export function publicResult(x) {
-  const { checks, error, dir, agentHome, failReason, cleanupError, metrics, ...rest } = x;
+  const { checks, skippedChecks, error, dir, agentHome, failReason, cleanupError, metrics, vision, ...rest } = x;
   const m = metrics ?? {};
-  return { ...rest, ...(cleanupError ? { cleanupError: true } : {}), checks: count(checks), harnessError: !!error || !!rest.harnessError, metrics: { ...m, violations: count(m.violations), fatalViolations: count(m.fatalViolations) } };
+  // vision: scores only (no notes or deliverable paths, which describe the task)
+  const v = vision ? { ...(typeof vision.overall === 'number' ? { overall: vision.overall, criteria: vision.criteria } : {}), ...(vision.error ? { error: true } : {}), ...(vision.skipped ? { skipped: true } : {}), ...(vision.judge ? { judge: { costUsd: vision.judge.costUsd, turns: vision.judge.turns } } : {}) } : undefined;
+  return { ...rest, ...(cleanupError ? { cleanupError: true } : {}), ...(v ? { vision: v } : {}), ...(skippedChecks ? { skippedChecks: count(skippedChecks) } : {}), checks: count(checks), harnessError: !!error || !!rest.harnessError, metrics: { ...m, violations: count(m.violations), fatalViolations: count(m.fatalViolations) } };
 }
 
 export function writeSummary(dir, s, opts) {
@@ -104,5 +144,5 @@ Main and held-out sets are reported separately. One row per run (\`node evals/ru
 
 export function appendHistory(file, s, note = '') {
   if (!existsSync(file) || !readFileSync(file, 'utf8').includes('| date | label |')) writeFileSync(file, HEADER);
-  appendFileSync(file, `| ${s.date.slice(0, 10)} | ${s.label} | ${s.set} | ${s.model} | ${s.tasks} | ${s.passed} | ${r(s.successRate * 100, 1)} % | ${s.meanScore} | ${s.meanTurns} | ${k(s.meanTokens)} | ${s.meanWallSec} | ${s.bashTimeouts} | ${s.failedEdits} | ${s.violations} | ${[s.dryRun ? 'dry run' : '', s.meanBaselineScore !== undefined ? `baseline ${s.meanBaselineScore}, delta ${s.meanDeltaScore}` : '', s.permissionDenials ? `${s.permissionDenials} permission denials` : '', s.violationFails ? `${s.violationFails} failed for violations` : '', note].filter(Boolean).join('; ')} |\n`);
+  appendFileSync(file, `| ${s.date.slice(0, 10)} | ${s.label} | ${s.set} | ${s.model} | ${s.tasks} | ${s.passed} | ${r(s.successRate * 100, 1)} % | ${s.meanScore} | ${s.meanTurns} | ${k(s.meanTokens)} | ${s.meanWallSec} | ${s.bashTimeouts} | ${s.failedEdits} | ${s.violations} | ${[s.dryRun ? 'dry run' : '', s.arm === 'without' ? 'arm without' : '', s.meanTotalUsd ? `$${r(s.meanTotalUsd, 3)}/run` : '', s.vision ? `vision ${s.meanVision ?? 'n/a'}, $/HQ ${s.costPerHQ ?? 'n/a'}` : '', s.meanBaselineScore !== undefined ? `baseline ${s.meanBaselineScore}, delta ${s.meanDeltaScore}` : '', s.permissionDenials ? `${s.permissionDenials} permission denials` : '', s.violationFails ? `${s.violationFails} failed for violations` : '', note].filter(Boolean).join('; ')} |\n`);
 }

@@ -56,7 +56,7 @@ export async function grade(dir) {
   });
 
   const pj = L.readProject(join(dir, 'podcast.mgl.json'));
-  g.check('podcast.mgl.json validates; clips reference both cameras and one audio clip references room.wav', (() => {
+  g.check('[lib] podcast.mgl.json validates; clips reference both cameras and one audio clip references room.wav', (() => {
     if (!pj || L.validateRaw(pj).length) return false;
     const clips = L.tables(pj, 'clips');
     const uses = (name) => clips.filter((c) => L.assetsNamed(pj, name).some((a) => a.id === c.asset));

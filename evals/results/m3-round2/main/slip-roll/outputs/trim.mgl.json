@@ -1,0 +1,17 @@
+{"michelangelo": 1,
+"project": {"name": "Trims"},
+"assets": [
+{"id": "counter", "src": "media/counter.mp4"}
+],
+"comps": [
+{"id": "main", "size": [1280, 720], "fps": 30, "length": 270}
+],
+"tracks": [
+{"id": "V1", "comp": "main"}
+],
+"clips": [
+{"id": "a", "track": "V1", "at": 0, "len": 102, "asset": "counter"},
+{"id": "b", "track": "V1", "at": 102, "len": 78, "asset": "counter", "in": 162, "clock": 12},
+{"id": "c", "track": "V1", "at": 180, "len": 90, "asset": "counter", "in": 330}
+]
+}

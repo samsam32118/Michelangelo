@@ -1,0 +1,19 @@
+{
+  "name": "posterize",
+  "version": "0.1.0",
+  "description": "A layer effect that tints a layer towards a colour.",
+  "type": "module",
+  "main": "src/index.ts",
+  "michelangelo": {
+    "api": "^1.1.0",
+    "kinds": [
+      "effect"
+    ]
+  },
+  "scripts": {
+    "test": "node --test test/*.test.ts"
+  },
+  "peerDependencies": {
+    "michelangelo": "*"
+  }
+}

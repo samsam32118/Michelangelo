@@ -1,0 +1,16 @@
+{
+  "id": "iris-basic",
+  "tags": [
+    "plugins",
+    "transition"
+  ],
+  "timeout_min": 15,
+  "expects_weak": false,
+  "fixtures": [
+    "demo.mgl.json (a 1080x1920 30 fps comp with a testsrc2 clip)"
+  ],
+  "checks": [
+    "demo.mgl.json names the plugin and clip 2 has transition.in type iris, len 1 s",
+    "out/iris.png: centre shows clip 2, corners clip 1"
+  ]
+}

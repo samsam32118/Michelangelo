@@ -1,0 +1,24 @@
+{"michelangelo": 1,
+"project": {"name": "Karaoke", "platform": "shorts"},
+"assets": [
+{"id": "vo-wav", "src": "media/vo.wav"}
+],
+"comps": [
+{"id": "main", "size": [1080, 1920], "fps": 30, "length": 300}
+],
+"tracks": [
+{"id": "BG", "comp": "main"},
+{"id": "V1", "comp": "main"},
+{"id": "A1", "comp": "main", "audio": true, "bus": "dialogue"}
+],
+"clips": [
+{"id": "bg", "track": "BG", "at": 0, "len": 300, "color": "#1e2a4a"},
+{"id": "subs", "track": "V1", "at": 15, "len": 255, "captions": true, "style": "karaoke"},
+{"id": "vo", "track": "A1", "at": 0, "len": 300, "asset": "vo-wav"}
+],
+"cues": [
+{"id": "c1", "clip": "subs", "at": 0, "len": 75, "text": "Every word lights up", "words": [0, 18, 33, 51]},
+{"id": "c2", "clip": "subs", "at": 87, "len": 78, "text": "as soon as it is spoken", "words": [0, 12, 21, 36, 45, 57]},
+{"id": "c3", "clip": "subs", "at": 177, "len": 78, "text": "then the next one follows", "words": [0, 15, 27, 45, 57]}
+]
+}

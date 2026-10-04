@@ -16,10 +16,10 @@ afterAll(() => rmSync(tmp, { recursive: true, force: true }));
 const isRoot = process.getuid?.() === 0;
 
 describe('runner arguments', () => {
-  it('parses options and refuses unsandboxed agent runs', () => {
+  it('parses options; --no-sandbox runs agents with audit isolation', () => {
     const o = run.parseArgs(['--set', 'heldout', '--tasks', 'a,b', '--parallel', '3', '--label', 'm1', '--timeout-scale', '1.5', '--dry-run', '--no-sandbox']);
     expect(o).toMatchObject({ set: 'heldout', tasks: ['a', 'b'], parallel: 3, label: 'm1', timeoutScale: 1.5, dryRun: true, sandbox: false, model: 'claude-opus-5-5', maxTurns: 200 });
-    expect(() => run.parseArgs(['--no-sandbox'])).toThrow(/dry runs only/);
+    expect(run.parseArgs(['--no-sandbox'])).toMatchObject({ sandbox: false, dryRun: false });
     expect(() => run.parseArgs(['--set', 'x'])).toThrow(/main or heldout/);
     expect(() => run.parseArgs(['--bogus'])).toThrow(/unknown option/);
   });

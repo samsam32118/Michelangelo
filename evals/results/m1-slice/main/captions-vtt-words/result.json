@@ -1,0 +1,50 @@
+{
+ "task": "captions-vtt-words",
+ "pass": true,
+ "score": 1,
+ "checks": [
+  {
+   "name": "cues carry word timings matching the VTT within 1 frame (texts unchanged)",
+   "pass": true,
+   "detail": "clip.mgl.json: 3 cues, word times 4/6/5"
+  },
+  {
+   "name": "out/still.png 1080x1920; the caption at 4.2 s shows 2 dominant text colours (highlighted word)",
+   "pass": true,
+   "detail": "clusters rgb(254,254,254) 0.78, rgb(253,210,0) 0.1"
+  }
+ ],
+ "metrics": {
+  "turns": 7,
+  "inputTokens": 14,
+  "outputTokens": 1153,
+  "cacheReadTokens": 273137,
+  "cacheCreationTokens": 20994,
+  "costUsd": 0.24685840000000003,
+  "toolCalls": 6,
+  "toolCounts": {
+   "Bash": 5,
+   "Read": 1
+  },
+  "bashTimeouts": 0,
+  "failedEdits": 0,
+  "errorCodes": {},
+  "verbs": {
+   "docs": 5,
+   "edit": 1,
+   "show": 1,
+   "check": 1,
+   "render": 1
+  },
+  "violations": [],
+  "resultSubtype": "success",
+  "isError": false,
+  "apiMs": 20045
+ },
+ "wallSec": 28.564,
+ "timedOut": false,
+ "dir": "/tmp/mgl-eval-captions-vtt-words-UBZZiN",
+ "timeoutMin": 15,
+ "expectsWeak": false,
+ "exitCode": 0
+}

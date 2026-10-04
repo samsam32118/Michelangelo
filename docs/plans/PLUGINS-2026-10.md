@@ -285,3 +285,6 @@ Before each push: `npm run typecheck`, `npm test`, `npm run docs:check`, `mgl pl
   long ids; licence names are short in lists; the Smithsonian API skips natural-history specimen units; tempo only for
   music. Found by a local test reel (jet-engine fan meets Japanese garden, 10 s, Kokoro voice): about 25 commands,
   QA clean, final render 21 s (2.1× real time).
+- Second local test (a beat-synced montage: 27 images on a 140 BPM taiko grid, cuts 0.21 → 0.54 s, a shutter click
+  per cut; 2 batch edits for 114 commands): added `align=peak`, RMS for sounds too short for LUFS, one `stock-credits`
+  finding for all uncredited assets, title caps, Jamendo `.mp32` → `.mp3`, and a default MP4 rate cap (104 MB → 24 MB).

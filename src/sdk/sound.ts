@@ -18,6 +18,8 @@ export async function describeSound(abs: string, backend: MediaBackend): Promise
     silences: a.silences.map((s) => ({ start: round(s.start, 2), end: round(s.end, 2) })),
   };
   if (a.bpm !== undefined && a.duration >= 8) facts.bpm = Math.round(a.bpm);
+  const loudest = Math.max(...a.rms.filter((x) => Number.isFinite(x)));
+  if (Number.isFinite(loudest)) facts.rms = round(loudest, 1);
   if (backend.analyzeLevels) {
     const lv = await backend.analyzeLevels(abs, RATE);
     const { bandEdges, LEVELS_RATE } = await import('../media/levels.js');

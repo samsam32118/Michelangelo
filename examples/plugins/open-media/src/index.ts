@@ -68,7 +68,8 @@ export function openverseItem(r: Json, kind: StockKind): StockItem | undefined {
   const lic = canonicalLicence(r.license_url) ?? canonicalLicence(r.license, r.license_version);
   if (!lic || !r.url || !r.id) return undefined;
   const it: StockItem = {
-    id: idOf('openverse', r.id), kind, title: stripHtml(r.title) || 'untitled', url: r.foreign_landing_url ?? r.detail_url ?? r.url, file: r.url, ext: (r.filetype || extOf(r.url, kind === 'image' ? 'jpg' : 'mp3')).toLowerCase(),
+    // Openverse labels Jamendo's MP3s "mp32": name files by what they are
+    id: idOf('openverse', r.id), kind, title: stripHtml(r.title) || 'untitled', url: r.foreign_landing_url ?? r.detail_url ?? r.url, file: r.url, ext: String(r.filetype || extOf(r.url, kind === 'image' ? 'jpg' : 'mp3')).toLowerCase().replace(/^mp3\d$/, 'mp3'),
     licence: { id: lic, ...(r.license_url ? { url: r.license_url } : {}) }, source: ovSource(r.source ?? r.provider ?? 'openverse'),
   };
   if (r.creator) it.author = stripHtml(r.creator);

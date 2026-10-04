@@ -45,9 +45,11 @@ export interface CommandServices {
 /** (API 1.5) What an agent needs to judge a sound without hearing it. */
 export interface SoundFacts {
   duration: number;
-  /** integrated loudness (LUFS) and true peak (dBTP) */
+  /** integrated loudness (LUFS; -70 or below when the sound is too short to gate, under 0.4 s) and true peak (dBTP) */
   lufs: number;
   peak: number;
+  /** the loudest 100 ms RMS (dBFS): the level of sounds too short for LUFS */
+  rms?: number;
   /** first audible moment (s): where a hit or whoosh really starts */
   onset: number;
   /** where the sound is loudest (s) */

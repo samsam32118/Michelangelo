@@ -231,11 +231,30 @@ describe('media.fetch', () => {
     expect((await error(edit({ op: 'media.fetch', id: 'fake:w5' }))).message).toMatch(/no-derivatives/);
     expect((await error(edit({ op: 'media.fetch', id: 'fake:nope' }))).code).toBe('E_ARG');
     const html = await error(edit({ op: 'media.fetch', id: 'fake:gone' }));
+    expect(html.message).not.toMatch(/\n/);
     expect(html.code).toBe('E_MEDIA_FILE');
     expect(html.message).toMatch(/web page/);
     expect(existsSync(join(dir, 'media', 'stock', 'sfx'))).toBe(true);
     // share-alike is fetched when allowed
     await edit({ op: 'media.fetch', id: 'fake:w3', licences: ['share-alike'] });
+  });
+
+  it('align=peak lands the loudest moment on at=; a short sound reports RMS instead of a missing LUFS', async () => {
+    const { edit, project } = setup();
+    await edit({ op: 'media.search', kind: 'sfx', query: 'whoosh' });
+    const r = await edit({ op: 'media.fetch', id: 's1', at: '2s', align: 'peak', clip: 'hit' });
+    const sound = (r.out[0] as { sound: { peakAt: number } }).sound;
+    const clip = project.data.clips!.find((c) => c.id === 'hit')!;
+    expect(clip.at).toBe(60 - Math.round(sound.peakAt * 30));
+    expect(sound.peakAt).toBeGreaterThan(0.25);
+  });
+
+  it('titles are capped when results come in, and credit lines cap long titles', async () => {
+    const { creditLine } = await import('../../src/core/licence.js');
+    const essay = 'Physalis alkekengi L. Rosaceae Chinese lantern, Winter Cherry, Bladder Cherry. Distribution: C & S Europe, W. Asia to Japan; ' + 'more words '.repeat(60);
+    const line = creditLine({ title: essay, author: 'A', source: 'S', licence: { id: 'cc-by-4.0' } });
+    expect(line.length).toBeLessThan(130);
+    expect(line).toMatch(/^“Physalis alkekengi L\. Rosaceae Chinese lantern, Winter Cherry, Bladder Cherry…” by A \(S\), CC BY 4\.0$/);
   });
 
   it('an image goes on a new top visual track for 3 s; music is cut to the comp', async () => {
@@ -267,6 +286,13 @@ describe('media.credits and the stock QA rules', () => {
     const before = runCheck('stock-credits', project.data);
     expect(before).toHaveLength(1);
     expect(before[0]!.message).toMatch(/CC BY 4\.0.*not credited/);
+    // several uncredited assets: still one finding (they share the fix), naming them
+    const many = structuredClone(project.data);
+    many.assets!.push({ id: 'x2', src: 'media/stock/image/x2.png', kind: 'image', licence: 'cc-by-2.0', credit: 'c' }, { id: 'x3', src: 'media/stock/image/x3.png', kind: 'image', licence: 'cc-by-4.0', credit: 'c' });
+    many.clips!.push({ id: 'u2', track: 'V1', at: 100, len: 10, asset: 'x2' } as never, { id: 'u3', track: 'V1', at: 120, len: 10, asset: 'x3' } as never);
+    const all = runCheck('stock-credits', many);
+    expect(all).toHaveLength(1);
+    expect(all[0]!.message).toMatch(/^3 assets need a credit and have none: .*x2, x3$/);
     expect(before[0]!.fix).toBe('mgl edit <file> media.credits card=true');
     const r = await edit({ op: 'media.credits', out: 'credits.txt', card: true });
     expect(readFileSync(join(dir, 'credits.txt'), 'utf8')).toBe('Credits\n\n“Whoosh by” by ana (Fake Sounds), CC BY 4.0\n“Deep Whoosh #1” by bigdog (Fake Sounds), CC0\n');

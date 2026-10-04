@@ -79,6 +79,8 @@ export function licenceUrl(id: string): string | undefined {
 
 /** One attribution line (title, author, source, licence): "“Deep Whoosh #1” by bigdog (Freesound), CC BY 4.0". */
 export function creditLine(it: { title: string; author?: string | undefined; source: string; licence: { id: string } }): string {
-  const title = it.title.trim() ? `“${it.title.trim()}”` : 'Untitled';
+  const t = it.title.replace(/\s+/g, ' ').trim();
+  // archives put whole descriptions in titles: a credit names the work, it does not reprint it
+  const title = t ? `“${t.length > 90 ? `${t.slice(0, 89).replace(/[\s,;:.-]+\S*$/, '')}…` : t}”` : 'Untitled';
   return `${title}${it.author ? ` by ${it.author}` : ''} (${it.source}), ${licenceName(it.licence.id)}`;
 }

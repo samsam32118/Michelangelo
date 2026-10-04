@@ -80,6 +80,12 @@ function need(ff: FfmpegInfo, enc: string, what: string) {
 }
 
 /** "8M" → "16M" (the VBV buffer for a capped rate) */
+/** The default MP4 rate cap by frame size: 8 Mbps up to 720p, 16 Mbps up to 1080p, 45 Mbps up to 4K, 80 Mbps above. */
+export function defaultMaxrate(width: number, height: number): string {
+  const px = width * height;
+  return px <= 1280 * 720 ? '8M' : px <= 1920 * 1080 ? '16M' : px <= 3840 * 2160 ? '45M' : '80M';
+}
+
 function doubleRate(b: string): string {
   const m = /^(\d+(?:\.\d+)?)([kKmM]?)$/.exec(b);
   return m ? `${Number(m[1]) * 2}${m[2]}` : b;
@@ -103,9 +109,12 @@ export function encodeArgs(o: EncodeOptions, ff: FfmpegInfo): string[] {
     case 'mp4': {
       need(ff, 'libx264', 'mp4');
       const q = X264[o.quality];
+      // with neither crf nor bitrate given, cap the rate at what platforms take (CRF alone lets grain and fast cuts
+      // balloon: a grainy 10 s 1080x1920 montage came out at 83 Mbps, 104 MB)
+      const cap = d.bitrate ?? (d.crf === undefined ? defaultMaxrate(o.width, o.height) : undefined);
       const rc = d.bitrate && d.crf === undefined
         ? ['-b:v', d.bitrate, '-maxrate', d.bitrate, '-bufsize', doubleRate(d.bitrate)]
-        : ['-crf', String(d.crf ?? q.crf), ...(d.bitrate ? ['-maxrate', d.bitrate, '-bufsize', doubleRate(d.bitrate)] : [])];
+        : ['-crf', String(d.crf ?? q.crf), ...(cap ? ['-maxrate', cap, '-bufsize', doubleRate(cap)] : [])];
       a.push('-vf', toYuv('yuv420p'), '-c:v', 'libx264', '-preset', q.preset, ...rc, '-pix_fmt', 'yuv420p', ...BT709, ...tc, '-movflags', '+faststart');
       if (withAudio) a.push('-c:a', 'aac', '-b:a', d.audioBitrate ?? q.abr, '-ar', '48000');
       a.push('-f', 'mp4');

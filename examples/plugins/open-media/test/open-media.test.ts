@@ -70,6 +70,7 @@ test('sfx: Freesound effects through Openverse, commercial-use licences asked fo
 
 test('music: Jamendo / ccMixter through Openverse and Commons audio; MIDI files are not music files', async () => {
   const { items } = await search('music', 'mozart');
+  assert.ok(from(items, 'openverse').every((i) => i.ext === 'mp3'), 'Jamendo "mp32" files are named .mp3');
   assert.ok(from(items, 'openverse').every((i) => /Jamendo|ccMixter/.test(i.source)));
   const commons = from(items, 'commons');
   assert.ok(commons.length >= 1);

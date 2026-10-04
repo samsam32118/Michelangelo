@@ -53,7 +53,9 @@ credit line, size or length, fetch date, sha256), and adds an asset with `licenc
   sounds their own length. `len=`, `track=`, `clip=` (clip id), `as=` (asset id), `gain=` and `comp=` override.
 - **Sound described as text**, because you cannot listen: length, loudness (LUFS), true peak, where the sound
   starts and where it is loudest, tonal / mixed / noisy, dark / balanced / bright, and for music an estimated tempo.
-  `align=onset` places the clip so the first audible moment lands on `at` (a whoosh on the cut, not 80 ms late).
+  `align=onset` places the clip so the first audible moment lands on `at` (a whoosh on the cut, not 80 ms late);
+  `align=peak` lands its loudest moment there (a shutter click or a hit on the beat). Sounds under 0.4 s have no
+  LUFS; their loudest RMS is given instead.
 - A download that is a web page, empty, or not the kind it claims (`ffprobe` decides) is deleted and refused
   (`E_MEDIA_FILE`); a licence the search would hide is refused (`E_LICENCE`).
 

@@ -119,15 +119,17 @@ const ASSET_KIND: Record<StockKind, 'image' | 'video' | 'audio'> = { image: 'ima
 const slug = (t: string) => t.toLowerCase().normalize('NFKD').replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 24).replace(/-+$/, '') || 'media';
 
 function soundLine(s: SoundFacts): string {
-  return `${s.duration.toFixed(2)}s, ${Number.isFinite(s.lufs) && s.lufs > -70 ? `${s.lufs.toFixed(1)} LUFS` : 'silent'}, peak ${s.peak.toFixed(1)} dBTP, starts ${s.onset.toFixed(2)}s, loudest ${s.peakAt.toFixed(2)}s, ${s.texture}, ${s.tone}${s.centroidHz ? ` (centroid ${s.centroidHz >= 1000 ? `${(s.centroidHz / 1000).toFixed(1)} kHz` : `${s.centroidHz} Hz`})` : ''}${s.bpm ? `, ~${s.bpm} BPM` : ''}`;
+  const level = Number.isFinite(s.lufs) && s.lufs > -70 ? `${s.lufs.toFixed(1)} LUFS`
+    : s.rms !== undefined && s.rms > -60 ? `${s.rms.toFixed(1)} dBFS RMS (too short for LUFS)` : 'silent';
+  return `${s.duration.toFixed(2)}s, ${level}, peak ${s.peak.toFixed(1)} dBTP, starts ${s.onset.toFixed(2)}s, loudest ${s.peakAt.toFixed(2)}s, ${s.texture}, ${s.tone}${s.centroidHz ? ` (centroid ${s.centroidHz >= 1000 ? `${(s.centroidHz / 1000).toFixed(1)} kHz` : `${s.centroidHz} Hz`})` : ''}${s.bpm ? `, ~${s.bpm} BPM` : ''}`;
 }
 
 defineCommand({
   op: 'media.fetch', group: 'media',
-  doc: 'Download one media.search result (its short handle such as i1, stable within the project, or its full id) into media/stock/<kind>/ (reused when already there) with a licence sidecar (<file>.json), add it as an asset with its licence and credit line, and with at= also a clip: music on a music-bus track, sfx on an sfx-bus track, images and video on a new top visual track (len: images 3 s, video up to 10 s, sounds their length). Sounds are described as text (loudness, peak, where it starts and peaks, tonal/noisy, dark/bright, tempo); align=onset starts the clip so the sound\'s first audible moment lands on at=. Refuses licences media.search would hide (licences=[...] allows share-alike or non-commercial). Credit attribution licences with media.credits.',
+  doc: 'Download one media.search result (its short handle such as i1, stable within the project, or its full id) into media/stock/<kind>/ (reused when already there) with a licence sidecar (<file>.json), add it as an asset with its licence and credit line, and with at= also a clip: music on a music-bus track, sfx on an sfx-bus track, images and video on a new top visual track (len: images 3 s, video up to 10 s, sounds their length). Sounds are described as text (loudness, peak, where it starts and peaks, tonal/noisy, dark/bright, tempo); align=onset starts the clip so the sound\'s first audible moment lands on at=, align=peak so its loudest moment does (a click, a hit). Refuses licences media.search would hide (licences=[...] allows share-alike or non-commercial). Credit attribution licences with media.credits.',
   schema: z.strictObject({
     id: z.string().min(2), as: Id.optional(), at: TimeArg.optional(), len: TimeArg.optional(), track: Id.optional(), comp: Id.optional(),
-    clip: Id.optional(), gain: z.number().min(-60).max(12).optional(), align: z.enum(['start', 'onset']).default('start'), licences: Allow,
+    clip: Id.optional(), gain: z.number().min(-60).max(12).optional(), align: z.enum(['start', 'onset', 'peak']).default('start'), licences: Allow,
   }),
   primary: 'id', example: { id: 's1', at: '2s', align: 'onset' },
   async apply(ctx, p) {
@@ -198,8 +200,8 @@ defineCommand({
           : item.kind === 'video' ? Math.max(1, Math.floor(Math.min(srcSecs ?? 10, 10) * fps))
             : Math.max(1, Math.floor((srcSecs ?? 3) * fps));
       let inF = 0;
-      if (p.align === 'onset' && sound) {
-        at -= Math.round(sound.onset * fps);
+      if (p.align !== 'start' && sound) {
+        at -= Math.round((p.align === 'peak' ? sound.peakAt : sound.onset) * fps);
         if (at < 0) { inF = -at; at = 0; }
         if (p.len === undefined) len = Math.max(1, len - inF);
       }
@@ -219,7 +221,7 @@ defineCommand({
       (ctx.project.clips ??= []).push(clip);
       if (typeof comp.length === 'number' && at + len > comp.length && item.kind !== 'music') ctx.note(`the clip ends at frame ${at + len}, after the end of comp "${comp.id}" (${comp.length}); extend it with comp.set ${comp.id} length=${at + len} (or length=auto).`);
       ctx.out.clip = id; ctx.out.at = at; ctx.out.len = len;
-      lines.push(`added clip "${id}" on ${track} at ${at}–${at + len}${inF ? ` (starts ${inF} frames into the file so the sound lands on the beat)` : ''}`);
+      lines.push(`added clip "${id}" on ${track} at ${at}–${at + len}${inF ? ` (starts ${inF} frames into the file so the sound lands on at)` : ''}`);
     }
     ctx.summary(lines.join('\n'));
   },

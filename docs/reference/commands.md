@@ -760,9 +760,9 @@ mgl edit video.mgl.json media.credits card=true
 
 ### media.fetch
 
-Download one media.search result (its short handle such as i1, stable within the project, or its full id) into media/stock/<kind>/ (reused when already there) with a licence sidecar (<file>.json), add it as an asset with its licence and credit line, and with at= also a clip: music on a music-bus track, sfx on an sfx-bus track, images and video on a new top visual track (len: images 3 s, video up to 10 s, sounds their length). Sounds are described as text (loudness, peak, where it starts and peaks, tonal/noisy, dark/bright, tempo); align=onset starts the clip so the sound's first audible moment lands on at=. Refuses licences media.search would hide (licences=[...] allows share-alike or non-commercial). Credit attribution licences with media.credits.
+Download one media.search result (its short handle such as i1, stable within the project, or its full id) into media/stock/<kind>/ (reused when already there) with a licence sidecar (<file>.json), add it as an asset with its licence and credit line, and with at= also a clip: music on a music-bus track, sfx on an sfx-bus track, images and video on a new top visual track (len: images 3 s, video up to 10 s, sounds their length). Sounds are described as text (loudness, peak, where it starts and peaks, tonal/noisy, dark/bright, tempo); align=onset starts the clip so the sound's first audible moment lands on at=, align=peak so its loudest moment does (a click, a hit). Refuses licences media.search would hide (licences=[...] allows share-alike or non-commercial). Credit attribution licences with media.credits.
 
-fields: `id` string (bare word); `as?` string; `at?` time; `len?` time; `track?` string; `comp?` string; `clip?` string; `gain?` number; `align?` "start"\|"onset" = `"start"`; `licences?` ("free"\|"attribution"\|"share-alike"\|"non-commercial"\|"no-derivatives"\|"unknown")[]
+fields: `id` string (bare word); `as?` string; `at?` time; `len?` time; `track?` string; `comp?` string; `clip?` string; `gain?` number; `align?` "start"\|"onset"\|"peak" = `"start"`; `licences?` ("free"\|"attribution"\|"share-alike"\|"non-commercial"\|"no-derivatives"\|"unknown")[]
 
 ```text
 mgl edit video.mgl.json media.fetch s1 at=2s align=onset

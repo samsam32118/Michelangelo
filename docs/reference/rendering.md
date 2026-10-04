@@ -37,7 +37,7 @@ mgl render r.mgl.json out/r.mp3
 
 | Flag | Applies to | Effect |
 |---|---|---|
-| `--crf n` | `.mp4` (x264 0–51, default 20), `.webm` (VP9 0–63, default 32) | quality; lower = better and bigger |
+| `--crf n` | `.mp4` (x264 0–51, default 20), `.webm` (VP9 0–63, default 32) | quality; lower = better and bigger. With neither `--crf` nor `--bitrate`, `.mp4` is capped at 8M (≤ 720p), 16M (≤ 1080p), 45M (≤ 4K) so grain and fast cuts cannot balloon the file |
 | `--bitrate 8M` | `.mp4`, `.webm` | target video bitrate (with `--crf`: a cap) |
 | `--audio-bitrate 320k` | `.mp4`, `.webm`, `.mp3`, `.m4a`, `.opus` | audio bitrate (default 192k AAC) |
 | `--pcm 24` | `.wav`, `.flac`, `.mov` | PCM bit depth (default 16) |

@@ -1222,8 +1222,13 @@ const stockCredits = defineCheck({
     if (!missing.length) return [];
     const card = (ctx.project.clips ?? []).some((c) => c.tags?.includes('credits'));
     const fix = `mgl edit <file> media.credits${card || !ctx.project.project?.credits?.file ? ' card=true' : ''}${ctx.project.project?.credits?.file ? ` out=${ctx.project.project.credits.file}` : ''}`;
-    return missing.map(({ a, user }): Finding => ({ rule: 'stock-credits', severity: 'warning', clip: user.id, frame: user.at,
-      message: `asset "${a.id}" (${licenceName(a.licence!)}) is used by "${user.id}" but not credited${a.credit ? `: ${a.credit}` : ''}`, fix }));
+    // one finding: every uncredited asset has the same fix, so the agent reads the fix once
+    const { a, user } = missing[0]!;
+    const ids = missing.map((m) => m.a.id);
+    const message = missing.length === 1
+      ? `asset "${a.id}" (${licenceName(a.licence!)}) is used by "${user.id}" but not credited`
+      : `${missing.length} assets need a credit and have none: ${ids.slice(0, 8).join(', ')}${ids.length > 8 ? ` +${ids.length - 8}` : ''}`;
+    return [{ rule: 'stock-credits', severity: 'warning', clip: user.id, frame: user.at, message, fix }];
   },
 });
 

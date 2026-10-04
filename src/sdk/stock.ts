@@ -95,7 +95,10 @@ export function stockService(projectDir: string, registry: PluginRegistry | unde
           const items = Array.isArray(res) ? res : (res?.items ?? []);
           if (!Array.isArray(res)) for (const n of res?.notes ?? []) notes.push(`${p.id}: ${n}`);
           // ids must carry the provider prefix so media.fetch finds the provider again
-          return items.filter((it) => it && typeof it.id === 'string' && it.file && it.licence?.id).map((it) => (it.id.startsWith(`${p.id}:`) ? it : { ...it, id: `${p.id}:${it.id}` }));
+          // titles are names, not descriptions: cap them (some archives put an essay in the title field)
+          const cap = (s: string) => { const t = String(s ?? '').replace(/\s+/g, ' ').trim(); return t.length > 120 ? `${t.slice(0, 119)}…` : t; };
+          return items.filter((it) => it && typeof it.id === 'string' && it.file && it.licence?.id)
+            .map((it) => ({ ...it, title: cap(it.title), id: it.id.startsWith(`${p.id}:`) ? it.id : `${p.id}:${it.id}` }));
         } catch (e) {
           failed.push({ provider: p.id, error: ((e as Error).message || String(e)).split('\n')[0]!.slice(0, 200) });
           return [];

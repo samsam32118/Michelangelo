@@ -19,7 +19,7 @@ decoding (media clips only); `layer` runs in Skia on the rendered layer.
 - **vignette** (layer): Darkens (or tints) the layer towards its corners with an elliptical falloff.  
   `amount?` number = `0.5` · opacity of the colour at the corners; `softness?` number = `0.5` · 0 = hard edge near the corners, 1 = falloff from the centre; `color?` string = `"#000000"`
 - **chroma-key** (layer): Makes pixels close to the key colour transparent (green/blue screen) and removes colour spill.  
-  `color?` string = `"#00ff00"`; `tolerance?` number = `0.3` · chroma distance keyed fully transparent; `softness?` number = `0.1` · chroma distance over which alpha ramps back to opaque; `spill?` number = `0.5` · how much key-colour spill to remove from kept pixels
+  `color?` string = `"#00ff00"`; `tolerance?` number = `0.3` · chroma distance keyed fully transparent; `softness?` number = `0.1` · chroma distance over which alpha ramps back to opaque; `spill?` number = `1` · how much key-colour spill to remove from kept pixels (1 = cap the key channel at the other two)
 - **color** (source + layer): Colour correction: brightness, contrast, saturation, hue rotation, temperature and tint.  
   `brightness?` number = `0`; `contrast?` number = `1`; `saturation?` number = `1`; `hue?` number = `0` · hue rotation in degrees; `temperature?` number = `0` · -1 cool (blue) .. 1 warm (orange); `tint?` number = `0` · -1 green .. 1 magenta
 - **lut** (source): Applies a 3D colour lookup table (.cube) to a media clip while it is decoded.  

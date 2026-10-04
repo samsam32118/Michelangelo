@@ -1,0 +1,17 @@
+{"michelangelo": 1,
+"project": {"name": "Day in the life", "platform": "shorts"},
+"assets": [
+{"id": "vlog-mp4", "src": "media/vlog.mp4"}
+],
+"comps": [
+{"id": "main", "size": [1080, 1920], "fps": 30, "length": 450}
+],
+"tracks": [
+{"id": "V1", "comp": "main"},
+{"id": "T1", "comp": "main"}
+],
+"clips": [
+{"id": "vlog", "track": "V1", "at": 0, "len": 450, "asset": "vlog-mp4"},
+{"id": "cta", "track": "T1", "at": 360, "len": 90, "text": "Subscribe", "style": "cta", "animate": {"in": "bounce", "by": "all"}, "x": 502, "y": 1300}
+]
+}

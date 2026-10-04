@@ -158,7 +158,7 @@ describe('report', () => {
     writeFileSync(join(d, 'summary.json'), JSON.stringify({ label: 'l1', set: 'main', model: 'm', date: '2026-10-04T00:00:00Z', sandbox: false }));
     writeFileSync(join(d, 'fix-broken-file/result.json'), JSON.stringify({ task: 'fix-broken-file', pass: true, score: 1, dir: '/tmp/mgl-eval-fix-broken-file-q', metrics: {}, checks: [] }));
     writeFileSync(join(d, 'fix-broken-file/transcript.jsonl'), [
-      { type: 'assistant', message: { id: 'a', content: [{ type: 'tool_use', id: 'r1', name: 'Read', input: { file_path: '/tmp/mgl-eval-home-Q1/.claude/skills/michelangelo/SKILL.md' } }, { type: 'tool_use', id: 'r2', name: 'Read', input: { file_path: '/home/user/Michelangelo/evals/tasks/fix-broken-file/grade.mjs' } }] } },
+      { type: 'assistant', message: { id: 'a', content: [{ type: 'tool_use', id: 'r1', name: 'Read', input: { file_path: '/tmp/mgl-eval-home-Q1/.claude/skills/michelangelo/SKILL.md' } }, { type: 'tool_use', id: 'r2', name: 'Read', input: { file_path: join(EVALS, 'tasks/fix-broken-file/grade.mjs') } }] } },
       { type: 'result', subtype: 'success', num_turns: 1, permission_denials: [{ tool_use_id: 'zz' }] },
     ].map((e) => JSON.stringify(e)).join('\n'));
     const s = await rep.report(d, { baseline: true });

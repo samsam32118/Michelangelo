@@ -174,6 +174,20 @@ How the plugin uses it:
 - The index is metadata built on the user's machine from the public dump. Nothing is bundled, and image files are
   fetched only on `media.fetch`.
 
+**Smithsonian with a key: the live API** (tested 2026-10-04 with a key from `edan.si.edu/openaccess/signup/form`):
+
+- 1,000 requests an hour per key (`x-ratelimit-limit: 1000`), against 10 for the shared `DEMO_KEY`.
+- Query `<terms> AND media_usage:CC0 AND online_media_type:Images` returns only records with a CC0 image (without
+  the second clause, CC0 records without an image come back). Measured: "locomotive" 2,340 results (NMAH, Cooper
+  Hewitt, Archives); "jazz" 148 (NMAAHC posters, an NPG portrait of Louis Armstrong); "moon landing" 25 (Air and
+  Space). `category/art_design/search` narrows to art and design ("botanical": 1,097 from SAAM and Cooper Hewitt).
+- Titles can contain HTML (`Steam Locomotive, <I>John Bull</I>`); the provider strips tags.
+- Smithsonian Libraries has 53 CC0 records with images (sheet-music covers), which confirms the dump finding:
+  the book scans are not in Smithsonian Open Access.
+- Full-size image downloads (`ids.si.edu`) need no key: the Armstrong portrait came back at 3114×4000 px.
+- The key is read from `SMITHSONIAN_API_KEY` and is never written to the project, its sidecars, logs or results.
+  With a key the live API is the default and the local index is optional; without one, the index is used.
+
 Not added: **Biodiversity Heritage Library** and **NYPL Digital Collections** need registered keys (401 without);
 their best material is also reachable through Smithsonian, Openverse or Wikimedia Commons. **Internet Archive Book
 Images**, **British Library** and Flickr Commons sit on Flickr, whose API needs a key (a later keyed source).
@@ -235,6 +249,7 @@ Before each push: `npm run typecheck`, `npm test`, `npm run docs:check`, `mgl pl
 1. **Safe zones in core, not a plugin.** Recommended, so every vertical project is checked.
 2. **Share-alike media:** refused unless asked (it would bind the whole video).
 3. **Keyed sources** (Freesound API, Pexels, Pixabay, Unsplash, Europeana; Smithsonian's live API): off unless
-   their key is in the environment. Smithsonian works without a key through the local index.
+   their key is in the environment. Smithsonian works without a key through the local index; with
+   `SMITHSONIAN_API_KEY` (free, tested) the live API is used.
 4. **Network in evals:** allow the open-media hosts for the `open-media-short` eval only.
 5. **Smithsonian index default units:** `chndm`, `npg`, `saam`, `fsg`, `nmaahc` (about 0.5 GB to stream once).

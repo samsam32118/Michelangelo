@@ -4,7 +4,7 @@ const plugin = await loadPlugin(import.meta.url);
 const flite = plugin.providers!.find((p) => p.id === 'flite')!;
 const { readFile } = await import('node:fs/promises');
 // the plugin's own helpers (lazy, like its Node built-ins)
-const { phrases, syllables, voicedSpan, wav } = await import('../src/index.js');
+const { phrases, syllables, voicedSpan, wav } = await import('../src/index.ts');
 
 /** samples and rate of a 16-bit mono WAV */
 function readWav(b: Uint8Array) {

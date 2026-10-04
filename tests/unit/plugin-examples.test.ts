@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { cpSync, readFileSync, readdirSync, rmSync } from 'node:fs';
+import { cpSync, existsSync, readFileSync, readdirSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { runPluginTests, type PluginTestResult } from '../../src/plugin/test-runner.js';
 import { loadRegistry } from '../../src/plugin/loader.js';
@@ -34,6 +34,15 @@ describe('example plugins', () => {
     for (const sub of ['src', 'test']) for (const f of readdirSync(join(root, sub))) {
       const imports = [...readFileSync(join(root, sub, f), 'utf8').matchAll(/from '([^']+)'/g)].map((m) => m[1]);
       expect(imports.every((s) => s === 'michelangelo/plugin' || s === 'michelangelo/testing'), `${n}/${sub}/${f}: ${imports.join(', ')}`).toBe(true);
+    }
+  });
+
+  // `mgl plugin test` runs the tests with plain node (type stripping): './x.js' is not rewritten to './x.ts' there
+  it.each(EXAMPLES)('%s imports its own files by their real names', (n) => {
+    const root = join(REPO, 'examples', 'plugins', n);
+    for (const sub of ['src', 'test']) for (const f of readdirSync(join(root, sub))) {
+      const rel = [...readFileSync(join(root, sub, f), 'utf8').matchAll(/(?:from |import\()'(\.{1,2}\/[^']+)'/g)].map((m) => m[1]!);
+      for (const r of rel) expect(existsSync(join(root, sub, r)), `${n}/${sub}/${f} imports ${r}, which does not exist`).toBe(true);
     }
   });
 

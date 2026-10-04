@@ -6,3 +6,6 @@ out/
 evals/results/**/sandbox/
 bench/tmp/
 .preview.png
+evals/results/**/transcript.jsonl
+evals/results/**/agent.stderr.log
+evals/results/**/stash/

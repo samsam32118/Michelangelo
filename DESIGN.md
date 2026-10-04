@@ -688,3 +688,6 @@ instead ("audit" isolation, `evals/run.mjs --no-sandbox`):
 - grading runs after the agent exits, with the grader-only files stashed outside the run dir while the agent works.
 
 Fresh cloud sessions (separate containers) remain the stronger option for the held-out set when available.
+- **Held-out hygiene.** The first held-out run printed task ids in its public summary, which the builder read;
+  the set (`evals/heldout`) is now an exposed regression set. Held-out set v2 (`evals/heldout2`) replaces it,
+  and the runner aliases held-out ids (`h-<hash>`) in every public log, directory and summary.

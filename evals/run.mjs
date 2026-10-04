@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { createHash } from 'node:crypto';
 // The eval runner (DESIGN §11.4, §16 #1). Usage:
 //   node evals/run.mjs [--set main|heldout] [--tasks a,b] [--parallel 2] [--model claude-opus-5-5] [--label m1]
 //                      [--timeout-scale 1] [--max-turns 200] [--dry-run] [--no-sandbox] [--no-build] [--pass-env A,B]
@@ -55,7 +56,7 @@ export function parseArgs(argv) {
       default: throw new Error(`unknown option ${a}. fix: see the usage at the top of evals/run.mjs.`);
     }
   }
-  if (!['main', 'heldout'].includes(o.set)) throw new Error(`--set ${o.set}: use main or heldout.`);
+  if (!/^(main|heldout\d*)$/.test(o.set)) throw new Error(`--set ${o.set}: use main or heldout (heldout2, ... for later held-out sets).`);
   // --no-sandbox with real agents = "audit" isolation: the agent runs as the current user in a fresh directory with a
   // fresh HOME; it is not prevented from reading the repository, but every access outside its run dir is recorded
   // as a violation from the transcript and reported (DESIGN.md §16 #1 records why).
@@ -146,6 +147,11 @@ function copyForBaseline(dir) {
 export const AGENT_TOOLS = ['Read', 'Write', 'Edit', 'Glob', 'Grep', 'TodoWrite',
   ...['npx', 'mgl', 'node', 'npm', 'ffmpeg', 'ffprobe', 'ls', 'cat', 'head', 'tail', 'wc', 'mkdir', 'cp', 'mv', 'grep', 'find', 'echo', 'pwd', 'sort', 'diff', 'file', 'stat', 'du', 'python3'].map((c) => `Bash(${c}:*)`)];
 
+/** Stable anonymous alias of a held-out task id: h<n> by the order of sha256(id). */
+export function aliasOf(task) {
+  return 'h-' + createHash('sha256').update(task).digest('hex').slice(0, 6);
+}
+
 const children = new Set();
 function runAgent({ dir, prompt, env, model, maxTurns, timeoutMs, transcript, stderrFile, sandbox, claude = 'claude' }) {
   return new Promise((done) => {
@@ -197,8 +203,8 @@ export async function main(argv = process.argv.slice(2)) {
   if (stale) { log(`restored ${stale.path} to mode ${stale.mode.toString(8)} (left by an interrupted run at ${stale.at})`); await S.killUserProcs(); }
   if (o.restore) { if (!stale) log('nothing to restore'); return { restored: stale }; }
 
-  const setRoot = join(EVALS, o.set === 'main' ? 'tasks' : 'heldout');
-  const hidden = o.set === 'heldout';
+  const setRoot = join(EVALS, o.set === 'main' ? 'tasks' : o.set);
+  const hidden = o.set !== 'main';
   const all = readdirSync(setRoot).filter((d) => existsSync(join(setRoot, d, 'task.md'))).sort();
   const tasks = o.tasks ? o.tasks.filter((t) => { if (!all.includes(t)) throw new Error(`unknown task "${t}" in the ${o.set} set. fix: one of ${hidden ? '(see evals/heldout)' : all.join(', ')}.`); return true; }) : all;
   const outRoot = join(o.resultsDir, o.label, o.set);
@@ -229,7 +235,9 @@ export async function main(argv = process.argv.slice(2)) {
     results = await pool(tasks, o.parallel, async (task) => {
       const tdir = join(setRoot, task);
       const meta = JSON.parse(readFileSync(join(tdir, 'meta.json'), 'utf8'));
-      const resDir = join(outRoot, task), privDir = join(privRoot, task);
+      // held-out task ids never appear in public output (dirs, logs, summaries): stable anonymous aliases instead
+      const shown = hidden ? aliasOf(task) : task;
+      const resDir = join(outRoot, shown), privDir = join(privRoot, task);
       rmSync(resDir, { recursive: true, force: true }); mkdirSync(resDir, { recursive: true }); mkdirSync(privDir, { recursive: true });
       const dir = o.sandbox ? join(S.HOME, 'runs', o.label, o.set, task) : mkdtempSync(join(tmpdir(), `mgl-eval-${task}-`));
       rmSync(dir, { recursive: true, force: true }); mkdirSync(dir, { recursive: true });
@@ -277,7 +285,7 @@ export async function main(argv = process.argv.slice(2)) {
         const { checks, harnessError, ...pub } = publicResult(r);
         writeFileSync(join(resDir, 'result.json'), JSON.stringify({ ...pub, checks, harnessError }, null, 1));
       }
-      log(`${task}: ${r.pass ? 'PASS' : 'fail'} score ${r.score}${o.dryRun ? '' : ` turns ${r.metrics.turns ?? 0} ${Math.round(r.wallSec)} s${r.timedOut ? ' TIMEOUT' : ''}`}${r.error ? ' (harness error)' : ''}${r.violationFail ? ' (failed: sandbox violation)' : ''}`);
+      log(`${shown}: ${r.pass ? 'PASS' : 'fail'} score ${r.score}${o.dryRun ? '' : ` turns ${r.metrics.turns ?? 0} ${Math.round(r.wallSec)} s${r.timedOut ? ' TIMEOUT' : ''}`}${r.error ? ' (harness error)' : ''}${r.violationFail ? ' (failed: sandbox violation)' : ''}`);
       return r;
     });
   } finally {
@@ -287,11 +295,13 @@ export async function main(argv = process.argv.slice(2)) {
     if (o.sandbox && !o.dryRun) await S.killUserProcs();
     if (o.sandbox) log('repository unlocked');
   }
-  const s = summarise(results, {
+  const pubResults = hidden ? results.map((r) => ({ ...r, task: aliasOf(r.task) })) : results;
+  const meta = {
     label: o.label, set: o.set, model: o.dryRun ? 'none' : o.model, date: new Date().toISOString(), dryRun: o.dryRun, sandbox: o.sandbox, isolation: o.sandbox ? 'user' : 'audit', packageVersion: template?.version, timeoutScale: o.timeoutScale, agentHome: agentEnv.HOME,
-  });
+  };
+  const s = summarise(pubResults, meta);
   writeSummary(outRoot, s, { hideChecks: hidden });
-  if (hidden) writeSummary(privRoot, s);
+  if (hidden) writeSummary(privRoot, summarise(results, meta));
   if (o.history) appendHistory(join(EVALS, 'HISTORY.md'), s, o.note);
   log(`${s.passed}/${s.tasks} passed; summary: ${join(outRoot, 'summary.md')}`);
   return s;

@@ -12,3 +12,7 @@ Notes:
 - m1-slice: the held-out set was not run at M1 (first held-out run is m2-fixes).
 - After m2-fixes, the beat-cut grader was corrected to accept cuts aligned with the beats as heard in the output
   (an agent may trim the silent lead-in); regraded, m2-fixes main would be 28/30. The table keeps the original grade.
+- Held-out exposure (2026-10-04): the m2-fixes held-out summary printed the held-out task ids, and the builder
+  saw them. The task contents were not read, but the names reveal themes, so held-out set v1 (`evals/heldout`)
+  is treated as an exposed regression set from now on. A new held-out set v2 (`evals/heldout2`) was written by
+  a separate agent, and the runner now hides held-out ids behind anonymous aliases in all public output.

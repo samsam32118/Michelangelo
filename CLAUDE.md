@@ -1,7 +1,7 @@
 # Michelangelo: agent notes
 
 - Read DESIGN.md first. `src/core/schema/` is the data contract: extend it additively, never break a field.
-- **Never open `evals/heldout/`** (or grep into it). It is the held-out eval set; only `evals/run.mjs` and
+- **Never open `evals/heldout*/`** (or grep into them). They are held-out eval sets; only `evals/run.mjs` and
   its graders read it. Builders who read it invalidate the eval.
 - Do not copy, paste or translate code from FrameCraft (`samsam32118/videoaftereffects`). Record any
   borrowed idea in LESSONS.md.

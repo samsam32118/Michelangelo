@@ -697,3 +697,43 @@ Fresh cloud sessions (separate containers) remain the stronger option for the he
   shells); `rm`/`ln`/`cp`/`mv` operands are resolved against the agent's directory; reading the repository, `evals/`,
   the grader stash or another sandbox is a fatal violation (the run fails). Public held-out results carry only
   aliases; earlier committed public summaries were rewritten, but git history still holds them.
+
+---
+
+## 17. North star: total cost per high-quality video (2026-10-04)
+
+The owner's goal: with Michelangelo, an AI coding agent in a CPU-only container makes **better videos, faster, for
+much less** than the same agent without it. Every priority and every eval is judged by that.
+
+### 17.1 The measure
+
+For a task (a brief, inputs and an expected deliverable), one agent run gives:
+
+- **cost**: model cost in $ (input, output and cache tokens at list price) plus machine time (wall-clock minutes ×
+  a container rate, default $0.10/h for 4 vCPU), reported separately and summed;
+- **quality**: the objective grade (fraction of checks passed; a pass needs all) and a **vision score** (0–10 from
+  a rubric applied by a model to frames sampled from the output: composition, legibility, safe zones, motion,
+  polish; plus the sound report as text). A failed objective grade caps quality at the objective score;
+- **effort**: turns, tokens, wall time, shell timeouts, failed edits, permission denials.
+
+The headline number is **cost per high-quality deliverable**: total cost of all runs ÷ runs that pass the
+objective grade with a vision score ≥ 7. Lower is better.
+
+### 17.2 With vs without
+
+The same tasks run in two arms, same model, same sandbox rules:
+
+- **with**: the packed library, its skill and docs (as today);
+- **without**: no Michelangelo; the agent gets Node 22, ffmpeg 6.1 (with flite, drawtext, ebur128 ...), Python 3
+  and `@napi-rs/canvas` preinstalled, and the same task text. This is what an agent does today.
+
+Graders judge the deliverable only (output files, ffprobe, pixels, loudness, caption timing). Checks that require
+a Michelangelo project file are marked library-only and are not counted in the "without" arm, so both arms are
+graded on the same deliverable checks. Reported per set: success rate, mean vision score, cost per run, cost per
+high-quality deliverable, wall time, and the ratio with/without.
+
+### 17.3 Priorities follow the measure
+
+A feature or fix ranks by its expected reduction in cost per high-quality deliverable, estimated from transcripts:
+turns and tokens it saves (one call instead of twenty), failures it removes, quality it adds (vision score), and
+minutes it saves (render speed). docs/FRAMECRAFT-GAP.md and REMAINING.md are ordered this way.

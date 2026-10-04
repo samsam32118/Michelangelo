@@ -2,7 +2,7 @@
  * The plugin registry: every effect, transition, generator, template, check, importer, exporter, style
  * and text animation known for a project (built-ins + the plugins the project names).
  */
-import type { PluginDef, EffectDef, TransitionDef, GeneratorDef, CheckDef, ImporterDef, ExporterDef, StyleDef, TextAnimationDef } from './api.js';
+import type { PluginDef, EffectDef, TransitionDef, GeneratorDef, CheckDef, ImporterDef, ExporterDef, StyleDef, TextAnimationDef, MotionPresetDef, ProviderDef } from './api.js';
 import type { TemplateDef, Catalog, CommandDef } from '../core/commands/registry.js';
 
 export class PluginRegistry {
@@ -15,6 +15,9 @@ export class PluginRegistry {
   exporters = new Map<string, ExporterDef>();
   styles = new Map<string, StyleDef>();
   textAnimations = new Map<string, TextAnimationDef>();
+  motionPresets = new Map<string, MotionPresetDef>();
+  /** providers by kind, then id */
+  providers = new Map<string, Map<string, ProviderDef>>();
   commands = new Map<string, CommandDef>();
   /** plugin name → { version, source: 'builtin' | path } */
   plugins = new Map<string, { version: string; source: string }>();
@@ -37,6 +40,11 @@ export class PluginRegistry {
     put(this.exporters, def.exporters, 'exporter');
     put(this.styles, def.styles, 'style');
     put(this.textAnimations, def.textAnimations, 'text animation');
+    put(this.motionPresets, def.motionPresets, 'motion preset');
+    for (const pr of def.providers ?? []) {
+      if (!this.providers.has(pr.kind)) this.providers.set(pr.kind, new Map());
+      this.providers.get(pr.kind)!.set(pr.id, pr);
+    }
     for (const c of def.commands ?? []) this.commands.set(c.op, c);
     return this;
   }

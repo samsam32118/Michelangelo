@@ -16,7 +16,7 @@ export { defineCommand } from '../core/commands/registry.js';
 export type { CommandDef, TemplateDef, TemplateOutput, CommandContext } from '../core/commands/registry.js';
 export type { FilterSpec } from '../render/types.js';
 
-export const PLUGIN_API_VERSION = '1.2.0';
+export const PLUGIN_API_VERSION = '1.3.0';
 
 /** A CanvasRenderingContext2D-compatible drawing context (Skia today; a GPU renderer provides the same contract). */
 export type Canvas2D = SKRSContext2D;
@@ -170,6 +170,46 @@ export interface PluginDef {
   styles?: StyleDef[];
   /** text animation presets: per-unit state at progress 0..1 (in) */
   textAnimations?: TextAnimationDef[];
+  /** (API 1.3) motion presets for any layer, expanded into keyframes by `motion.apply` */
+  motionPresets?: MotionPresetDef[];
+  /** (API 1.3) AI and media providers (text-to-speech, transcription, music, ...) behind stable interfaces */
+  providers?: ProviderDef[];
+}
+
+/**
+ * A motion preset (in / out / emphasis / loop) for any visual layer. `keys` returns keyframes for clip
+ * properties over `len` frames starting at frame 0 (the command offsets them); values are relative to the
+ * layer's rest state: `x`/`y` are px offsets added to rest, `scale` multiplies, `rotate` adds degrees,
+ * `opacity` multiplies. Must be a pure function of (params, len, fps, seed).
+ */
+export interface MotionPresetDef {
+  id: string;
+  describe: string;
+  phase: 'in' | 'out' | 'emphasis' | 'loop';
+  params?: z.ZodObject;
+  /** default length in seconds */
+  seconds?: number;
+  keys(args: { len: number; fps: number; seed: number; params: Record<string, unknown>; size: { w: number; h: number }; comp: { width: number; height: number } }): Partial<Record<'x' | 'y' | 'scale' | 'rotate' | 'opacity', [number, number, string?][]>>;
+}
+
+/** A provider of an AI or media capability. The library ships the interfaces; models come as plugins. */
+export type ProviderDef = SpeakProvider | TranscribeProvider;
+
+export interface SpeakProvider {
+  kind: 'speak';
+  id: string;
+  describe: string;
+  voices(): Promise<{ id: string; describe?: string; lang?: string }[]>;
+  /** synthesise `text` to a WAV at `out` (48 kHz preferred); word start times (s) when the engine knows them */
+  speak(args: { text: string; voice?: string; speed?: number; out: string }): Promise<{ words?: { text: string; start: number; end?: number }[] }>;
+}
+
+export interface TranscribeProvider {
+  kind: 'transcribe';
+  id: string;
+  describe: string;
+  /** transcribe an audio/video file; word-level times in seconds */
+  transcribe(args: { file: string; lang?: string }): Promise<{ text: string; words: { text: string; start: number; end: number; confidence?: number }[] }>;
 }
 
 export interface TextAnimationDef {
@@ -190,3 +230,5 @@ export function defineTemplate(def: TemplateDef): TemplateDef { return def; }
 export function defineImporter(def: ImporterDef): ImporterDef { return def; }
 export function defineExporter(def: ExporterDef): ExporterDef { return def; }
 export function defineTextAnimation(def: TextAnimationDef): TextAnimationDef { return def; }
+export function defineMotionPreset(def: MotionPresetDef): MotionPresetDef { return def; }
+export function defineProvider<P extends ProviderDef>(def: P): P { return def; }

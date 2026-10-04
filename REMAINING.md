@@ -38,12 +38,19 @@ Status as of 2026-10-04 (branch `claude/michelangelo-v1`, draft PR #1). Measured
    main After Effects gaps.
 7. **Colour.** Colour effect, LUTs and a broadcast legaliser only; no lift/gamma/gain wheels, curves or scopes in
    `look` (a luma-range QA check exists).
-8. **AI hooks.** The plugin API has no provider point yet for transcription (word timings from speech), TTS or
-   segmentation; `captions.from-text` uses silence detection only. Add an `ai.providers` extension point.
+8. **AI hooks.** Plugin API 1.3 has `speak` and `transcribe` providers (`audio.speak`, `captions.from-speech`,
+   example plugin `flite-voice`). No model-backed provider (e.g. Whisper, neural TTS) or segmentation ships yet.
 9. **Importers/exporters.** The plugin kinds exist; no EDL/FCPXML/OTIO importer or exporter is shipped.
 10. **Grader coverage.** Some main-set graders give credit to an untouched sandbox for invariants (reported as
-    the baseline score); a vision-model grade on top of the objective checks is not implemented.
+    the baseline score). The vision judge (`--vision`) exists but has not been run across the full sets.
 11. **Multicam.** Angle cuts work with clip.split/remove, but there is no audio-waveform sync or angle-switch command.
 12. **Keyframed audio-effect parameters** are read once per clip (not animated over time).
 13. **Performance headroom.** Targets are met (see bench); heavy layer blurs at full HD and per-pixel plugin
     effects are the slowest paths (≈150–200 ms per 1080x1920 frame for small-radius Skia blurs).
+14. **Cost evals (DESIGN §17).** The with/without-library comparison has only a one-task smoke run (gif-export).
+    The full baseline run failed before any agent started: the eval user had no API credentials in this session.
+    Re-run `node evals/run.mjs --arm with|without --vision` on main and heldout2 (on 838fc03 for the
+    pre-feature baseline, then on this head), then `node evals/compare.mjs`.
+15. **Template library.** On purpose, only a couple of high-quality items per kind (hook-title and outro
+    templates, hormozi and word-pop caption styles, whip and zoom-punch transitions, two fonts). A larger library
+    is a separate effort.

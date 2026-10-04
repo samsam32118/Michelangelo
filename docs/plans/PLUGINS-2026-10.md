@@ -1,6 +1,8 @@
 # Plan: platform safe zones in core, and the open-media plugin (2026-10-04)
 
-Status: **proposal, awaiting the owner's go-ahead**. Nothing here is built yet.
+Status: **proposal, awaiting the owner's go-ahead**. Nothing here is built yet. Revised 2026-10-04 after review:
+one `open-media` plugin (images, video, music, sound effects) instead of three, safe zones moved into core, svg-prop
+and cutout deferred, laya dropped for now, public-domain archives and Smithsonian access added.
 
 Judged against DESIGN §17: an agent in a CPU-only container, which cannot browse, watch or listen, should make
 better videos for less with Michelangelo than without it. So each item below says who needs it and how it lowers
@@ -128,15 +130,29 @@ container on 2026-10-04:
 
 | Archive | What it has | Access | Licence filter |
 |---|---|---|---|
-| **Smithsonian Open Access** | CC0 art, design, portraits, history and nature photography (details below) | keyless: a local index built from the public metadata dump on S3, images from `ids.si.edu` at full resolution; the `api.si.edu` search API is used instead when `SMITHSONIAN_API_KEY` is set | `usage.access == "CC0"` |
+| **Smithsonian Open Access** | CC0 art, design, portraits, history and nature photography (details below) | live `api.si.edu` search with a free key (`SMITHSONIAN_API_KEY`, tested); without a key, a local index built from the public metadata dump on S3. Images from `ids.si.edu` at full resolution, no key | `media_usage:CC0` |
 | **Library of Congress** | photographs, prints, posters, maps (Prints & Photographs, FSA/OWI, HABS) | `loc.gov/photos/?fo=json`, keyless | only items whose rights say "No known restrictions on publication" (read per item; anything else dropped) |
-| **Metropolitan Museum** | 400k+ open-access works | keyless; `v1.1/search?isPublicDomain=true` (the old `v1/search` was retired on 2026-10-01, measured) | `isPublicDomain` |
-| **Art Institute of Chicago** | 60k+ public-domain works | keyless (`api.artic.edu`), IIIF images | `is_public_domain` |
-| **Cleveland Museum of Art** | 60k+ CC0 works | keyless (`openaccess-api.clevelandart.org`) | `cc0=1` |
+| **Metropolitan Museum** | open-access paintings, prints, photographs, objects | keyless; `v1.1/search?isPublicDomain=true` (the old `v1/search` was retired on 2026-10-01, measured) | `isPublicDomain` |
+| **Art Institute of Chicago** | public-domain paintings, prints, photographs | keyless (`api.artic.edu`), IIIF images | `is_public_domain` |
+| **Cleveland Museum of Art** | CC0 paintings, prints, objects | keyless (`openaccess-api.clevelandart.org`) | `cc0=1` |
 | **Rijksmuseum** | Dutch Golden Age paintings, prints, drawings | keyless Linked Art search (`data.rijksmuseum.nl`) + IIIF | CC0 / PD statement |
 | **Wellcome Collection** | medicine and science history: anatomy plates, botanical prints, old book scans | keyless (`api.wellcomecollection.org`), IIIF | PDM / CC0 / CC BY only |
 | **SMK (National Gallery of Denmark)** | paintings and prints | keyless (`api.smk.dk`) | `public_domain:true` |
-| **Europeana** | 13M+ items from European libraries and museums | `api2demo` key works for testing; real use needs a free key (`EUROPEANA_API_KEY`) | `reusability=open` |
+| **Europeana** | items from European libraries and museums (13.8M of them already indexed by Openverse) | `api2demo` key works for testing; real use needs a free key (`EUROPEANA_API_KEY`) | `reusability=open` |
+
+**Smithsonian with a key: the live API** (tested 2026-10-04 with a key from `edan.si.edu/openaccess/signup/form`):
+
+- 1,000 requests an hour per key (`x-ratelimit-limit: 1000`), against 10 for the shared `DEMO_KEY`.
+- Query `<terms> AND media_usage:CC0 AND online_media_type:Images` returns only records with a CC0 image (without
+  the second clause, CC0 records without an image come back). Measured: "locomotive" 2,340 results (NMAH, Cooper
+  Hewitt, Archives); "jazz" 148 (NMAAHC posters, an NPG portrait of Louis Armstrong); "moon landing" 25 (Air and
+  Space). `category/art_design/search` narrows to art and design ("botanical": 1,097 from SAAM and Cooper Hewitt).
+- Titles can contain HTML (`Steam Locomotive, <I>John Bull</I>`); the provider strips tags.
+- Smithsonian Libraries has 53 CC0 records with images (sheet-music covers), which confirms the dump finding:
+  the book scans are not in Smithsonian Open Access.
+- Full-size image downloads (`ids.si.edu`) need no key: the Armstrong portrait came back at 3114×4000 px.
+- The key is read from `SMITHSONIAN_API_KEY` and is never written to the project, its sidecars, logs or results.
+  With a key the live API is the default and the local index is optional; without one, the index is used.
 
 **Smithsonian without a key: the open-access dump.** The Smithsonian publishes all its open-access metadata on S3
 (`smithsonian-open-access.s3-us-west-2.amazonaws.com/metadata/edan/index.txt`). Measured on 2026-10-04:
@@ -160,7 +176,8 @@ container on 2026-10-04:
 
 How the plugin uses it:
 
-- `open-media.index smithsonian [units=chndm,npg,saam,fsg,nmaahc] [refresh=true]` streams the chosen units' shards
+- `open-media.index smithsonian [units=chndm,npg,saam,fsg,nmaahc] [refresh=true]` (changes nothing in the project)
+  streams the chosen units' shards
   once (never stored whole) and keeps only records with a CC0 image. Each entry holds the ids image id, title,
   unit, date, object type, topics and place, written to `~/.cache/michelangelo/stock/smithsonian/<unit>.jsonl.gz`.
   The default units are the five above: about 0.5 GB to stream, a few minutes, an index of roughly 10–15 MB. The
@@ -173,20 +190,6 @@ How the plugin uses it:
   optional.
 - The index is metadata built on the user's machine from the public dump. Nothing is bundled, and image files are
   fetched only on `media.fetch`.
-
-**Smithsonian with a key: the live API** (tested 2026-10-04 with a key from `edan.si.edu/openaccess/signup/form`):
-
-- 1,000 requests an hour per key (`x-ratelimit-limit: 1000`), against 10 for the shared `DEMO_KEY`.
-- Query `<terms> AND media_usage:CC0 AND online_media_type:Images` returns only records with a CC0 image (without
-  the second clause, CC0 records without an image come back). Measured: "locomotive" 2,340 results (NMAH, Cooper
-  Hewitt, Archives); "jazz" 148 (NMAAHC posters, an NPG portrait of Louis Armstrong); "moon landing" 25 (Air and
-  Space). `category/art_design/search` narrows to art and design ("botanical": 1,097 from SAAM and Cooper Hewitt).
-- Titles can contain HTML (`Steam Locomotive, <I>John Bull</I>`); the provider strips tags.
-- Smithsonian Libraries has 53 CC0 records with images (sheet-music covers), which confirms the dump finding:
-  the book scans are not in Smithsonian Open Access.
-- Full-size image downloads (`ids.si.edu`) need no key: the Armstrong portrait came back at 3114×4000 px.
-- The key is read from `SMITHSONIAN_API_KEY` and is never written to the project, its sidecars, logs or results.
-  With a key the live API is the default and the local index is optional; without one, the index is used.
 
 Not added: **Biodiversity Heritage Library** and **NYPL Digital Collections** need registered keys (401 without);
 their best material is also reachable through Smithsonian, Openverse or Wikimedia Commons. **Internet Archive Book
@@ -228,8 +231,9 @@ a credits check, and compared with `script-only-short` on cost per high-quality 
 2. Core API 1.4 for open-media: `stock` provider kind, `media.search` / `media.fetch` / `media.credits`, licence
    rules, sound-as-text on fetch, the two QA checks, docs (`mgl docs media`, `mgl docs plugins`), schema
    regenerated, `PLUGIN_API_VERSION = 1.4.0`.
-3. `examples/plugins/open-media`: sfx and music first (Openverse, Musopen), then images (Openverse, Commons, the
-   public-domain archives), then video (Commons, NASA, Prelinger).
+3. `examples/plugins/open-media`: sfx and music first (Openverse, Musopen), then images (Openverse, Commons,
+   Smithsonian live API, then the other public-domain archives, then the keyless Smithsonian index), then video
+   (Commons, NASA, Prelinger).
 4. The `open-media-short` eval, run with and without the plugin.
 
 Before each push: `npm run typecheck`, `npm test`, `npm run docs:check`, `mgl plugin test examples/plugins/open-media`.

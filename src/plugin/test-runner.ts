@@ -47,6 +47,32 @@ function resolveFrom(spec: string, dir: string): string | undefined {
   return undefined;
 }
 
+/**
+ * Keeps only the tsc diagnostics that are the plugin's own problem: those in files outside `dir` are dropped
+ * (library sources are checked by their own build), and without @types/node the ones that only say a Node
+ * built-in is unknown are dropped too. tsc reports those in two ways: TS2307 "Cannot find module 'node:fs'" for a
+ * static import and TS2591 "Cannot find name 'node:fs'" for a dynamic `import('node:fs')`; values that come out
+ * of such an import are untyped, so the implicit-any errors (TS7006, TS7031) that follow in the same file are
+ * consequences, not plugin bugs.
+ */
+export function filterDiagnostics(out: string, dir: string, hasNodeTypes: boolean): { kept: string[]; outside: number; skippedNode: number } {
+  const kept: string[] = [];
+  const nodeFiles = new Set<string>();
+  let keep = false, outside = 0, skippedNode = 0;
+  for (const l of out.split('\n')) {
+    const m = /^(.+?)\(\d+,\d+\): (error|warning)/.exec(l);
+    if (m) {
+      const f = resolve(dir, m[1]!), rel = relative(dir, f);
+      keep = !rel.startsWith('..') && !isAbsolute(rel);
+      if (!keep) outside++;
+      else if (!hasNodeTypes && /Cannot find (module|name) '(node:[^']*|Buffer|process|NodeJS)'/.test(l)) { keep = false; skippedNode++; nodeFiles.add(f); }
+      else if (!hasNodeTypes && nodeFiles.has(f) && /error TS70(06|31):/.test(l)) { keep = false; skippedNode++; }
+    } else if (!/^\s/.test(l)) keep = false;
+    if (keep) kept.push(l);
+  }
+  return { kept, outside, skippedNode };
+}
+
 async function typecheck(dir: string, timeoutMs: number): Promise<PluginTestStep> {
   const tsPkg = resolveFrom('typescript/package.json', dir);
   if (!tsPkg) return { step: 'typecheck', ok: true, skipped: true, detail: 'skipped type-check: typescript not installed (npm install -D typescript to enable it)' };
@@ -67,21 +93,7 @@ async function typecheck(dir: string, timeoutMs: number): Promise<PluginTestStep
     };
     writeFileSync(join(tmp, 'tsconfig.json'), JSON.stringify(cfg));
     const r = await run(process.execPath, [resolve(dirname(tsPkg), bin), '-p', join(tmp, 'tsconfig.json')], dir, timeoutMs);
-    // keep only diagnostics in the plugin's own files (library sources are checked by their own build)
-    const lines = r.out.split('\n');
-    const kept: string[] = [];
-    let keep = false, outside = 0, skippedNode = 0;
-    for (const l of lines) {
-      const m = /^(.+?)\(\d+,\d+\): (error|warning)/.exec(l);
-      if (m) {
-        const f = resolve(dir, m[1]!), rel = relative(dir, f);
-        keep = !rel.startsWith('..') && !isAbsolute(rel);
-        if (!keep) outside++;
-        // without @types/node, Node built-ins can't be checked: don't fail the plugin for that
-        else if (!nodeTypes && /Cannot find (module 'node:|name '(Buffer|process|NodeJS)')/.test(l)) { keep = false; skippedNode++; }
-      } else if (!/^\s/.test(l)) keep = false;
-      if (keep) kept.push(l);
-    }
+    const { kept, outside, skippedNode } = filterDiagnostics(r.out, dir, Boolean(nodeTypes));
     if (r.timedOut) return { step: 'typecheck', ok: false, detail: `tsc timed out after ${timeoutMs / 1000} s` };
     if (kept.length) return { step: 'typecheck', ok: false, detail: kept.join('\n') };
     if (r.code !== 0 && !outside && !skippedNode) return { step: 'typecheck', ok: false, detail: r.out.trim() || `tsc exited with ${r.code}` };

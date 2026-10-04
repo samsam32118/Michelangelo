@@ -19,13 +19,16 @@ const WORDS = [
 ];
 const TEXT = WORDS.map((w) => w.text).join(' ');
 
-function memServices(o: { words?: boolean; transcribe?: boolean; speak?: boolean } = {}) {
+/** A loudness envelope (dBFS per 10 ms) with speech where WORDS are: two phrases, 0.1–1.6 s and 2.1–2.9 s. */
+const ENVELOPE = Array.from({ length: 310 }, (_, i) => ((i >= 10 && i < 160) || (i >= 210 && i < 290) ? -18 : -80));
+
+function memServices(o: { words?: boolean; transcribe?: boolean; speak?: boolean; analyze?: boolean; late?: number } = {}) {
   const files = new Map<string, Uint8Array>();
   const calls: { text: string; voice?: string; speed?: number; out: string }[] = [];
   const speak: SpeakService = {
     id: 'fake', describe: 'test voice',
     async voices() { return [{ id: 'a' }]; },
-    async speak(args) { calls.push(args); files.set(args.out, new Uint8Array(100)); return o.words === false ? {} : { words: WORDS }; },
+    async speak(args) { calls.push(args); files.set(args.out, new Uint8Array(100)); return o.words === false ? {} : { words: WORDS.map((w) => ({ ...w, start: w.start + (o.late ?? 0) })) }; },
   };
   const transcribe: TranscribeService = { id: 'fake-asr', async transcribe() { return { text: TEXT, words: WORDS.map((w) => ({ ...w, end: w.end })) }; } };
   const services: CommandServices = {
@@ -33,6 +36,7 @@ function memServices(o: { words?: boolean; transcribe?: boolean; speak?: boolean
     async fileExists(p) { return files.has(p); },
     async readText(p) { const d = files.get(p); if (!d) throw new Error(`no ${p}`); return new TextDecoder().decode(d); },
     async probe() { return { kind: 'audio', duration: 3.1, hasAudio: true }; },
+    ...(o.analyze ? { async analyzeAudio() { return { duration: 3.1, silences: [], envelope: ENVELOPE }; } } : {}),
     ...(o.speak === false ? {} : { speak }),
     ...(o.transcribe ? { transcribe } : {}),
   };
@@ -101,6 +105,37 @@ describe('audio.speak', () => {
   });
 });
 
+describe('audio.speak timings against the sound', () => {
+  it('a provider with no word timings: the text is aligned to the sound (timings: aligned)', async () => {
+    const { edit, files } = setup({ words: false, analyze: true });
+    const r = (await edit({ op: 'audio.speak', text: TEXT, id: 'line' })).out[0]!;
+    expect(r.timings).toBe('aligned');
+    const meta = JSON.parse(new TextDecoder().decode(files.get(`${r.src}.json`)!));
+    expect(meta.timing).toBe('aligned');
+    expect(meta.words.map((w: { text: string }) => w.text)).toEqual(WORDS.map((w) => w.text));
+    // each phrase starts where its sound starts
+    expect(meta.words[0].start).toBe(0.1);
+    expect(meta.words[5].start).toBe(2.1);
+  });
+  it('provider timings are kept, with phrase starts moved to where the voice starts', async () => {
+    const { edit, files } = setup({ analyze: true, late: 0.08 });
+    const r = (await edit({ op: 'audio.speak', text: TEXT, id: 'line' })).out[0]!;
+    expect(r.timings).toBe('provider');
+    const meta = JSON.parse(new TextDecoder().decode(files.get(`${r.src}.json`)!));
+    expect(meta.words[0].start).toBe(0.1); // was 0.18
+    expect(meta.words[5].start).toBe(2.1); // was 2.18
+    expect(meta.words[1].start).toBe(0.48); // inside a phrase: kept
+  });
+  it('captions.from-speech aligns a stored text without timings when it can analyse the sound', async () => {
+    const { edit, files, project } = setup({ words: false });
+    const r0 = (await edit({ op: 'audio.speak', text: TEXT, id: 'line' })).out[0]!;
+    expect(JSON.parse(new TextDecoder().decode(files.get(`${r0.src}.json`)!)).words).toBeUndefined();
+    project.services.analyzeAudio = async () => ({ duration: 3.1, silences: [], envelope: ENVELOPE });
+    const r = (await edit({ op: 'captions.from-speech', clip: 'line' })).out[0]!;
+    expect(r.source).toBe('aligned');
+  });
+});
+
 describe('captions.from-speech', () => {
   it('uses the timings audio.speak stored: cues break at sentences, words are frame offsets', async () => {
     const { edit, project } = setup();
@@ -111,8 +146,8 @@ describe('captions.from-speech', () => {
     expect(cues.map((q) => q.text)).toEqual(['Three tips', 'for better sleep.', 'Keep it cool.']); // never ends a cue on "for"
     const cap = project.data.clips!.find((c) => c.id === r.clip)!;
     expect(cap).toMatchObject({ captions: true, style: 'karaoke' });
-    // the first word starts at 1s + 0.1s = frame 33
-    expect(cap.at + cues[0]!.at).toBe(33);
+    // the first word starts at 1s + 0.1s = frame 33; the cue appears CUE_TIMING.lead (0.05 s) before it
+    expect(cap.at + cues[0]!.at).toBe(31);
     expect(cues[0]!.words).toEqual([0, 9]);
     for (const q of cues) expect(q.words!.every((w) => w < q.len)).toBe(true);
     // cues never overlap
@@ -155,7 +190,7 @@ describe('captions.from-speech', () => {
     // in=30 frames = 1s of source: the words before it are dropped
     const cues = project.data.cues!.filter((q) => q.clip === r.clip);
     expect(cues[0]!.text).toBe('sleep.');
-    expect(cues[0]!.at + project.data.clips!.find((c) => c.id === r.clip)!.at).toBe(30 + Math.round(0.25 * 30));
+    expect(cues[0]!.at + project.data.clips!.find((c) => c.id === r.clip)!.at).toBe(30 + Math.floor((0.25 - 0.05) * 30));
   });
 
   it('estimates from the stored text when the voice has no timings and there is no transcriber', async () => {
@@ -194,6 +229,13 @@ describe('word helpers', () => {
     expect(groupWords(ws2, 3).map((x) => x.map((w) => w.text).join(' '))).toEqual(['that changed', 'my mornings.']);
     const ws3 = 'Third, write down the one task that matters today.'.split(' ').map((text, i) => ({ text, start: i * 0.27, end: i * 0.27 + 0.24 }));
     expect(groupWords(ws3, 4).map((x) => x.map((w) => w.text).join(' '))).toEqual(['Third, write down', 'the one task', 'that matters today.']);
+  });
+  it('groupWords chunks like speech: a drawn-out "First," is its own beat, long phrases split evenly', () => {
+    const t = (spec: string) => spec.split(' ').map((x) => { const [text, a, b] = x.split('@'); return { text: text!, start: Number(a), end: Number(b) }; });
+    const ws = t('First,@0@0.49 keep@0.55@0.73 your@0.75@0.83 room@0.88@1.08 cool@1.12@1.4 and@1.45@1.52 dark.@1.58@1.86');
+    expect(groupWords(ws, 3).map((x) => x.map((w) => w.text).join(' '))).toEqual(['First,', 'keep your room', 'cool and dark.']);
+    // a quick "So, ..." stays with what follows
+    expect(groupWords(t('So,@0@0.2 here@0.22@0.4 it@0.42@0.5 is.@0.52@0.8'), 4).map((x) => x.length)).toEqual([4]);
   });
   it('estimateTimedWords spans the duration in order; normaliseWords clamps and orders', () => {
     const w = estimateTimedWords('Hello there. How are you?', 2);

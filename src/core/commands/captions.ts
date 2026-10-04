@@ -5,9 +5,11 @@ import { defineCommand, TimeArg, type CommandContext } from './registry.js';
 import { Id, inputSchemas, type Clip, type Cue, type TextStyle } from '../schema/index.js';
 import { parseCaptions, splitScript, estimateWordTimes, wordsOf, type CaptionCue } from '../captions.js';
 import { BUILTIN_STYLES } from '../load.js';
-import { speedOf } from './clip.js';
+import { clipEnd, speedOf } from './clip.js';
 import { keyLists } from '../keylists.js';
 import { defaultCompId, placeLayers } from './template.js';
+import { alignWords, textWords } from '../align.js';
+import { envelopeFromSilences, timeCues } from '../cue-timing.js';
 
 // ---------------------------------------------------------------------------
 // helpers
@@ -60,6 +62,18 @@ function insertCue(ctx: CommandContext, q: Cue) {
   cues.forEach((x, i) => { if (x.clip === q.clip && x.at <= q.at) idx = i; });
   if (idx < 0) idx = cues.findIndex((x) => x.clip === q.clip) - 1;
   cues.splice(idx < -1 ? cues.length : idx + 1, 0, q);
+}
+
+/**
+ * The loudness envelope of a file (dBFS per 10 ms) for word alignment: measured when the media service can, else
+ * stood in for by its silences; undefined when there is no audio analysis here or it fails.
+ */
+export async function speechEnvelope(ctx: CommandContext, src: string, o: { silenceDb?: number; minSilence?: number } = {}): Promise<number[] | undefined> {
+  if (!ctx.services.analyzeAudio) return undefined;
+  try {
+    const a = await ctx.services.analyzeAudio(src, { ...o, envelope: true });
+    return a.envelope?.length ? a.envelope : envelopeFromSilences(a.silences, a.duration);
+  } catch { return undefined; }
 }
 
 function fitWords(text: string, len: number): number[] {
@@ -198,70 +212,60 @@ defineCommand({
     const compId = voice ? ctx.compOfClip(voice).id : compFor(ctx, p);
     const rate = ctx.rate(compId);
     const existing = p.clip ? captionsClip(ctx, p.clip) : undefined;
-    // speech segments on the timeline (comp frames)
-    let segs: [number, number][];
+    const cues: { at: number; len: number; text: string; words?: number[] }[] = [];
     if (voice) {
+      // every word of the script aligned to the voice's sound, then grouped into the script's chunks
       if (voice.asset === undefined) fail('E_ARG', `voice clip "${voice.id}" is not a media clip.`, 'give the id of an audio or video clip with speech.');
       if (!ctx.services.analyzeAudio) fail('E_NO_SERVICE', 'audio analysis is not available here.', 'run through the SDK or CLI, or omit voice to spread cues evenly.');
       const asset = (ctx.project.assets ?? []).find((a) => a.id === voice.asset);
       if (!asset) fail('E_REF', `asset "${voice.asset}" does not exist.`, 'add it with asset.add.');
-      const an = await ctx.services.analyzeAudio(asset.src, { ...(p.silenceDb !== undefined ? { silenceDb: p.silenceDb } : {}), ...(p.minSilence !== undefined ? { minSilence: p.minSilence } : {}) });
+      const fps = rate.num / rate.den;
+      const env = await speechEnvelope(ctx, asset.src, { ...(p.silenceDb !== undefined ? { silenceDb: p.silenceDb } : {}), ...(p.minSilence !== undefined ? { minSilence: p.minSilence } : {}) });
+      if (!env) fail('E_MEDIA', `cannot analyse the sound of "${voice.id}" (${asset.src}).`, 'check the file with mgl show, or omit voice to spread the cues evenly.');
+      // the part of the source the clip plays, in source seconds
       const sp = speedOf(voice);
-      const toTl = (srcSec: number) => voice.at + ((srcSec * rate.num) / rate.den - (voice.in ?? 0)) * (sp.num ? sp.den / sp.num : 0);
-      const speech: [number, number][] = [];
-      let t = 0;
-      for (const s of [...an.silences].sort((a, b) => a.start - b.start)) { if (s.start > t) speech.push([t, s.start]); t = Math.max(t, s.end); }
-      if (an.duration > t) speech.push([t, an.duration]);
-      segs = speech.map(([a, b]): [number, number] => [Math.max(voice.at, Math.round(toTl(a))), Math.min(voice.at + voice.len, Math.round(toTl(b)))]).filter(([a, b]) => b > a);
-      if (!segs.length) { ctx.note(`no speech found in "${voice.id}"; spread the cues over the whole clip.`); segs = [[voice.at, voice.at + voice.len]]; }
-    } else if (existing) segs = [[existing.at, existing.at + existing.len]];
-    else {
-      const at = p.at === undefined ? 0 : ctx.time(p.at, compId, 'at');
-      const nWords = chunks.reduce((n, c) => n + wordsOf(c).length, 0);
-      const len = p.len === undefined ? Math.max(chunks.length, Math.round((nWords * 0.4 * rate.num) / rate.den)) : ctx.time(p.len, compId, 'len');
-      segs = [[at, at + len]];
-    }
-    // distribute chunks over speech time by word count
-    const counts = chunks.map((c) => wordsOf(c).length);
-    const W = counts.reduce((a, b) => a + b, 0);
-    const T = segs.reduce((n, [a, b]) => n + b - a, 0);
-    const map = (pos: number, preferNext: boolean): number => {
-      let acc = 0;
-      for (const [a, b] of segs) {
-        const d = b - a;
-        if (pos < acc + d || (!preferNext && pos === acc + d)) return a + (pos - acc);
-        acc += d;
+      const k = sp.num ? sp.den / sp.num : 0;
+      const src0 = (voice.in ?? 0) / fps, src1 = src0 + (voice.len * (sp.num / sp.den)) / fps;
+      const a0 = Math.max(0, Math.floor(src0 / 0.01)), a1 = Math.min(env.length, Math.ceil(src1 / 0.01));
+      const part = env.slice(a0, Math.max(a0 + 1, a1));
+      const words = alignWords(textWords(chunks.join(' ')), part, p.silenceDb !== undefined ? { silenceDb: p.silenceDb } : {});
+      const tl = (sec: number) => (voice.at + (sec * fps) * k) / fps; // seconds into the played part → timeline seconds
+      const timed = words.map((w) => ({ text: w.text, start: tl(w.start), ...(w.end !== undefined ? { end: tl(w.end) } : {}) }));
+      const groups: (typeof timed)[] = [];
+      let i = 0;
+      for (const ch of chunks) { const n = wordsOf(ch).length; groups.push(timed.slice(i, i + n)); i += n; }
+      const lo = Math.max(0, voice.at - Math.ceil(0.1 * fps));
+      for (const q of timeCues(groups, fps, lo, clipEnd(voice))) cues.push(p.words === false ? { at: q.at, len: q.len, text: q.text } : q);
+      if (!words.length || !cues.length) fail('E_NO_SPEECH', `no speech found in "${voice.id}".`, 'check the clip, or omit voice to spread the cues evenly.');
+    } else {
+      // spread over the captions clip, or at + len, by word count
+      let at0: number, len0: number;
+      if (existing) { at0 = existing.at; len0 = existing.len; }
+      else {
+        at0 = p.at === undefined ? 0 : ctx.time(p.at, compId, 'at');
+        const nWords = chunks.reduce((n, c) => n + wordsOf(c).length, 0);
+        len0 = p.len === undefined ? Math.max(chunks.length, Math.round((nWords * 0.4 * rate.num) / rate.den)) : ctx.time(p.len, compId, 'len');
       }
-      return segs[segs.length - 1]![1];
-    };
-    // chunk boundaries in speech time, snapped to a pause when one is near (sentences tend to end there)
-    const edges: number[] = [];
-    segs.reduce((acc, [a, b]) => { edges.push(acc + b - a); return acc + b - a; }, 0);
-    const tol = Math.round((0.6 * rate.num) / rate.den);
-    let w = 0;
-    const bounds = [0, ...counts.map((n) => {
-      w += n;
-      const pos = Math.round((w / W) * T);
-      const near = edges.reduce((best, e) => (Math.abs(e - pos) < Math.abs(best - pos) ? e : best), Infinity);
-      return Math.abs(near - pos) <= tol ? near : pos;
-    })];
-    for (let i = 1; i < bounds.length; i++) bounds[i] = Math.max(bounds[i]!, bounds[i - 1]!);
-    const cues: { at: number; len: number; text: string; words?: number[] }[] = [];
-    let prevEnd = -Infinity;
-    chunks.forEach((text, i) => {
-      const s = Math.max(prevEnd, map(bounds[i]!, true));
-      const e = Math.max(s + 1, map(bounds[i + 1]!, false));
-      const q: (typeof cues)[number] = { at: s, len: e - s, text };
-      if (p.words !== false) q.words = fitWords(text, e - s);
-      cues.push(q);
-      prevEnd = e;
-    });
+      const counts = chunks.map((c) => wordsOf(c).length);
+      const W = counts.reduce((a, b) => a + b, 0);
+      let w = 0;
+      const bounds = [0, ...counts.map((n) => { w += n; return Math.round((w / W) * len0); })];
+      let prevEnd = -Infinity;
+      chunks.forEach((text, i) => {
+        const s = Math.max(prevEnd, at0 + bounds[i]!);
+        const e = Math.max(s + 1, at0 + bounds[i + 1]!);
+        const q: (typeof cues)[number] = { at: s, len: e - s, text };
+        if (p.words !== false) q.words = fitWords(text, e - s);
+        cues.push(q);
+        prevEnd = e;
+      });
+    }
     const at = cues[0]!.at, end = cues[cues.length - 1]!.at + cues[cues.length - 1]!.len;
     const c = targetClip(ctx, { ...p, ...(existing ? { clip: existing.id } : {}) }, at, end - at, compId);
     const ids = writeCues(ctx, c, cues);
     ctx.out.clip = c.id;
     ctx.out.cues = ids.length;
-    ctx.summary(`created ${ids.length} cue(s) in captions clip "${c.id}"${voice ? ` timed to the speech of "${voice.id}" (${segs.length} segment(s))` : ''}.`);
+    ctx.summary(`created ${ids.length} cue(s) in captions clip "${c.id}"${voice ? ` with every word aligned to the speech of "${voice.id}"` : ''}.`);
   },
 });
 

@@ -141,8 +141,9 @@ box=[x,y,w,h]` (zoom to a region), `layout.grid ids=[...]` (split screens), `fx.
 (audio effects on a bus or a clip with sound).
 Motion and sound in one call each: `motion.apply <clip> in=pop emphasis=pulse@1s loop=float out=fade` (presets
 for any layer), `audio.music mood=upbeat len=30s`, `audio.sfx type=whoosh at=2s`, `audio.auto-sfx` (SFX on every
-cut, transition and entrance); all generated offline. Speech needs a provider plugin: `audio.speak text="..."`
-then `captions.from-speech` (word-timed captions; `mgl docs audio`).
+cut, transition and entrance); all generated offline. Speech needs a provider plugin (`kokoro-voice`: natural; `flite-voice`:
+offline drafts): `audio.speak text="..."` then `captions.from-speech` (word-timed captions, in sync by default;
+`mgl docs audio`). A recorded voice-over with its script: `captions.from-text voice=<clip> file=script.txt`.
 `mgl docs commands` lists all of them; `mgl docs <op>` prints one with its fields and an example.
 
 ## Look and QA

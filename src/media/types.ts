@@ -125,6 +125,8 @@ export interface AudioAnalysisReport {
   bpm?: number;
   /** RMS dBFS per 100 ms window */
   rms: number[];
+  /** RMS dBFS per 10 ms window, when asked for (`envelope: true`): what word alignment reads */
+  envelope?: number[];
 }
 
 export interface MediaBackend {
@@ -139,7 +141,7 @@ export interface MediaBackend {
   encode(opts: EncodeOptions): Promise<FrameSink>;
   /** encode an existing WAV to another audio format (mp3, aac/m4a, opus, flac) */
   transcodeAudio(wav: string, out: string, opts?: { bitrate?: string; pcmDepth?: 16 | 24 }): Promise<void>;
-  analyzeAudio(file: string, opts?: { silenceDb?: number; minSilence?: number }): Promise<AudioAnalysisReport>;
+  analyzeAudio(file: string, opts?: { silenceDb?: number; minSilence?: number; envelope?: boolean }): Promise<AudioAnalysisReport>;
   /** join segment files without re-encoding */
   concat(parts: string[], out: string): Promise<void>;
   /** per-frame RMS + spectrum of a file's audio at `rate` (audio-reactive generators; cached) */

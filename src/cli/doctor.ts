@@ -90,7 +90,7 @@ export async function doctor(a: Args, o: Out) {
   const byKind = (k: string) => providers.filter((p) => p.kind === k).map((p) => p.id);
   const scope = file ? `of ${file}` : '(built-in; pass a project file to include its plugins)';
   lines.push(`providers ${scope}: speak ${byKind('speak').join(', ') || 'none'} · transcribe ${byKind('transcribe').join(', ') || 'none'}`);
-  if (file && !byKind('speak').length) lines.push(`  audio.speak needs a speak provider: copy examples/plugins/flite-voice into plugins/, mgl plugin trust plugins/flite-voice, then project.set plugins='{"flite-voice": "^1.0.0"}' (uses ffmpeg flite${has.filters.includes('flite') ? ', present' : ', missing here'})`);
+  if (file && !byKind('speak').length) lines.push(`  audio.speak needs a speak provider: copy examples/plugins/kokoro-voice (natural voices; npm install there, ~330 MB model on first use) or examples/plugins/flite-voice (no downloads; uses ffmpeg flite${has.filters.includes('flite') ? ', present' : ', missing here'}) into plugins/, mgl plugin trust plugins/<name>, then project.set plugins='{"<name>": "^1.0.0"}'`);
 
   lines.push(gaps.length ? `${gaps.length} gap${gaps.length > 1 ? 's' : ''}:` : 'ready: nothing missing');
   for (const g of gaps) lines.push(`  ${g.fatal ? 'error' : 'warn'} ${g.what}`, `    fix: ${g.fix}`);

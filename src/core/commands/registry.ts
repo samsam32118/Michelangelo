@@ -17,7 +17,7 @@ export interface CommandServices {
   /** probe a media file (relative to the project dir) */
   probe?(src: string): Promise<ProbeInfo>;
   /** speech/silence analysis of an audio range of an asset */
-  analyzeAudio?(src: string, opts?: { silenceDb?: number; minSilence?: number }): Promise<AudioAnalysis>;
+  analyzeAudio?(src: string, opts?: { silenceDb?: number; minSilence?: number; envelope?: boolean }): Promise<AudioAnalysis>;
   /** motion-centroid track of a media asset (normalised 0..1 per sampled frame) */
   trackMotion?(src: string, opts: { fps: number; inFrames: number; lenFrames: number; rate: Rate }): Promise<{ frame: number; x: number; y: number }[]>;
   /** read a text file relative to the project dir */
@@ -102,6 +102,8 @@ export interface AudioAnalysis {
   /** onset/beat times in seconds, and a tempo estimate */
   beats?: number[];
   bpm?: number;
+  /** RMS dBFS per 10 ms (only when asked for with `envelope: true`): word alignment (src/core/align.ts) reads it */
+  envelope?: number[];
 }
 
 export interface CommandContext {

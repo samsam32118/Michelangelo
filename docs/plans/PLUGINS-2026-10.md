@@ -1,8 +1,8 @@
-# Plan: open media, svg-prop, cutout, safe-zone, laya plugins (2026-10-04)
+# Plan: open media, svg-prop, cutout, safe-zone plugins (2026-10-04)
 
 Status: **proposal, awaiting the owner's go-ahead**. Nothing here is built yet.
 
-Seven requests, judged against DESIGN §17 (cost per high-quality video for an agent in a CPU-only container that
+Six requests, judged against DESIGN §17 (cost per high-quality video for an agent in a CPU-only container that
 cannot browse, watch or listen) and the rules in CLAUDE.md (additive schema, public plugin API only, no GPL, no
 bundled assets, no browser).
 
@@ -14,9 +14,8 @@ bundled assets, no browser).
 | 4 | `svg-prop` | generator + command | generators may read an asset's bytes; opt-in device-resolution drawing |
 | 5 | `cutout` | provider `segment` + command | `segment` provider kind; core `image.cutout` |
 | 6 | `safe-zone` | checks + generator + command | `CheckContext.uiZones()` (the table already exists in `src/qa/safezones.ts`) |
-| 7 | `laya` | provider `decide` + checks + commands | `decide` provider kind; `media.search rank=true` uses it when present |
 
-All seven live in `examples/plugins/<name>/` (package.json, `src/index.ts`, tests via `michelangelo/testing`, an
+All six live in `examples/plugins/<name>/` (package.json, `src/index.ts`, tests via `michelangelo/testing`, an
 eval task, README), like the existing seven.
 
 ---
@@ -218,87 +217,15 @@ but no check uses them.
 
 ---
 
-## 7. laya (calibrated text decisions)
-
-Source: [convaiinnovations/laya](https://huggingface.co/convaiinnovations/laya), Apache-2.0 (weights and the
-`laya` PyPI runtime, 0.3.27, Python ≥ 3.10, torch + transformers). It answers **typed questions** about a text
-state (`choice` among labelled options, `score` on an ordered scale, `noul` yes/no) with calibrated probabilities,
-in one forward pass, in 100+ languages; it never generates text. Measured by its authors: 193–464 ms per call
-on CPU (the `Router`), 7.4 s to load a checkpoint, 421M params (English) / 322M (multilingual).
-
-**Where it helps an agent making video.** An agent already *is* a language model, so laya earns its place only
-where a cheap, calibrated, repeatable judgement over many small texts saves turns and tokens, or where the decision
-must be the same on every run (QA). Three places do that:
-
-1. **Ranking stock results it cannot preview (with 1–3).** An agent can't listen to 20 Openverse audio hits.
-   `media.search rank=true` asks the `decide` provider, per result, how well its title, tags and description fit
-   the query and an optional `brief` ("calm rain ambience, no music, no voices") and sorts by that probability,
-   printed on each line (`p=0.91`). It also answers typed filters such as `has vocals?` from the metadata. Without
-   a provider, `rank=true` is an error naming the fix; `media.search` without it is unchanged.
-2. **Text guard QA (deterministic, every run).** Check `text-guard` (project stage): every on-screen text and
-   caption cue is asked a fixed set of questions: profanity, slurs or harassment, sexual content, medical or
-   financial guarantees ("cures", "guaranteed returns"), and calls to action that platforms limit. A finding above
-   a threshold names the clip, cue, time, question and probability, with a fix (`clip.set <id> text=...` or
-   `cue.set`). Thresholds and the question set are in `project.settings.textGuard`; it is a warning by default
-   (calibrated, but zero-shot), error with `--strict`.
-3. **Transcript-based editing.** `laya.tag-cues clip=<captions> [questions=...]` labels each cue of a
-   transcribed talk (`captions.from-speech`) with a default set: `filler` (um, false start), `retake` (a
-   repeated attempt at the previous line), `off-topic` against an optional `topic=`, and `hook` (score: how
-   strongly it opens the video). It writes markers (`marker.add` with the label and probability) and prints a
-   suggested cut list as ready-to-run `clip.split` / `clip.remove --ripple` commands. It never cuts by itself;
-   the agent decides. A `laya.decide state="..." questions='{...}'` command exposes the raw provider for anything
-   else (changes nothing, returns the answers).
-
-### Core (API 1.4)
-
-```ts
-interface DecideProvider {
-  kind: 'decide'; id: string; describe: string;
-  decide(args: { states: (string | Record<string, unknown>)[];       // batched
-                 questions: Record<string, DecideQuestion>; lang?: string }):
-    Promise<Record<string, DecideAnswer>[]>;                          // one per state
-}
-type DecideQuestion =
-  | { type: 'choice'; instructions: string; criteria: Record<string, string> }
-  | { type: 'score'; instructions: string; criteria: string[] }
-  | { type: 'noul'; instructions: string };
-type DecideAnswer = { choice?: string; probs?: Record<string, number>; score?: number; noul?: number };
-```
-
-`services.decide` (first `decide` provider, like `speak`), answers cached in `.mgl/cache/decide/` by
-(provider, model, state, questions), so `check` re-runs cost nothing for unchanged text.
-
-### The plugin
-
-- Provider `laya`: one long-lived Python child (`python3 -m` a ~60-line JSON-lines bridge written in the plugin,
-  loading `laya.Router` once), started on first use and kept for the process's life, so the 7 s load is paid once
-  per `mgl` run; batched calls. Alternatively, `LAYA_URL` points at a running `laya-serve` (the
-  `POST /v1/systemone` HTTP API) and no Python is spawned. The model is downloaded by laya itself from Hugging
-  Face on first use (into the HF cache), never by us and never bundled; `mgl doctor` reports Python, the `laya`
-  package, the cached checkpoint and the install line (`pip install laya`; CPU torch wheel).
-- `model=english|multilingual|typed-decisions|auto` (default `auto`: laya's own router by language).
-- Built-in questions use the workaround the model card gives for its known `noul` issue (#156: a yes/no can
-  follow its `false:`/`true:` labels instead of the text on the English checkpoint): every yes/no is asked as a
-  two-option `choice` with neutral keys.
-- Licence: Apache-2.0 (laya), BSD (torch), Apache-2.0 (transformers): all outside the npm package; no GPL.
-- Tests: the bridge protocol, batching, caching, the `noul`→`choice` rewrite, every command and check against a
-  fake provider (deterministic answers); one live test with `MGL_LIVE=1` that runs the real model on CPU.
-- Honest limits, stated in the README: zero-shot accuracy is modest on unfamiliar decisions (its authors report
-  0.362 on their typed-decisions benchmark for the base English checkpoint, 0.766 fine-tuned), so findings are
-  warnings and suggestions, and the plugin is optional for everything else in this plan.
-
----
-
 ## Order of work, and checks
 
-1. Core API 1.4 (`stock`, `segment`, `decide` providers; generator `assets`/`resolution`; `CheckContext.uiZones`), with
+1. Core API 1.4 (`stock`, `segment` providers; generator `assets`/`resolution`; `CheckContext.uiZones`), with
    unit tests, docs (`mgl docs plugins`), schema regenerated, `PLUGIN_API_VERSION = 1.4.0`.
 2. `safe-zone` (smallest, highest payoff: it prevents the v3 failure).
 3. `svg-prop`.
 4. `open-image`, then `open-audio`, `open-video` (shared core first, then three thin providers).
 5. `cutout`.
-6. `laya` (after open-media, since its first use is ranking search results).
-7. An eval task per plugin (in the plugin's `evals/`, never in `evals/heldout*`), README per plugin, LESSONS.md
+6. An eval task per plugin (in the plugin's `evals/`, never in `evals/heldout*`), README per plugin, LESSONS.md
    entry for any borrowed idea (FrameCraft had safe zones; concept only, already recorded).
 
 Before each push: `npm run typecheck`, `npm test`, `npm run docs:check`, `mgl plugin test examples/plugins/<x>`.
@@ -311,6 +238,3 @@ Before each push: `npm run typecheck`, `npm test`, `npm run docs:check`, `mgl pl
 3. **cutout default engine.** Recommended: `auto` (rembg if installed, else the colour-key engine), with no
    automatic `pip install`.
 4. **Keyed sources** (Pexels, Pixabay, Unsplash, Freesound): off unless their key is in the environment.
-5. **laya scope.** Recommended: the three uses above (search ranking, text guard, cue tagging), all advisory;
-   no automatic cuts. It adds a Python + torch dependency (roughly 1–2 GB installed with CPU torch, plus about 1.3–1.7 GB of
-   weights), so it stays an optional plugin and nothing else depends on it.

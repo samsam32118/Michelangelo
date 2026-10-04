@@ -1,240 +1,174 @@
-# Plan: open media, svg-prop, cutout, safe-zone plugins (2026-10-04)
+# Plan: platform safe zones in core, and the open-media plugin (2026-10-04)
 
 Status: **proposal, awaiting the owner's go-ahead**. Nothing here is built yet.
 
-Six requests, judged against DESIGN §17 (cost per high-quality video for an agent in a CPU-only container that
-cannot browse, watch or listen) and the rules in CLAUDE.md (additive schema, public plugin API only, no GPL, no
-bundled assets, no browser).
+Judged against DESIGN §17: an agent in a CPU-only container, which cannot browse, watch or listen, should make
+better videos for less with Michelangelo than without it. So each item below says who needs it and how it lowers
+cost per high-quality video. Rules from CLAUDE.md hold throughout: schema changes only add fields, built-ins use
+only the public plugin API, no GPL, no bundled assets, no browser.
 
-| # | Plugin | Kind(s) | Needs from core (plugin API 1.3 → 1.4, additive) |
-|---|---|---|---|
-| 1 | `open-audio` | provider `stock` + command | `stock` provider kind; core `media.search` / `media.fetch` / `media.credits` |
-| 2 | `open-video` | provider `stock` + command | same |
-| 3 | `open-image` | provider `stock` + command | same |
-| 4 | `svg-prop` | generator + command | generators may read an asset's bytes; opt-in device-resolution drawing |
-| 5 | `cutout` | provider `segment` + command | `segment` provider kind; core `image.cutout` |
-| 6 | `safe-zone` | checks + generator + command | `CheckContext.uiZones()` (the table already exists in `src/qa/safezones.ts`) |
-
-All six live in `examples/plugins/<name>/` (package.json, `src/index.ts`, tests via `michelangelo/testing`, an
-eval task, README), like the existing seven.
+| # | What | Where | Who needs it | Why |
+|---|---|---|---|---|
+| A | Platform safe zones checked by default | core (built-in QA) | everyone making vertical video | captions under the TikTok / Reels / Shorts interface are a quality failure the agent cannot see; v3 shipped one |
+| B | `open-media`: images, video, music and sound effects | plugin + small core API (1.3 → 1.4) | anyone without their own footage or sound (script-only briefs) | `docs/FRAMECRAFT-GAP.md` rates "no real imagery" a high-impact gap (FrameCraft's Reel scored 4.5/10 for it) |
+| – | svg-prop, cutout | deferred | brand videos; occasional sticker work | niche; build when a task needs them (notes at the end) |
 
 ---
 
-## Why core changes are needed (and why they are small)
+## A. Safe zones (core, always on)
 
-Today a plugin **command** cannot write a file into the project folder: `CommandContext` has no project dir and
-`services.writeFile` only accepts `media/generated/*.wav`. A **generator** cannot read a file: `draw` gets params
-and the frame, nothing else, and is rendered at its box size, then scaled as a raster. Those are the two gaps.
+**Why v3 slipped through.** The built-in `text-outside-safe` check only looks at text and captions, only for the
+one platform in `project.platform` (default `none`, which means 5 % title-safe margins), and only against that
+margin rectangle. The per-platform interface rectangles (header, action buttons, caption panel) already exist in
+`src/qa/safezones.ts` (`uiZones`) but no check uses them. A plugin would not fix this: plugins load only when a
+project names them, so the projects that need it most would not have it.
 
-The pattern already exists: `audio.speak` is a core command, the TTS engine is a `speak` provider in a plugin
-(`flite-voice`), and core owns the file confinement, caching and sidecar metadata. The new features follow it
-exactly, so licence handling, paths and caching are written once and every provider stays a thin adapter.
+**Changes (`src/qa/`, `src/builtin/checks/`, plugin API 1.4, all additive):**
 
-All API changes are additive (minor bump to **1.4.0**); no schema field changes. New optional fields only.
+- `CheckContext.uiZones(platform?)`: the named interface rectangles in comp px (exposes the existing table).
+- New check `ui-overlap` (project stage, so it runs in `check` and `look`): on a vertical comp (height > width),
+  tests captions (every cue), text, and **stickers** (image, generator or shape layers covering < 40 % of the
+  frame, or clips tagged `sticker`) against the interface zones of **tiktok, reels and shorts together** unless
+  `project.platform` names one, at every rest and sample frame. One finding per clip, naming the platforms and
+  panels and by how much:
+  `caption cue "wait for it" (caps, 4.2s) is under the TikTok caption-and-sound panel and the Reels caption
+  area by 86 px; fix: mgl edit <file> clip.set caps y=1418`.
+  The fix moves the clip into the area that is clear on all three, and `check --fix` is tested to converge on it.
+  Error for captions and text, warning for stickers. Moving layers (crawls, fly-ins) pass through on purpose, as
+  in `text-outside-safe` today.
+- `look --safe` draws the interface panels of each platform as labelled outlines on the contact sheet and crops,
+  so the agent sees what the check sees. Drawn on the QA images only; it can never reach a render.
+- Docs: SKILL.md and `mgl docs qa` say vertical projects are checked against all three platforms by default.
+
+**Tests:** a caption at y = 1700 on 1080x1920 flagged for all three, with a fix that clears them; a sticker in the
+TikTok action column flagged for TikTok only; a full-frame background and a moving crawl not flagged; a horizontal
+comp skipped; `project.platform: "shorts"` checks Shorts only; `look --safe` output has the outlines and the
+render does not.
 
 ---
 
-## 1–3. open-audio, open-video, open-image
+## B. open-media (one plugin: images, video, music, sound effects)
 
-**Goal.** An agent can find, fetch and use openly licensed media without a browser, and the project always
-knows each file's licence, author and source, so the deliverable can carry correct credits. No asset is bundled:
-everything is fetched at run time into the project's `media/stock/`.
+**Goal.** An agent finds, fetches and uses openly licensed media in one or two commands, without a browser, and
+the project always knows each file's licence, author and source, so the video carries correct credits. Nothing is
+bundled: every file is fetched at run time into the project's `media/stock/`.
 
-### Core (API 1.4)
+### Why a small core addition is needed
+
+A plugin command today cannot write into the project folder (`CommandContext` has no project dir, and
+`services.writeFile` accepts only `media/generated/*.wav`). The same problem was solved for speech: `audio.speak`
+is a core command, and the engine is a `speak` provider in a plugin (`flite-voice`). open-media follows that
+pattern: core owns paths, caching, licence rules and credits; the plugin is the source adapters.
+
+### Core (plugin API 1.4, additive)
 
 ```ts
 interface StockProvider {
   kind: 'stock'; id: string; describe: string;
-  media: ('audio' | 'video' | 'image')[];
-  search(q: { kind; query; limit?; orientation?; minSeconds?; maxSeconds?; minWidth?; licences?: LicenceClass[] }):
+  media: StockKind[];                                     // 'image' | 'video' | 'music' | 'sfx'
+  search(q: { kind: StockKind; query: string; limit?: number; orientation?: 'portrait' | 'landscape' | 'square';
+              minSeconds?: number; maxSeconds?: number; minWidth?: number; licences?: LicenceClass[] }):
     Promise<StockItem[]>;
   fetch(args: { item: StockItem; out: string }): Promise<void>;   // core gives a temp path inside media/stock/
 }
 interface StockItem {
-  id: string;                 // provider-scoped, stable (e.g. "openverse:9f1c...")
-  kind; title; url /* landing page */; file /* direct download */; ext;
-  licence: { id: string /* "cc0" | "pdm" | "cc-by-4.0" | ... */; url: string };
-  author?: string; authorUrl?: string; source: string /* "Wikimedia Commons" */;
-  seconds?: number; width?: number; height?: number; bytes?: number; preview?: string;
+  id: string;                     // provider-scoped and stable, e.g. "openverse:9f1c…"
+  kind: StockKind; title: string; url: string /* landing page */; file: string /* download */; ext: string;
+  licence: { id: string /* "cc0" | "pdm" | "cc-by-4.0" | … */; url: string };
+  author?: string; authorUrl?: string; source: string /* "Freesound via Openverse" */;
+  seconds?: number; width?: number; height?: number; bytes?: number; preview?: string; tags?: string[];
 }
 ```
 
 Commands (core, group `media`):
 
-- `media.search kind=audio query="rain on window" [limit=8 provider= orientation=portrait minSeconds= ...]`
-  changes nothing; prints at most 8 numbered results, one line each (`id · title · 0:42 · 1920x1080 · CC BY 4.0 ·
-  author`), full list in `.mgl/<p>/search.json`. Agents can't preview audio/video, so results also carry the
-  facts that let them choose without one: duration, size, orientation, tags; images get a contact sheet
-  (`.mgl/<p>/search.png`, thumbnails fetched from `preview`) the agent can look at.
-- `media.fetch id=openverse:9f1c [as=rain] [track= at= len=]` downloads to `media/stock/<provider>-<hash>.<ext>`
-  (reused if present), writes `<file>.json` (licence, author, title, url, fetched date, sha256), adds the asset with
-  a `note` naming the licence, optionally adds a clip. Probes the file and refuses HTML error pages / wrong kind.
-- `media.credits [out=credits.txt] [card=true]` writes the attribution lines (TASL: title, author, source, licence)
-  for every stock asset in use, and with `card=true` applies the `end-card` template with them.
+- `media.search kind=sfx query=whoosh [maxSeconds=2 limit=8 orientation= minWidth= licences=]` changes nothing.
+  Prints at most 8 numbered results, one per line (`id · title · 0:01.4 · CC0 · author · tags`); the full list
+  goes to `.mgl/<p>/search.json`. Images and video also get a contact sheet of thumbnails
+  (`.mgl/<p>/search.png`) the agent can look at.
+- `media.fetch id=openverse:9f1c [as=whoosh] [track= at= len= gain=]` downloads to
+  `media/stock/<kind>/<provider>-<hash>.<ext>` (reused if already there), writes `<file>.json` (licence, author,
+  title, url, fetch date, sha256), probes it and refuses an HTML error page or the wrong kind, and adds the asset
+  with a `note` naming the licence. With `at=` it also adds a clip: music on the music bus, sfx on the sfx bus
+  (like `audio.sfx`), images and video on a new visual track.
+- **Sound described as text**, because the agent can't listen: for music and sfx, the fetch result reports
+  duration, integrated loudness and peak, where the sound starts (first onset, so a whoosh lands on the cut and not
+  80 ms late), whether it is tonal or noisy, bright or dark, and for music the tempo. All from the existing audio
+  analysis (`src/media/analysis.ts`). `media.fetch … align=onset` places the clip so its onset falls on `at`.
+- `media.credits [out=credits.txt] [card=true]` writes attribution lines (title, author, source, licence) for
+  every stock asset in use, and with `card=true` applies the `end-card` template with them.
 
-Licence policy, in core so all providers obey it:
+**Licence rules (in core, so every source obeys them):**
 
 | Class | Licences | Default |
 |---|---|---|
-| `free` | CC0, Public Domain Mark, US-gov PD (NASA) | allowed |
-| `attribution` | CC BY 2.0–4.0 | allowed; `media.credits` required |
-| `share-alike` | CC BY-SA | refused unless `licences=[...,share-alike]` (the whole video would inherit it) |
-| `non-commercial` / `no-derivatives` | NC, ND variants | refused unless asked; ND is never allowed (editing *is* a derivative) |
+| `free` | CC0, Public Domain Mark, US-government public domain (NASA) | allowed |
+| `attribution` | CC BY 2.0–4.0 | allowed; credits required |
+| `share-alike` | CC BY-SA | refused unless asked (`licences=[…,share-alike]`): the whole video would inherit it |
+| `non-commercial` | any NC | refused unless asked |
+| `no-derivatives` | any ND | always refused (an edit is a derivative) |
 | unknown | anything else | refused |
 
-QA check `stock-credits` (built-in, project stage): a CC BY asset in use with no credits written → warning with
-the fix `mgl edit <file> media.credits card=true`. Another, `stock-licence`: an asset whose sidecar licence is NC
-when `project.settings.commercial` is true → error.
+QA (built-in, project stage): `stock-credits` warns when a CC BY asset is used and no credits were written
+(fix: `mgl edit <file> media.credits card=true`); `stock-licence` errors when an NC asset is used and
+`project.settings.commercial` is true.
 
-### The providers (keyless sources first; keys optional via env)
+### The plugin: sources (no key needed unless stated)
 
-| Plugin | Sources, no key | Optional with a key |
+| Kind | Sources | Notes |
 |---|---|---|
-| `open-audio` | Openverse audio (`api.openverse.org`, CC music/SFX from Jamendo, Freesound, Wikimedia), Wikimedia Commons (ogg/wav/flac) | Freesound (`FREESOUND_API_KEY`) for more SFX |
-| `open-video` | Wikimedia Commons video (webm/ogv, transcodes picked by height), NASA Image and Video Library (US-gov PD), Internet Archive (only items with a PD or CC licence URL) | Pexels (`PEXELS_API_KEY`), Pixabay (`PIXABAY_API_KEY`) |
-| `open-image` | Openverse images, Wikimedia Commons, NASA, Art Institute of Chicago (CC0 only) | Pexels, Unsplash (`UNSPLASH_ACCESS_KEY`) |
+| **sfx** | Openverse → Freesound | Measured from this container: keyless search returns Freesound CC0 / CC BY effects with HQ MP3 previews on `cdn.freesound.org` (downloads work). Openverse's `category=sound_effect` filter returns nothing, so sfx means source Freesound plus a duration cap (default ≤ 10 s). |
+|  | Freesound API (`FREESOUND_API_KEY`, optional) | original WAV/FLAC files, duration and tag filters |
+| **music** | Openverse → Jamendo, ccMixter | CC BY tracks (measured: "Upbeat Corporate", 1:40, Jamendo, CC BY); `license_type=commercial,modification` filtering |
+| **image** | Openverse images, Wikimedia Commons, NASA, Art Institute of Chicago (CC0 only) | Pexels (`PEXELS_API_KEY`), Unsplash (`UNSPLASH_ACCESS_KEY`) optional |
+| **video** | Wikimedia Commons (webm/ogv; the transcode closest to the comp's height), NASA Image and Video Library, Internet Archive (items with a PD or CC licence URL only) | Pexels, Pixabay (`PIXABAY_API_KEY`) optional |
 
-Reachability measured from this container (2026-10-04): Openverse, Commons, NASA and Internet Archive return 200;
-Freesound and Pexels return 401 without a key (expected).
+Measured reachability (2026-10-04): Openverse, Freesound CDN, Wikimedia Commons, NASA and Internet Archive return
+200. Commons needs a descriptive `User-Agent`, which every request sends (`michelangelo/<v> (+repo url)`). Freesound
+and Pexels APIs return 401 without a key, as expected; keyed sources stay off unless their key is set.
 
-Each provider maps the source's licence strings to the canonical ids above and drops anything it cannot map
-(fail closed). Sources with their own non-CC licence (Pexels, Pixabay, Unsplash) map to `free` with
-`licence.id: "pexels"` etc. and the licence URL, since they allow commercial use without attribution, and they are
-off unless their key is set. Requests send a `User-Agent: michelangelo/<v> (+repo url)` as Wikimedia and
-Openverse ask. Results are cached in `~/.cache/michelangelo/stock/` for a day.
+Each source maps its licence strings to the canonical ids above and drops anything it cannot map (fail closed).
+Pexels, Pixabay and Unsplash have their own licences (commercial use, no attribution required); they map to
+`free` with their own licence id and URL. Search results are cached in `~/.cache/michelangelo/stock/` for a day.
 
-Tests use recorded JSON responses (a few KB each, API metadata only, no media) through an injected `fetch`; one
-optional live test runs with `MGL_LIVE=1`. Fixture media for the fetch path is generated by ffmpeg in the test.
+**Tests:** recorded API responses (metadata only, a few KB, no media) through an injected `fetch`; fetch path with
+ffmpeg-generated fixture files; licence mapping for every source; refusals; sidecar and credits; onset alignment;
+reuse of a fetched file. One live test runs with `MGL_LIVE=1`.
 
----
+### Measuring it (DESIGN §17.3)
 
-## 4. svg-prop
-
-**Goal.** An SVG (logo, icon, sticker) becomes a layer that stays sharp at any scale and can be recoloured, instead
-of being rasterised at decode size like today's `image` path (ffmpeg's svg decoder, then raster scaling).
-
-### Core (API 1.4, both opt-in, nothing changes for existing generators)
-
-- `GeneratorDef.assets?(params): string[]` — asset ids the generator reads (as `audioSource` already does for
-  sound). The renderer resolves and confines the paths, reads each file once (cached by content hash) and passes
-  `files: Map<assetId, Uint8Array>` to `draw`. `check` reports a missing asset with the usual fix. `draw` stays a
-  pure function of (params, frame, seed, file contents).
-- `GeneratorDef.resolution?: 'box' | 'device'` — `device` renders the generator surface at the layer's on-screen
-  scale `k` (the same `k` media uses, capped by `MAX_SURFACE`) and passes `pixelRatio: k`; a scaled-up logo then
-  is redrawn as vectors, not upscaled.
-
-### The plugin
-
-- Generator `svg-prop`: params `{ asset, fit: contain|cover|fill, color?, colors?: {"#1d1d1b": "#ffffff"},
-  stroke?, strokeWidth?, opacity? }`. `color` recolours every fill and stroke (a one-colour icon); `colors` maps
-  specific colours (a brand logo). Colour params are animatable like any other.
-- Its own small SVG interpreter (no dependency): `svg`/`g`/`use`/`defs`, `path`, `rect` (rx/ry), `circle`,
-  `ellipse`, `line`, `polyline`, `polygon`; `transform` (matrix/translate/scale/rotate/skew); presentation
-  attributes, `style=""` and simple `<style>` class/element rules; `fill-rule`, opacity, stroke caps/joins/dash;
-  linear and radial gradients; `viewBox` + `preserveAspectRatio`. Arcs converted to beziers. Parsed once per file
-  hash. Unsupported features (text, filters, masks, clipPath, embedded raster `image`, CSS selectors beyond
-  class/element) are **reported, not silently dropped**.
-- Command `svg-prop.add file=logo.svg [id= track= at= len= width=]`: adds the asset and a clip sized from the
-  viewBox, and prints the colours found (`#1d1d1b ×12, #e30613 ×3`) and any unsupported features, so the agent
-  knows what `colors` to remap and whether to trust the result.
-- Tests: a rect/circle/path SVG drawn at 1× and at 8× compared with an analytic edge (no blur ramp wider than
-  1 px at 8×), recolour by `color` and `colors`, transforms, gradients, unsupported-feature report.
-
-## 5. cutout
-
-**Goal.** Remove a photo's background into a transparent PNG, and make it hard to keep a cut-out of the wrong
-subject: the agent can't see the result unless it is shown one, so the command always produces a verdict sheet.
-
-### Core (API 1.4)
-
-- Provider kind `segment` (DESIGN §9.1 already lists segmentation as an AI hook):
-  `segment({ file, out, model? }) → { mask: out /* 8-bit PNG */ }`.
-- Command `image.cutout asset=photo [point=[x,y] | box=[x,y,w,h]] [expect="a brown dog"] [feather=1]` writes
-  `media/generated/cutout-<hash>.png` (+ `.json` with engine, model, stats), adds it as an asset (and replaces
-  the clip's asset with `swap=true`). Cached by (file hash, engine, model, point/box).
-
-### The verdict sheet ("does this still show what I think it shows")
-
-Written to `.mgl/<p>/cutout-<id>.png` and printed with the result, one image ≤ 1568 px wide for the agent's
-viewer: original with the kept region outlined | mask | cut-out on a checkerboard | cut-out on black and on white.
-With the stats in the result text and as warnings:
-
-- foreground coverage (warn < 3 % or > 90 %: "almost nothing / almost everything kept");
-- connected components; share of the largest (warn when the kept subject is split or a second large blob exists:
-  "2 subjects of similar size; pick one with point=[x,y]");
-- the kept region's box and centre (warn when the subject touches 2+ image edges: "cropped subject?");
-- with `point`/`box`, only the component(s) under it are kept, which fixes the "wrong subject" case directly;
-- `expect` is echoed at the top of the sheet so the reviewer (the agent, or a vision judge) compares the picture
-  against the stated intent, and the result says "look at <sheet>; if it is not <expect>, re-run with point=".
-
-### The plugin
-
-- Provider `cutout` with engines, picked by `engine=auto|rembg|key`:
-  - `rembg` (MIT; U²-Net / isnet / u2net_human_seg / birefnet models, MIT/Apache, downloaded by rembg itself on
-    first use, never by us): runs the `rembg` CLI if on PATH (`rembg i -om -m <model> in out` for the mask);
-    `mgl doctor` reports whether it is installed and the install line (`pip install "rembg[cli]"`).
-  - `key` (zero downloads, deterministic): background estimated from the border pixels, flood-filled in Lab
-    colour space with a tolerance, then cleaned (morphological open/close, small holes filled). Good for studio
-    and plain backgrounds; the sheet makes its failures visible.
-  - `auto`: rembg when available, else `key` with a note saying so.
-- Tests: synthetic photos (a disc on a plain background, two discs, a subject touching the edges) for coverage,
-  components, point selection and every warning; rembg mocked by a fake executable on PATH.
-
-## 6. safe-zone
-
-**Goal.** Catch captions **and stickers** under the TikTok, Reels or Shorts interface every time, without
-relying on the project's `platform` setting.
-
-Why v3 slipped through today: the built-in `text-outside-safe` only checks text and captions, only against the
-one platform in `project.platform` (default `none` = 5 % title-safe margins), and only against the margin
-rectangle, not the UI panels. The per-platform UI rectangles already exist (`uiZones` in `src/qa/safezones.ts`)
-but no check uses them.
-
-### Core (API 1.4)
-
-- `CheckContext.uiZones(platform?)` → the named UI rectangles in comp px (exposes the existing table; one source
-  of truth).
-
-### The plugin
-
-- Check `ui-overlap` (project stage, so it runs in `check` and `look`): for a vertical comp, tests every visual
-  layer that is a caption, text, or a **sticker** (an image/svg-prop/generator/shape layer covering < 40 % of the
-  frame, or tagged `sticker`) against the UI zones of **all three** platforms at every rest/sample frame, including
-  every caption cue. One finding per clip naming the platforms and panels it hits:
-  `caption cue "wait for it" (caps, 4.2s) sits under TikTok "caption and sound" and Reels "caption and audio" by
-  86 px; fix: mgl edit <file> clip.set caps y=1418`. The fix moves into the intersection of the three safe
-  areas (the strictest), and is checked to converge with `check --fix`.
-  Severity: error for captions/text (unreadable), warning for stickers. Platforms configurable with
-  `project.settings.safeZone.platforms` (default `["tiktok","reels","shorts"]`).
-- Generator `safe-zone-guide`: draws the three platforms' UI panels as translucent outlines with labels, for
-  stills and `look` contact sheets, so the agent sees what the check sees.
-- Check `safe-zone-guide-left-on`: the guide generator is on an enabled track in the comp being rendered → error
-  (it must not reach a final render).
-- Command `safe-zone.fit [clips=...]`: moves every offending clip into the shared safe area in one undoable step.
-- Tests: a caption at y = 1700 on 1080x1920 flagged for all three with a fix that clears them; a sticker in the
-  TikTok action column flagged for TikTok only; a full-frame background not flagged; a moving crawl not flagged;
-  horizontal comps skipped; guide-left-on fires.
+Today's eval sandboxes have no network, and `script-only-short` says "make or generate every visual and sound
+yourself", so no current task can show open-media's effect. Add a plugin eval `open-media-short`
+(`examples/plugins/open-media/evals/`, never in `evals/heldout*`): a 20–30 s script-only Short that may use open
+media, run with network allowed for the open-media hosts only, graded on the deliverable plus the vision score and
+a credits check, and compared with `script-only-short` on cost per high-quality video.
 
 ---
 
 ## Order of work, and checks
 
-1. Core API 1.4 (`stock`, `segment` providers; generator `assets`/`resolution`; `CheckContext.uiZones`), with
-   unit tests, docs (`mgl docs plugins`), schema regenerated, `PLUGIN_API_VERSION = 1.4.0`.
-2. `safe-zone` (smallest, highest payoff: it prevents the v3 failure).
-3. `svg-prop`.
-4. `open-image`, then `open-audio`, `open-video` (shared core first, then three thin providers).
-5. `cutout`.
-6. An eval task per plugin (in the plugin's `evals/`, never in `evals/heldout*`), README per plugin, LESSONS.md
-   entry for any borrowed idea (FrameCraft had safe zones; concept only, already recorded).
+1. **A. Safe zones in core** (smallest, everyone benefits, prevents the v3 failure).
+2. Core API 1.4 for open-media: `stock` provider kind, `media.search` / `media.fetch` / `media.credits`, licence
+   rules, sound-as-text on fetch, the two QA checks, docs (`mgl docs media`, `mgl docs plugins`), schema
+   regenerated, `PLUGIN_API_VERSION = 1.4.0`.
+3. `examples/plugins/open-media`: sfx and music first (Openverse), then images, then video.
+4. The `open-media-short` eval, run with and without the plugin.
 
-Before each push: `npm run typecheck`, `npm test`, `npm run docs:check`, `mgl plugin test examples/plugins/<x>`.
+Before each push: `npm run typecheck`, `npm test`, `npm run docs:check`, `mgl plugin test examples/plugins/open-media`.
+
+## Deferred (build when a task needs them)
+
+- **svg-prop**: an SVG layer drawn as vectors at its on-screen size, recolourable (`color`, `colors` map). Needs
+  generators that may read an asset (`GeneratorDef.assets`) and draw at device resolution. SVGs already load as
+  images today; they only blur when scaled up a lot.
+- **cutout**: background removal (rembg when installed, else a colour-key engine for plain backgrounds), with a
+  verdict sheet (original with the kept region outlined, mask, result on checkerboard / black / white) and warnings
+  for near-empty masks, two similar subjects and edge-cropped subjects; `point=[x,y]` keeps the subject under it.
+  Needs a `segment` provider kind.
 
 ## Decisions for the owner
 
-1. **Core vs plugin-only.** Recommended: the small API 1.4 additions above. The alternative (plugins writing
-   files themselves from `process.cwd()`) breaks path confinement, caching and licence tracking.
-2. **Share-alike default.** Recommended: refused unless asked, because it would bind the whole video.
-3. **cutout default engine.** Recommended: `auto` (rembg if installed, else the colour-key engine), with no
-   automatic `pip install`.
-4. **Keyed sources** (Pexels, Pixabay, Unsplash, Freesound): off unless their key is in the environment.
+1. **Safe zones in core, not a plugin.** Recommended, so every vertical project is checked.
+2. **Share-alike media:** refused unless asked (it would bind the whole video).
+3. **Keyed sources** (Freesound API, Pexels, Pixabay, Unsplash): off unless their key is in the environment.
+4. **Network in evals:** allow the open-media hosts for the `open-media-short` eval only.

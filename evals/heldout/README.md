@@ -20,3 +20,17 @@ are never copied into the agent's sandbox.
 | 8 | [quote-card-plugin](quote-card-plugin/task.md) | plugins, templates | 5 |
 | 9 | [stats-bar-chart](stats-bar-chart/task.md) | motion, data, text | 5 |
 | 10 | [highlight-reel-script](highlight-reel-script/task.md) | sdk, editing, batch | 6 |
+
+## Graders
+
+Each task has `setup.mjs` (`setup(dir)`: fixtures from ffmpeg lavfi / flite / hand-written files, input hashes
+in `dir/.setup.json`, grader-only references in `dir/.golden/`) and `grade.mjs` (`grade(dir)` →
+`{pass, score, checks: [{name, pass, detail}]}`, one check per line of `meta.json`). Graders decode with plain
+ffmpeg/ffprobe and read projects as raw JSON (DESIGN.md §16 #17); their helpers live in `_lib/` and do not
+depend on `evals/lib/`. Agent code that a grader must run (a plugin test, a re-run script) runs as
+`MGL_EVAL_RUN_AS` when the grader is root.
+
+`node evals/heldout/_validate.mjs [task ...] [--keep]` checks the graders themselves: every task's grade must
+fail on a fresh setup with no outputs; `reference.mjs` (a solution made with plain ffmpeg/JSON, or through the
+CLI where the task is about the plugin API) must pass; each `mutants.mjs` entry (black, frozen, silent or
+otherwise gamed variants of the reference output) must fail.

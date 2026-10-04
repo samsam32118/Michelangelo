@@ -47,6 +47,8 @@ export class PluginRegistry {
       transitions: new Map([...this.transitions].map(([k, v]) => [k, { params: v.params, describe: v.describe }])),
       generators: new Map([...this.generators].map(([k, v]) => [k, { params: v.params, describe: v.describe }])),
       templates: this.templates,
+      textAnimations: new Map([...this.textAnimations].map(([k, v]) => [k, { describe: v.describe }])),
+      styles: new Map([...this.styles].map(([k, v]) => [k, { describe: v.describe, style: v.style }])),
     };
   }
 }

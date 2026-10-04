@@ -5,3 +5,4 @@ out/
 *.tgz
 evals/results/**/sandbox/
 bench/tmp/
+.preview.png

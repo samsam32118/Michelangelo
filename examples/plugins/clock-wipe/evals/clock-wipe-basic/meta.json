@@ -1,0 +1,8 @@
+{
+  "id": "clock-wipe-basic",
+  "tags": ["plugins", "transition"],
+  "timeout_min": 15,
+  "expects_weak": false,
+  "fixtures": ["demo.mgl.json (two colour-bar / testsrc2 clips back to back)", "plugins/clock-wipe"],
+  "checks": ["clip 2 has transition.in clock-wipe, len 1 s, clockwise false", "out/wipe.png: the left half shows clip 2, the right half clip 1"]
+}

@@ -32,6 +32,8 @@ export interface Catalog {
   transitions: Map<string, { params?: z.ZodType; describe?: string }>;
   generators: Map<string, { params?: z.ZodType; describe?: string }>;
   templates: Map<string, TemplateDef>;
+  textAnimations?: Map<string, { describe?: string }>;
+  styles?: Map<string, { describe?: string; style: Record<string, unknown> }>;
 }
 
 export interface TemplateDef {

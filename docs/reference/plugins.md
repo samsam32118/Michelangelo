@@ -1,0 +1,84 @@
+# Plugins
+
+A plugin adds **effects** (source and/or layer stage), **transitions**, **generators** (clip kinds that
+draw), **templates**, **commands**, **QA checks**, **importers**, **exporters**, text **styles** and text
+**animations**. The built-ins use exactly the same API (`michelangelo/plugin`), so anything they do a
+plugin can do.
+
+## The loop
+
+```sh
+mgl new shorts -o demo.mgl.json
+mgl edit demo.mgl.json clip.add id=bg track=V1 len=2s gen='{"type": "gradient"}'
+mgl plugin new effect film-tint
+mgl plugin test plugins/film-tint
+mgl plugin trust plugins/film-tint
+mgl edit demo.mgl.json project.set plugins='{"film-tint": "^0.1.0"}'
+mgl edit demo.mgl.json fx.add bg type=film-tint amount=0.4
+mgl plugin list demo.mgl.json
+mgl render demo.mgl.json out/tint.png --still 1s
+```
+
+1. `mgl plugin new <kind> <name>` scaffolds `plugins/<name>/` next to the project (kinds: effect,
+   transition, generator, template, command, check, importer, exporter) with a working example, a passing
+   test, an eval task and a README.
+2. Edit `plugins/<name>/src/index.ts`. Keep to erasable TypeScript (no enums, namespaces or parameter
+   properties): Node runs it directly.
+3. `mgl plugin test plugins/<name>` checks the manifest, loads the definition in a child process, writes
+   `.preview.png` (look at it), type-checks when `tsc` is available, and runs `test/*.test.ts` with
+   `node --test`. Exit 1 until everything passes.
+4. Name it in the project: `project.set plugins='{"<name>": "^0.1.0"}'` (or `mgl.config.json`).
+5. `mgl plugin trust plugins/<name>`: plugins found next to a project load only after you trust them; the
+   trust store keeps the plugin's name and a hash of its files, so **trust again after every edit**.
+   Untrusted plugins let `show`, `check` and `edit` work and refuse `render` / `look` with the fix.
+
+## Layout
+
+```text
+plugins/film-tint/
+  package.json        "type": "module", "main": "src/index.ts", "michelangelo": {"api": "^1.0.0", "kinds": ["effect"]}
+  src/index.ts        export default definePlugin({ name: 'film-tint', effects: [...] })
+  test/film-tint.test.ts   uses michelangelo/testing
+  evals/film-tint-basic/   task.md + meta.json
+  README.md
+```
+
+## The API (`michelangelo/plugin`, semver 1.x, minor versions only add)
+
+```text
+definePlugin({ name, version?, effects?, transitions?, generators?, templates?, commands?, checks?, importers?, exporters?, styles?, textAnimations? })
+defineEffect({ type, describe, params: z.object({...}), draw?({ src, dst, params, frame, time, fps, seed, comp }), source?(params) → [{ filter, args }], margin?(params) })
+defineTransition({ type, describe, params, draw({ from, to, dst, progress, params, ... }) })
+defineGenerator({ type, describe, params, size?(params, comp), draw({ dst, params, frame, time, seed, ... }) })
+defineTemplate({ id, describe, params, build({ params, comp, rate, at, len, prefix, project }) → { clips, tracks?, comps?, styles?, cues?, summary? } })
+defineCommand({ op: '<plugin>.<verb>', group, doc, schema, primary?, example, apply(ctx, payload) })
+defineCheck({ id, describe, stage: 'project' | 'frame' | 'audio', run(ctx) → [{ rule, severity, message, clip?, frame?, box?, fix? }] })
+defineImporter({ id, describe, extensions, import({ file, text, project, options }) → commands })
+defineExporter({ id, describe, extensions, export({ out, project, compId, renderFrames, renderAudio }) })
+```
+
+- A `Surface` (`src`, `dst`, `from`, `to`) has `ctx` (a CanvasRenderingContext2D-compatible context),
+  `pixels()` (RGBA, call `commit()` after changing them), `scratch(w?, h?)`, `clear()`, `width`, `height`.
+- **Parameters are zod schemas**; numeric and colour parameters are animatable with keyframes for free.
+- `draw` must be a pure function of (params, frame, seed): use `seed` for randomness.
+- Source-stage effects return structured ffmpeg filters (`{ filter: 'hue', args: { s: 0 } }`); the core
+  escapes them and refuses filters that read files or run commands.
+- Commands are named `<plugin>.<verb>`, have a zod schema, a doc sentence and an example, and change the
+  project only through `ctx` (so they are undoable and dry-runnable).
+
+## Testing helpers (`michelangelo/testing`)
+
+`renderEffect(def, params, opts)`, `renderTransition(def, progress, opts)`, `renderGenerator(def, params, frame)`,
+`runCommandOn(project, cmd)`, `checkContext(project)`, `testProject()`, `renderProject(project, frame)`,
+`pixel(surface, x, y)`, `meanColor`, `coverage`, `difference`, `distinctLevels`, `savePNG`, `loadPlugin(import.meta.url)`,
+plus `test` and `assert` (node:test).
+
+## Loading rules and safety
+
+- Only plugins the project (or `mgl.config.json` next to it) names are loaded: never anything found just
+  by being in the folder. Resolution: `./plugins/<name>/` next to the project, then `node_modules/<name>`
+  (npm dependencies of the project count as trusted).
+- The manifest's `api` range must include this Michelangelo's plugin API (1.0.0), and the version must
+  satisfy the project's range; otherwise the plugin is refused with the reason and a fix.
+- **Plugins are code that runs on your machine with no sandbox.** Read a plugin before trusting it.
+- `mgl plugin list [file]` shows what is loaded, versions and sources, and every plugin problem.

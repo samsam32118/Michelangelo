@@ -351,6 +351,10 @@ function semanticChecks(p: ProjectFile, err: Reporter, warn: Reporter, issue: Re
       const dym = suggest(c.style, [...styles, ...BUILTIN_STYLES]);
       err(['clips', i, 'style'], 'E_REF', `clip "${c.id}" uses style "${c.style}", which does not exist.`, dym.length ? `did you mean "${dym[0]}"?` : `use a built-in style (${BUILTIN_STYLES.join(', ')}) or add it to "styles".`);
     }
+    if (c.style && typeof c.style === 'object' && c.style.base && !styles.has(c.style.base) && !BUILTIN_STYLES.includes(c.style.base)) {
+      const dym = suggest(c.style.base, [...styles, ...BUILTIN_STYLES]);
+      err(['clips', i, 'style', 'base'], 'E_REF', `clip "${c.id}" style inherits "${c.style.base}", which does not exist.`, dym.length ? `did you mean "${dym[0]}"?` : `use a built-in style (${BUILTIN_STYLES.join(', ')}) or add it to "styles".`);
+    }
     if (c.matte && !clips.has(c.matte.clip)) err(['clips', i, 'matte', 'clip'], 'E_REF', `clip "${c.id}" uses matte clip "${c.matte.clip}", which does not exist.`, 'use the id of a clip in the same comp.');
     if (c.parent !== undefined && !clips.has(c.parent)) err(['clips', i, 'parent'], 'E_REF', `clip "${c.id}" has parent "${c.parent}", which does not exist.`, 'use the id of a clip in the same comp, or remove "parent".');
     if (t.audio && !(c.asset !== undefined)) err(['clips', i], 'E_TRACK_KIND', `clip "${c.id}" is visual but sits on audio track "${t.id}".`, 'move it to a visual track.');

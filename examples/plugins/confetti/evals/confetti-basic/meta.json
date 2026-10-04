@@ -1,0 +1,8 @@
+{
+  "id": "confetti-basic",
+  "tags": ["plugins", "generator"],
+  "timeout_min": 15,
+  "expects_weak": false,
+  "fixtures": ["demo.mgl.json (8 s testsrc2 clip)", "plugins/confetti"],
+  "checks": ["a gen confetti clip covers the last 3 s on the top track with colors limited to gold/white", "out/confetti.png: many small gold/white pieces over the video"]
+}

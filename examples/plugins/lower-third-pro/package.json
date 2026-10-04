@@ -1,0 +1,10 @@
+{
+  "name": "lower-third-pro",
+  "version": "1.0.0",
+  "description": "A two-line lower third with an accent bar, plus a lower-third-pro.add command.",
+  "type": "module",
+  "main": "src/index.ts",
+  "michelangelo": { "api": "^1.0.0", "kinds": ["template", "command"] },
+  "scripts": { "test": "node --test test/*.test.ts" },
+  "peerDependencies": { "michelangelo": ">=0.1.0" }
+}

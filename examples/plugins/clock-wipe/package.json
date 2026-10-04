@@ -1,0 +1,10 @@
+{
+  "name": "clock-wipe",
+  "version": "1.0.0",
+  "description": "A radial clock-hand sweep that reveals the incoming clip.",
+  "type": "module",
+  "main": "src/index.ts",
+  "michelangelo": { "api": "^1.0.0", "kinds": ["transition"] },
+  "scripts": { "test": "node --test test/*.test.ts" },
+  "peerDependencies": { "michelangelo": ">=0.1.0" }
+}

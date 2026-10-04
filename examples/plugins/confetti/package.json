@@ -1,0 +1,10 @@
+{
+  "name": "confetti",
+  "version": "1.0.0",
+  "description": "Seeded confetti falling and tumbling over the frame.",
+  "type": "module",
+  "main": "src/index.ts",
+  "michelangelo": { "api": "^1.0.0", "kinds": ["generator"] },
+  "scripts": { "test": "node --test test/*.test.ts" },
+  "peerDependencies": { "michelangelo": ">=0.1.0" }
+}

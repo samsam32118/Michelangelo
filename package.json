@@ -23,7 +23,9 @@
     "./testing": {
       "types": "./dist/plugin/testing.d.ts",
       "default": "./dist/plugin/testing.js"
-    }
+    },
+    "./schema/v1.json": "./schema/v1.json",
+    "./package.json": "./package.json"
   },
   "files": [
     "dist",
@@ -41,10 +43,12 @@
     "test:fast": "npm run typecheck && vitest run",
     "schema": "node --import tsx scripts/gen-schema.ts",
     "bench": "node --import tsx scripts/bench.ts",
-    "mgl": "node --import tsx src/cli/main.ts"
+    "mgl": "node --import tsx src/cli/main.ts",
+    "docs": "node --import tsx scripts/gen-docs.ts",
+    "docs:check": "node --import tsx scripts/gen-docs.ts --check && node --import tsx scripts/gen-schema.ts --check"
   },
   "dependencies": {
-    "@napi-rs/canvas": "^1.0.10",
+    "@napi-rs/canvas": "0.1.80",
     "jsonc-parser": "^3.3.1",
     "undici": "^8.11.2",
     "zod": "^4.6.5"

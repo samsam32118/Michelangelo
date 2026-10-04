@@ -44,6 +44,7 @@ function shiftKeys(c: Clip, delta: number) {
     if (isKeyframes(v)) (v as [number, unknown][]).forEach((kf) => { kf[0] -= delta; });
   }
   for (const fx of c.fx ?? []) for (const [k, v] of Object.entries(fx)) if (k !== 'type' && isKeyframes(v)) (v as [number, unknown][]).forEach((kf) => { kf[0] -= delta; });
+  if (c.shape && isKeyframes(c.shape.trim)) (c.shape.trim as [number, unknown][]).forEach((kf) => { kf[0] -= delta; });
 }
 
 /** Keep keyframes within [0, len) plus the nearest key on each side (so interpolation is unchanged). */
@@ -60,6 +61,7 @@ function pruneKeys(c: Clip) {
     if (isKeyframes(v)) (c as Record<string, unknown>)[k] = prune(v as [number, unknown][]);
   }
   for (const fx of c.fx ?? []) for (const [k, v] of Object.entries(fx)) if (k !== 'type' && isKeyframes(v)) fx[k] = prune(v as [number, unknown][]);
+  if (c.shape && isKeyframes(c.shape.trim)) c.shape.trim = prune(c.shape.trim as [number, unknown][]) as never;
 }
 
 /** Move a clip's start by delta while keeping its content in place (head trim). */
@@ -122,7 +124,8 @@ defineCommand({
       const assets = (ctx.project.assets ??= []);
       let a = assets.find((x) => x.src === src);
       if (!a) {
-        a = { id: ctx.newId(src.split('/').pop()!.replace(/\.[^.]+$/, '').toLowerCase()), src };
+        const stem = src.split('/').pop()!.replace(/\.[^.]+$/, '').toLowerCase();
+        a = { id: ctx.newId(stem === fields.id ? `${stem}-${src.split('.').pop()!.toLowerCase()}` : stem), src };
         assets.push(a);
         ctx.note(`added asset "${a.id}" for ${src}.`);
       }
@@ -213,6 +216,7 @@ defineCommand({
       if (!k.includes('.') && isKeyframes(cur) && v !== null && !isKeyframes(v) && ANIMATABLE_CLIP_KEYS.includes(top)) {
         fail('E_KEYFRAMED', `clip "${id}" ${top} is animated by keyframes; a constant would discard them.`, `remove them first: mgl edit <file> key.clear ${id} prop=${top} value=${JSON.stringify(v)} (or set a keyframe: key.set ${id} prop=${top} at=<frame> value=${JSON.stringify(v)})`);
       }
+      if (top === 'style' && k.includes('.') && typeof c.style === 'string') c.style = { base: c.style };
       if (['at', 'len', 'in', 'clock'].includes(k) && v !== null) {
         (c as Record<string, unknown>)[k] = ctx.time(v as string | number, ctx.compOfClip(c), k);
         continue;

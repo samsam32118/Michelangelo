@@ -1,0 +1,5 @@
+Bundled fonts (SIL Open Font License 1.1; each family's licence is in OFL-<family>.txt):
+Anton-Regular.ttf          github.com/google/fonts ofl/anton
+Inter-{Regular,Bold,Black}.ttf  github.com/rsms/inter release v4.1 (extras/ttf)
+NotoSans-{Regular,Bold}.ttf     github.com/notofonts/notofonts.github.io fonts/NotoSans/unhinted/ttf
+JetBrainsMono-{Regular,Bold}.ttf github.com/JetBrains/JetBrainsMono fonts/ttf

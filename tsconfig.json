@@ -15,7 +15,18 @@
     "allowImportingTsExtensions": false,
     "types": [
       "node"
-    ]
+    ],
+    "paths": {
+      "michelangelo/plugin": [
+        "./src/plugin/api.ts"
+      ],
+      "michelangelo/testing": [
+        "./src/plugin/testing.ts"
+      ],
+      "michelangelo": [
+        "./src/sdk/index.ts"
+      ]
+    }
   },
   "include": [
     "src",

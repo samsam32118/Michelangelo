@@ -81,6 +81,8 @@ export interface MediaSource {
   filters: FilterSpec[];
   fit: 'contain' | 'cover' | 'fill' | 'none';
   crop?: [number, number, number, number];
+  /** the source's pixel size, when known (crop is in these px) */
+  size?: { w: number; h: number };
 }
 
 export interface CaptionWord { text: string; state: 'past' | 'active' | 'future'; /** 0..1 progress of the active word */ progress: number }
@@ -95,6 +97,7 @@ export interface UnitState { opacity: number; dx: number; dy: number; scale: num
 export type ResolvedTextStyle = Required<Pick<TextStyle, 'font' | 'size' | 'color' | 'align' | 'lineHeight' | 'letterSpacing' | 'weight'>> & TextStyle;
 
 export interface ResolvedEffect { type: string; params: Record<string, unknown>; id?: string }
+/** A mask with its box in px: comp px for space "comp" (default), layer px for space "clip" (fractions resolved). */
 export type ResolvedMask = Mask & { box?: [number, number, number, number] };
 
 /** An ffmpeg filter as data; the core escapes args and checks the allowlist. */
@@ -145,8 +148,11 @@ export interface AudioSegment {
 /** Rendering pipeline interface: a GPU renderer can be added as a plugin implementing this. */
 export interface Renderer {
   id: string;
-  open(opts: { width: number; height: number; fontsDir?: string }): Promise<RenderSession>;
+  open(opts: { width: number; height: number; fontsDir?: string; registry?: RendererRegistry; fontAssets?: { id: string; path: string }[] }): Promise<RenderSession>;
 }
+
+/** The part of the plugin registry a renderer draws with (effects, transitions, generators). */
+export type RendererRegistry = Pick<import('../plugin/registry.js').PluginRegistry, 'effects' | 'transitions' | 'generators'>;
 
 export interface RenderSession {
   /** draw one display list; media frames come from `frames` (decoded RGBA by asset + source frame) */

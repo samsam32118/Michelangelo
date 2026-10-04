@@ -4,6 +4,7 @@ import { readFileSync, existsSync } from 'node:fs';
 const TIMEOUT_RE = /Command timed out|timed out after \d|Timeout(?:Error)?:|exceeded the (?:maximum )?(?:time|timeout)/i;
 const EDIT_FAIL_RE = /String to replace not found|Found \d+ matches of the string|File has not been read yet|has been (?:modified|changed) since (?:it was )?(?:last )?read|old_string and new_string are (?:exactly )?the same|No changes to make/i;
 const ERR_CODE_RE = /\bE_[A-Z][A-Z0-9_]+\b/g;
+const RAISED_RE = /^error (E_[A-Z][A-Z0-9_]+)\b|"code":\s*"(E_[A-Z][A-Z0-9_]+)"|MglError[^\n]*?\b(E_[A-Z][A-Z0-9_]+)\b/gm;
 const VERB_RE = /(?:^|[\s;&|(`$])(?:npx\s+(?:--no-install\s+)?|\.\/node_modules\/\.bin\/)?(?:mgl|michelangelo)\s+([a-z][a-z-]*)/g;
 const EDIT_TOOLS = new Set(['Edit', 'Write', 'MultiEdit', 'NotebookEdit']);
 
@@ -58,7 +59,8 @@ export function metricsFrom(events, { runDir = '', forbidden = [], home = '/home
         const text = textOf(c.content);
         if (tool?.name === 'Bash' && TIMEOUT_RE.test(text)) m.bashTimeouts++;
         if (tool && EDIT_TOOLS.has(tool.name) && (c.is_error || EDIT_FAIL_RE.test(text)) && (c.is_error ? true : text.length < 2000)) m.failedEdits++;
-        for (const code of text.match(ERR_CODE_RE) ?? []) m.errorCodes[code] = (m.errorCodes[code] ?? 0) + 1;
+        // count codes the CLI/SDK actually raised ("error E_X ..." lines, JSON error objects, MglError stacks), not codes in docs output
+        for (const mm of text.matchAll(RAISED_RE)) { const code = mm[1] ?? mm[2] ?? mm[3]; m.errorCodes[code] = (m.errorCodes[code] ?? 0) + 1; }
       }
     }
     if (e.type === 'result') {

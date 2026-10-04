@@ -173,7 +173,7 @@ export async function main(argv = process.argv.slice(2)) {
           const a = await runAgent({ dir, prompt, env: agentEnv, model: o.model, maxTurns: o.maxTurns, timeoutMs: (meta.timeout_min ?? 15) * 60_000 * o.timeoutScale,
             transcript: join(privDir, 'transcript.jsonl'), stderrFile: join(privDir, 'agent.stderr.log'), sandbox: o.sandbox, claude: o.claude });
           Object.assign(r, { timedOut: a.timedOut, wallSec: a.wallSec, exitCode: a.code });
-          r.metrics = metricsFrom(readTranscript(join(privDir, 'transcript.jsonl')), { runDir: dir, forbidden: [REPO, '/root', '/home', '/tmp/claude-0', EVALS] });
+          r.metrics = metricsFrom(readTranscript(join(privDir, 'transcript.jsonl')), { runDir: dir, forbidden: [REPO, '/root', '/home/user', '/home/claude', '/tmp/claude-0/-home-user', EVALS] });
         }
         S.unstash(dir, join(privDir, 'stash'));
         const g = await gradeIn(join(tdir, 'grade.mjs'), dir, gradeEnv);

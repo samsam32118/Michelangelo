@@ -158,6 +158,8 @@ export interface FrameIndex {
   vfr: boolean;
   /** median frame duration (s) */
   frameDur: number;
+  /** the stream's time base (s per tick); WebM/MKV use 1 ms, so their PTS are rounded to the millisecond */
+  tb?: number;
 }
 
 const indexMemo = new Map<string, Promise<FrameIndex>>();
@@ -170,11 +172,11 @@ export async function frameIndex(file: string, opts: ProbeOptions = {}): Promise
   if (!opts.noCache && indexMemo.has(memoKey)) return indexMemo.get(memoKey)!;
   const p = (async () => {
     if (!opts.noCache) {
-      const hit = await readCache<FrameIndex>(dir, 'i-' + key);
+      const hit = await readCache<FrameIndex>(dir, 'i2-' + key);
       if (hit) return hit;
     }
     const idx = await buildIndex(file, opts);
-    if (!opts.noCache) await writeCache(dir, 'i-' + key, idx);
+    if (!opts.noCache) await writeCache(dir, 'i2-' + key, idx);
     return idx;
   })();
   if (!opts.noCache) { indexMemo.set(memoKey, p); p.catch(() => indexMemo.delete(memoKey)); }
@@ -207,12 +209,22 @@ async function buildIndex(file: string, opts: ProbeOptions): Promise<FrameIndex>
   const frameDur = sorted.length ? sorted[sorted.length >> 1]! : info.fps ? info.fps.den / info.fps.num : 1 / 30;
   const vfr = d.some((x) => Math.abs(x - frameDur) > frameDur * 0.25);
   const offset = Math.max(0, first * tb - (info.formatStart ?? 0));
-  return { pts, offset, vfr, frameDur };
+  return { pts, offset, vfr, frameDur, tb };
+}
+
+/**
+ * Tolerance when comparing a time with frame PTS: PTS are rounded to the stream's time base (1 ms for WebM/MKV,
+ * so frame 2 of a 30 fps file is stored as 0.067 s, after the exact 0.0667 s), so allow one tick, but never more
+ * than a quarter frame.
+ */
+export function frameEpsilon(idx: Pick<FrameIndex, 'frameDur' | 'tb'>): number {
+  const fd = idx.frameDur > 0 ? idx.frameDur : 1 / 30;
+  return Math.min(fd * 0.25, Math.max(Math.min(1e-4, fd * 0.01), idx.tb ?? 0));
 }
 
 /** Index (into `idx.pts`) of the source frame on screen at `t` seconds from the first frame (the last frame starting at or before t). */
 export function frameAtTime(idx: FrameIndex, t: number): number {
-  const eps = Math.min(1e-4, idx.frameDur * 0.01);
+  const eps = frameEpsilon(idx);
   const pts = idx.pts;
   let lo = 0, hi = pts.length - 1;
   if (t <= pts[0]! + eps) return 0;

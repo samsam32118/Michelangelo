@@ -76,8 +76,14 @@ plus `test` and `assert` (node:test).
 ## Loading rules and safety
 
 - Only plugins the project (or `mgl.config.json` next to it) names are loaded: never anything found just
-  by being in the folder. Resolution: `./plugins/<name>/` next to the project, then `node_modules/<name>`
-  (npm dependencies of the project count as trusted).
+  by being in the folder. Resolution: `./plugins/<name>/` next to the project, then `node_modules/<name>`.
+- **Every plugin loads only once trusted**, from `./plugins/` or `node_modules/` alike (a cloned repo can ship
+  both, so being listed in package.json is not trust): `mgl plugin trust node_modules/<name>` after reading it.
+  The hash covers every file of the plugin folder (also `out/` or `dist/`, and symlink targets, which must stay
+  inside the folder) except `node_modules/`, `.git/` and `.mgl/`; an entry inside those, or outside the folder,
+  is refused.
+- Plugin code imports `michelangelo/plugin` and `michelangelo/testing`; they resolve to the Michelangelo that
+  is running (global install, npx or a project dependency), so a plugin folder needs no `node_modules`.
 - The manifest's `api` range must include this Michelangelo's plugin API (1.0.0), and the version must
   satisfy the project's range; otherwise the plugin is refused with the reason and a fix.
 - **Plugins are code that runs on your machine with no sandbox.** Read a plugin before trusting it.

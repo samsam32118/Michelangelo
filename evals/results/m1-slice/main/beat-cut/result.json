@@ -49,5 +49,8 @@
  "dir": "/tmp/mgl-eval-beat-cut-IbP0j0",
  "timeoutMin": 20,
  "expectsWeak": true,
- "exitCode": 0
+ "exitCode": 0,
+ "outputs": 4,
+ "dirRemoved": true,
+ "baselineScore": 0
 }

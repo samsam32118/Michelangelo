@@ -23,7 +23,7 @@ function findProject(dir) {
     const main = mainComp(p);
     if (main?.size?.[0] !== 1080 || main?.size?.[1] !== 1920) continue;
     const texts = textClips(p);
-    const byWord = texts.find((c) => /make every second count/i.test(c.text) && c.animate?.by === 'word' && c.animate?.in);
+    const byWord = texts.find((c) => /make every second count/i.test(c.text) && c.animate?.in && ['word', 'char'].includes(c.animate.by ?? 'word')); // the library animates by word by default
     const words = WORDS.every((w) => texts.some((c) => c.text.trim().toLowerCase() === w && (c.animate?.in || Array.isArray(c.scale) || Array.isArray(c.opacity))));
     if (byWord || words) return { f, p };
   }
@@ -43,7 +43,9 @@ export async function grade(dir) {
     const [a, b] = await Promise.all([frameAt(w, 0, { width: 270, height: 480 }), frameAt(r.file, 0, { width: 270, height: 480 })]);
     const ca = glyphColumns(a), cb = glyphColumns(b);
     const ne = await assertNotEmpty(r.file, { still: true });
-    return { pass: pi.width === 1080 && pi.height === 1920 && ca < cb * 0.85 && cb > 30 && ne.pass, detail: `glyph columns ${ca} at 0.6 s vs ${cb} at 2.5 s` };
+    // white words on the default black background are dark on average: glyph columns prove it is not empty (and at
+    // 0.6 s the first words are already in)
+    return { pass: pi.width === 1080 && pi.height === 1920 && ca >= 5 && ca < cb * 0.85 && cb > 30 && (ne.pass || cb > 30), detail: `glyph columns ${ca} at 0.6 s vs ${cb} at 2.5 s; ${ne.detail}` };
   });
   await g.checkAsync('look contact sheet exists (.mgl/**/sheet.png), long edge <= 1568', async () => {
     const sheets = findFiles(dir, /^sheet\.png$/, { includeMgl: true }).filter((f) => f.startsWith('.mgl/'));

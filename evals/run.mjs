@@ -3,26 +3,31 @@
 //   node evals/run.mjs [--set main|heldout] [--tasks a,b] [--parallel 2] [--model claude-opus-5-5] [--label m1]
 //                      [--timeout-scale 1] [--max-turns 200] [--dry-run] [--no-sandbox] [--no-build] [--pass-env A,B]
 //                      [--no-history] [--note text] [--restore] [--claude <cmd>] [--no-template] [--no-credentials]
+//                      [--keep-dirs] [--no-baseline]
 // --dry-run: no agent; setup + grade on the untouched sandboxes (must all fail), to test the harness.
 // --no-sandbox (dry runs only): temp dirs as the current user, no eval user, no repository lock.
 // --restore: put back the repository mode after a crashed run, then exit.
 // --claude / --no-template / --no-credentials are for testing the harness with a stand-in agent (no package build).
+// --keep-dirs: keep each run dir after grading (by default it is deleted; the outputs the report needs are copied
+//   to <results>/<task>/outputs). --no-baseline: skip grading the untouched sandbox (the baseline score).
 import { spawn } from 'node:child_process';
-import { copyFileSync, createWriteStream, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, readlinkSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { copyFileSync, cpSync, createWriteStream, existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, readlinkSync, rmSync, statSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { run } from './lib/util.mjs';
 import * as S from './sandbox/sandbox.mjs';
-import { readTranscript, metricsFrom } from './sandbox/metrics.mjs';
-import { summarise, writeSummary, appendHistory } from './sandbox/summary.mjs';
+import { readTranscript, metricsFrom, applyViolationPolicy } from './sandbox/metrics.mjs';
+import { summarise, writeSummary, appendHistory, publicResult } from './sandbox/summary.mjs';
 
 const EVALS = dirname(fileURLToPath(import.meta.url));
 const REPO = resolve(EVALS, '..');
+/** Paths whose access is a violation; the repository and evals/ (and other sandboxes) are fatal. */
+export const FORBIDDEN = [REPO, '/root', '/home/user', '/home/claude', '/tmp/claude-0/-home-user', EVALS];
 
 export function parseArgs(argv) {
   const o = { set: 'main', tasks: null, parallel: 2, model: 'claude-opus-5-5', label: null, timeoutScale: 1, maxTurns: 200, dryRun: false, sandbox: true, build: true, passEnv: [], history: true, note: '', restore: false,
-    privateDir: process.env.MGL_EVAL_PRIVATE_DIR || '/root/mgl-eval-private', resultsDir: join(EVALS, 'results'), claude: 'claude', template: true, credentials: true };
+    privateDir: process.env.MGL_EVAL_PRIVATE_DIR || '/root/mgl-eval-private', resultsDir: join(EVALS, 'results'), claude: 'claude', template: true, credentials: true, keepDirs: false, baseline: true };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i], next = () => { const v = argv[++i]; if (v === undefined) throw new Error(`${a} needs a value. fix: e.g. ${a} 2`); return v; };
     switch (a) {
@@ -45,6 +50,8 @@ export function parseArgs(argv) {
       case '--claude': o.claude = next(); break;
       case '--no-template': o.template = false; break;
       case '--no-credentials': o.credentials = false; break;
+      case '--keep-dirs': o.keepDirs = true; break;
+      case '--no-baseline': o.baseline = false; break;
       default: throw new Error(`unknown option ${a}. fix: see the usage at the top of evals/run.mjs.`);
     }
   }
@@ -62,14 +69,77 @@ const PREAMBLE = `You are working in a sandbox: your current directory holds the
 Task:
 `;
 
-/** Processes of the eval user whose working directory is inside dir. */
-function killProcsIn(dir) {
-  for (const pid of readdirSync('/proc').filter((p) => /^\d+$/.test(p))) {
+/**
+ * Kill every process whose working directory is inside dir (the agent's leftovers, e.g. a `mgl render --detach`
+ * worker, which runs in its own process group and survives the group kill), and the pids recorded in
+ * .mgl/<project>/render.json. Never this process or its ancestors. Returns the pids signalled.
+ */
+export function killProcsIn(dir) {
+  const killed = [];
+  const spare = new Set([process.pid, process.ppid]);
+  const kill = (pid) => { if (!pid || spare.has(pid)) return; try { process.kill(pid, 'SIGKILL'); killed.push(pid); } catch { /* gone or not ours */ } };
+  let procs = [];
+  try { procs = readdirSync('/proc').filter((p) => /^\d+$/.test(p)); } catch { /* no procfs */ }
+  for (const pid of procs) {
     try {
       const cwd = readlinkSync(`/proc/${pid}/cwd`);
-      if ((cwd === dir || cwd.startsWith(dir + '/')) && statSync(`/proc/${pid}`).uid !== 0) process.kill(Number(pid), 'SIGKILL');
+      if (cwd === dir || cwd.startsWith(dir + '/')) kill(Number(pid));
     } catch { /* gone or not ours */ }
   }
+  try {
+    for (const p of readdirSync(join(dir, '.mgl'))) {
+      try {
+        const st = JSON.parse(readFileSync(join(dir, '.mgl', p, 'render.json'), 'utf8'));
+        const pid = Number(st.pid);
+        // only a render worker: its command line runs node (never signal an unrelated reused pid)
+        if (Number.isInteger(pid) && pid > 1 && /node|mgl|michelangelo/.test(readFileSync(`/proc/${pid}/cmdline`, 'utf8'))) kill(pid);
+      } catch { /* no state or not running */ }
+    }
+  } catch { /* no .mgl */ }
+  return killed;
+}
+
+/** Wait until no process has its cwd in dir (or timeoutMs passes). */
+async function settleProcs(dir, timeoutMs = 5000) {
+  const t0 = Date.now();
+  while (Date.now() - t0 < timeoutMs && killProcsIn(dir).length) await new Promise((r) => setTimeout(r, 200));
+}
+
+/** Outputs kept for the report (small, agent-made files: out/, projects, scripts, plugins), copied before the run dir is deleted. */
+export function keepOutputs(dir, dest, { maxFile = 25 * 1024 * 1024, maxTotal = 150 * 1024 * 1024 } = {}) {
+  let total = 0;
+  const kept = [];
+  const SKIP = new Set(['node_modules', '.claude', '.cache', '.npm', '.golden', '.git', 'media']);
+  const walk = (rel, depth) => {
+    if (depth > 5) return;
+    let entries = [];
+    try { entries = readdirSync(join(dir, rel), { withFileTypes: true }); } catch { return; }
+    for (const e of entries) {
+      const r = rel ? `${rel}/${e.name}` : e.name;
+      if (e.isDirectory()) { if (!SKIP.has(e.name) && !(depth === 0 && e.name === '.mgl')) walk(r, depth + 1); continue; }
+      if (!e.isFile()) continue;
+      const keep = r.startsWith('out/') || /\.(mgl\.json|m?js|m?ts|cjs|json|srt|vtt|md|txt|csv)$/.test(e.name);
+      if (!keep || ['package-lock.json', 'package.json', 'task.md', '.setup.json'].includes(r)) continue;
+      const size = lstatSync(join(dir, r)).size;
+      if (size > maxFile || total + size > maxTotal) continue;
+      mkdirSync(dirname(join(dest, r)), { recursive: true });
+      copyFileSync(join(dir, r), join(dest, r));
+      total += size; kept.push(r);
+    }
+  };
+  rmSync(dest, { recursive: true, force: true });
+  walk('', 0);
+  return kept;
+}
+
+/** Copy a fresh run dir for the baseline grade (node_modules linked, not copied). */
+function copyForBaseline(dir) {
+  const b = mkdtempSync(join(tmpdir(), 'mgl-eval-base-'));
+  for (const n of readdirSync(dir)) {
+    if (n === 'node_modules') symlinkSync(join(dir, n), join(b, n));
+    else cpSync(join(dir, n), join(b, n), { recursive: true, verbatimSymlinks: true });
+  }
+  return b;
 }
 
 /** What an eval agent may use: file tools, and the shell for the library, Node, ffmpeg and plain file commands. */
@@ -94,7 +164,7 @@ function runAgent({ dir, prompt, env, model, maxTurns, timeoutMs, transcript, st
     const timer = setTimeout(() => { timedOut = true; kill('SIGTERM'); setTimeout(() => kill('SIGKILL'), 10_000); }, timeoutMs);
     p.on('close', (code) => {
       clearTimeout(timer); children.delete(p);
-      if (sandbox) killProcsIn(dir);
+      killProcsIn(dir); // always: detached renders leave the process group (audit mode too)
       out.end(); err.end();
       done({ code, timedOut, wallSec: (Date.now() - t0) / 1000 });
     });
@@ -103,8 +173,11 @@ function runAgent({ dir, prompt, env, model, maxTurns, timeoutMs, transcript, st
 }
 const killChildren = () => { for (const p of children) { try { process.kill(-p.pid, 'SIGKILL'); } catch { /* gone */ } } };
 
-async function gradeIn(gradePath, dir, env, timeoutMs = 900_000) {
-  const r = await run(process.execPath, [join(EVALS, 'sandbox/grade-child.mjs'), gradePath, dir], { timeoutMs, env: { ...process.env, ...env } });
+export async function gradeIn(gradePath, dir, env, timeoutMs = 900_000) {
+  // the grader's temp files (renders, frames) go to a dir removed afterwards
+  const tmp = mkdtempSync(join(tmpdir(), 'mgl-eval-grade-'));
+  let r;
+  try { r = await run(process.execPath, [join(EVALS, 'sandbox/grade-child.mjs'), gradePath, dir], { timeoutMs, env: { ...process.env, ...env, TMPDIR: tmp } }); } finally { rmSync(tmp, { recursive: true, force: true }); }
   const line = r.stdout.toString().split('\n').reverse().find((l) => l.startsWith('MGL_GRADE '));
   if (line) return JSON.parse(line.slice(10));
   return { pass: false, score: 0, checks: [{ name: 'grader ran', pass: false, detail: `grader ${r.timedOut ? 'timed out' : `exited ${r.code}`}: ${r.stderr.slice(-800)}` }] };
@@ -161,11 +234,18 @@ export async function main(argv = process.argv.slice(2)) {
       const dir = o.sandbox ? join(S.HOME, 'runs', o.label, o.set, task) : mkdtempSync(join(tmpdir(), `mgl-eval-${task}-`));
       rmSync(dir, { recursive: true, force: true }); mkdirSync(dir, { recursive: true });
       const r = { task, pass: false, score: 0, checks: [], metrics: {}, wallSec: 0, timedOut: false, dir, timeoutMin: meta.timeout_min, expectsWeak: !!meta.expects_weak };
+      if (!o.dryRun) r.agentHome = agentEnv.HOME;
       try {
         if (!o.dryRun && o.template) S.populateFromTemplate(dir);
         const { setup } = await import(join(tdir, 'setup.mjs'));
         await setup(dir);
         copyFileSync(join(tdir, 'task.md'), join(dir, 'task.md'));
+        if (o.baseline && !o.dryRun) {
+          // the baseline: what the untouched sandbox already scores (graded on a copy, so grading leaves no trace)
+          const b = copyForBaseline(dir);
+          if (o.sandbox) await S.chownTree(b);
+          try { r.baselineScore = (await gradeIn(join(tdir, 'grade.mjs'), b, gradeEnv)).score ?? 0; } finally { rmSync(b, { recursive: true, force: true }); }
+        }
         S.stash(dir, join(privDir, 'stash'));
         if (o.sandbox) await S.chownTree(dir);
         if (!o.dryRun) {
@@ -173,28 +253,42 @@ export async function main(argv = process.argv.slice(2)) {
           const a = await runAgent({ dir, prompt, env: agentEnv, model: o.model, maxTurns: o.maxTurns, timeoutMs: (meta.timeout_min ?? 15) * 60_000 * o.timeoutScale,
             transcript: join(privDir, 'transcript.jsonl'), stderrFile: join(privDir, 'agent.stderr.log'), sandbox: o.sandbox, claude: o.claude });
           Object.assign(r, { timedOut: a.timedOut, wallSec: a.wallSec, exitCode: a.code });
-          r.metrics = metricsFrom(readTranscript(join(privDir, 'transcript.jsonl')), { runDir: dir, forbidden: [REPO, '/root', '/home/user', '/home/claude', '/tmp/claude-0/-home-user', EVALS] });
+          r.metrics = metricsFrom(readTranscript(join(privDir, 'transcript.jsonl')), { runDir: dir, home: agentEnv.HOME, forbidden: FORBIDDEN, fatal: [REPO, EVALS] });
+          await settleProcs(dir); // nothing of the agent's may still write outputs while grading
         }
         S.unstash(dir, join(privDir, 'stash'));
         const g = await gradeIn(join(tdir, 'grade.mjs'), dir, gradeEnv);
         Object.assign(r, { pass: g.pass, score: g.score, checks: g.checks });
+        if (o.dryRun && !o.baseline) delete r.baselineScore;
+        else if (o.dryRun) r.baselineScore = g.score; // a dry run grades the untouched sandbox itself
+        applyViolationPolicy(r);
       } catch (e) {
         r.error = String(e?.stack ?? e).slice(0, 2000);
         r.checks.push({ name: 'harness', pass: false, detail: r.error });
       }
+      // keep what the report needs (outside /tmp), then remove the run dir and the grader-only stash
+      try {
+        if (existsSync(dir)) { await settleProcs(dir); r.outputs = keepOutputs(dir, join(privDir, 'outputs')).length; }
+        if (!o.keepDirs) { rmSync(dir, { recursive: true, force: true }); r.dirRemoved = true; }
+        rmSync(join(privDir, 'stash'), { recursive: true, force: true });
+      } catch (e) { r.cleanupError = String(e?.message ?? e).slice(0, 300); }
       writeFileSync(join(privDir, 'result.json'), JSON.stringify(r, null, 1));
-      if (hidden) writeFileSync(join(resDir, 'result.json'), JSON.stringify({ task, pass: r.pass, score: r.score, wallSec: r.wallSec, timedOut: r.timedOut, metrics: { ...r.metrics, violations: r.metrics.violations?.length ?? 0 } }, null, 1));
-      log(`${task}: ${r.pass ? 'PASS' : 'fail'} score ${r.score}${o.dryRun ? '' : ` turns ${r.metrics.turns ?? 0} ${Math.round(r.wallSec)} s${r.timedOut ? ' TIMEOUT' : ''}`}${r.error ? ' (harness error)' : ''}`);
+      if (hidden) {
+        const { checks, harnessError, ...pub } = publicResult(r);
+        writeFileSync(join(resDir, 'result.json'), JSON.stringify({ ...pub, checks, harnessError }, null, 1));
+      }
+      log(`${task}: ${r.pass ? 'PASS' : 'fail'} score ${r.score}${o.dryRun ? '' : ` turns ${r.metrics.turns ?? 0} ${Math.round(r.wallSec)} s${r.timedOut ? ' TIMEOUT' : ''}`}${r.error ? ' (harness error)' : ''}${r.violationFail ? ' (failed: sandbox violation)' : ''}`);
       return r;
     });
   } finally {
     unlock();
     process.off('SIGINT', onSignal); process.off('SIGTERM', onSignal);
+    if (!o.sandbox && agentEnv.HOME?.startsWith(join(tmpdir(), 'mgl-eval-home-'))) rmSync(agentEnv.HOME, { recursive: true, force: true });
     if (o.sandbox && !o.dryRun) await S.killUserProcs();
     if (o.sandbox) log('repository unlocked');
   }
   const s = summarise(results, {
-    label: o.label, set: o.set, model: o.dryRun ? 'none' : o.model, date: new Date().toISOString(), dryRun: o.dryRun, sandbox: o.sandbox, isolation: o.sandbox ? 'user' : 'audit', packageVersion: template?.version, timeoutScale: o.timeoutScale,
+    label: o.label, set: o.set, model: o.dryRun ? 'none' : o.model, date: new Date().toISOString(), dryRun: o.dryRun, sandbox: o.sandbox, isolation: o.sandbox ? 'user' : 'audit', packageVersion: template?.version, timeoutScale: o.timeoutScale, agentHome: agentEnv.HOME,
   });
   writeSummary(outRoot, s, { hideChecks: hidden });
   if (hidden) writeSummary(privRoot, s);

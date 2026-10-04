@@ -1,7 +1,9 @@
 /**
- * How plugin code finds `michelangelo/plugin` and `michelangelo/testing`: in an installed package Node
- * resolves them through node_modules; when Michelangelo runs from its own sources (repository, tsx) a
- * resolve hook maps them to the sibling source files so plugins share this copy of the library.
+ * How plugin code finds `michelangelo`, `michelangelo/plugin` and `michelangelo/testing`: a module resolve
+ * hook (node:module register) maps them to the entry points of the copy of Michelangelo that is running,
+ * built (dist/*.js) or from source (src/*.ts). So a plugin folder next to a project loads with a global
+ * install, an npx run or the repository, with no node_modules/michelangelo, and every plugin shares one copy
+ * of the library. Other `michelangelo/<path>` specifiers resolve inside this package's folder.
  */
 import { existsSync } from 'node:fs';
 import { createRequire, register } from 'node:module';
@@ -28,10 +30,32 @@ export function libraryModules(): Record<string, string> {
   return m;
 }
 
-function hookSource(): string {
+/** Folder of this package (the one holding package.json): src/plugin/ and dist/plugin/ are both two levels down. */
+export function packageRoot(): string {
+  return new URL('../../', import.meta.url).href;
+}
+
+/** Type declarations for the library modules (for type-checking plugins): .d.ts next to built .js, the .ts sources otherwise. */
+export function libraryTypes(): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const [spec, u] of Object.entries(libraryModules())) {
+    const f = fileURLToPath(u);
+    const dts = f.replace(/\.js$/, '.d.ts');
+    if (f.endsWith('.ts')) out[spec] = f;
+    else if (existsSync(dts)) out[spec] = dts;
+  }
+  return out;
+}
+
+/** Source of the resolve hook module (exported for tests). */
+export function hookSource(): string {
   return `const map = ${JSON.stringify(libraryModules())};
+const root = ${JSON.stringify(packageRoot())};
 export async function resolve(spec, ctx, next) {
   if (Object.hasOwn(map, spec)) return { url: map[spec], shortCircuit: true };
+  if (spec.startsWith('michelangelo/') && !spec.includes('..')) {
+    try { return await next(spec, ctx); } catch { return next(new URL(spec.slice(13), root).href, ctx); }
+  }
   return next(spec, ctx);
 }`;
 }
@@ -50,9 +74,12 @@ export function childNodeArgs(): string[] {
 }
 
 let registered = false;
-/** In a source run outside vitest (vite resolves modules itself), map the bare specifiers in this process. */
-export function registerSourceHook(): void {
-  if (registered || !fromSource || process.env.VITEST) return;
+/**
+ * Map the bare specifiers in this process before plugin code is imported, for built and source runs alike.
+ * Not under vitest: vite resolves modules itself (aliases in vitest.config.ts).
+ */
+export function registerLibraryHook(): void {
+  if (registered || process.env.VITEST) return;
   registered = true;
   register(dataUrl(hookSource()));
 }

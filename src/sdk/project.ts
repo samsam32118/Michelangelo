@@ -112,10 +112,20 @@ export class Project {
     const changes = this.describe(patch, v.project);
     const result: EditResult = { ok: true, dryRun: !!opts.dryRun, summary, notes, changes, out, issues: newIssues, patch };
     if (opts.dryRun) return result;
+    const prevData = this.data, prevProblems = this.problems;
     this.data = v.project;
     this.problems = v.problems;
-    if (patch.length) this.record({ at: new Date().toISOString(), summary: summary.join(' '), commands: list, patch });
-    if (opts.save !== false && patch.length) await this.save();
+    if (!patch.length) return result;
+    const entry: HistoryEntry = { at: new Date().toISOString(), summary: summary.join(' '), commands: list, patch };
+    try {
+      // the history entry is recorded only once the file is written, under the same lock
+      if (opts.save !== false) this.writeFile({}, entry);
+      else if (this.file) withLock(this.work, () => this.record(entry));
+    } catch (e) {
+      this.data = prevData;
+      this.problems = prevProblems;
+      throw e;
+    }
     return result;
   }
 
@@ -140,19 +150,30 @@ export class Project {
 
   /** Write the file atomically; refuses if it changed on disk since it was opened (unless force). */
   async save(opts: { force?: boolean } = {}): Promise<void> {
+    this.writeFile(opts);
+  }
+
+  /** Write this.data under the lock, then record `entry` while still holding it. */
+  private writeFile(opts: { force?: boolean }, entry?: HistoryEntry): void {
     const text = formatProject(this.data);
     withLock(this.work, () => {
-      if (existsSync(this.file) && !opts.force && this.openedHash) {
-        const disk = readFileSync(this.file, 'utf8');
-        if (hashText(disk) !== this.openedHash && hashText(disk) !== hashText(text)) {
-          fail('E_CHANGED_ON_DISK', `${this.file} changed on disk since it was opened (another command or a hand edit).`, 'open it again and repeat the change (SDK: await open(file)), or save({ force: true }) to overwrite.');
-        }
-      }
-      const tmp = `${this.file}.tmp-${process.pid}`;
-      writeFileSync(tmp, text);
-      renameSync(tmp, this.file);
-      this.openedHash = hashText(text);
+      this.writeLocked(text, !!opts.force);
+      if (entry) this.record(entry);
     });
+  }
+
+  /** The atomic write; the caller holds the lock. */
+  private writeLocked(text: string, force: boolean) {
+    if (existsSync(this.file) && !force && this.openedHash) {
+      const disk = readFileSync(this.file, 'utf8');
+      if (hashText(disk) !== this.openedHash && hashText(disk) !== hashText(text)) {
+        fail('E_CHANGED_ON_DISK', `${this.file} changed on disk since it was opened (another command or a hand edit).`, 'open it again and repeat the change (SDK: await open(file)), or save({ force: true }) to overwrite.');
+      }
+    }
+    const tmp = `${this.file}.tmp-${process.pid}`;
+    writeFileSync(tmp, text);
+    renameSync(tmp, this.file);
+    this.openedHash = hashText(text);
   }
 
   // --- history (undo/redo across processes) ---
@@ -167,6 +188,7 @@ export class Project {
     writeFileSync(tmp, JSON.stringify(h));
     renameSync(tmp, this.historyPath());
   }
+  /** Append a history entry; the caller holds the lock. */
   private record(e: HistoryEntry) {
     if (!this.file) return;
     const h = this.readHistory();
@@ -185,6 +207,11 @@ export class Project {
   async redo(steps = 1): Promise<EditResult> { return this.step('redo', steps); }
 
   private async step(dir: 'undo' | 'redo', steps: number): Promise<EditResult> {
+    // read history, apply, write the file and the history under one lock (no lost updates between processes)
+    return withLock(this.work, () => this.stepLocked(dir, steps));
+  }
+
+  private stepLocked(dir: 'undo' | 'redo', steps: number): EditResult {
     const h = this.readHistory();
     const from = dir === 'undo' ? h.undo : h.redo;
     const to = dir === 'undo' ? h.redo : h.undo;
@@ -201,10 +228,10 @@ export class Project {
       to.push(from.pop()!);
     }
     const v = normaliseAndValidate(clone(data) as unknown as Record<string, unknown>);
+    this.writeLocked(formatProject(v.project), false);
+    this.writeHistory(h);
     this.data = v.project;
     this.problems = v.problems;
-    await this.save();
-    this.writeHistory(h);
     return { ok: true, dryRun: false, summary, notes: [], changes: this.describe(patches), out: [], issues: this.issues, patch: patches };
   }
 

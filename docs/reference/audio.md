@@ -59,6 +59,16 @@ mgl edit mix.mgl.json audio.cut-silences voice min=0.5s pad=0.1s
 mgl show mix.mgl.json
 ```
 
+## Cutting to the beat
+
+`marker.beats <clip>` finds the beats in an audio (or video with sound) clip's used range and adds comp
+markers `beat1`, `beat2`, … (`prefix` changes the name; `every=2` keeps every second beat; `max` caps the
+count and `min` is the fewest allowed, else `E_NO_BEATS`). Running it again replaces them.
+`clip.sequence` then places clips back to back, or cut on those markers (`on=markers`) or straight on a
+clip's beats (`on=beats clip=<id>`): for example `mgl edit v.mgl.json marker.beats bed every=2`, then
+`mgl edit v.mgl.json clip.sequence srcs='["a.mp4","b.mp4","c.mp4"]' on=markers fit=cover`.
+`mgl docs marker.beats` and `mgl docs clip.sequence` list every field.
+
 ## Hearing it as text
 
 You cannot listen, so `mgl look` reports the mix: integrated loudness (LUFS), true peak, loudness range,

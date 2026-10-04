@@ -5,11 +5,13 @@
  */
 import { resolve } from 'node:path';
 import { fail } from '../core/errors.js';
-import type { Clip, Comp, ProjectFile, Track } from '../core/schema/index.js';
+import type { Clip, Comp, Easing, ProjectFile, Track } from '../core/schema/index.js';
+import { easingFn } from '../render/keyframes.js';
 import { parseRate, parseSpeed, type Rate } from '../core/time.js';
 import type { AudioPlan, AudioSegment } from '../render/types.js';
 
 export const SAMPLE_RATE = 48000;
+const AUDIO_EXT = /\.(wav|mp3|m4a|aac|opus|ogg|oga|flac|aiff?|caf|wma)$/i;
 const NOT_AUDIBLE = /\.(png|jpe?g|webp|gif|bmp|svg|tiff?|avif|cube|3dl|srt|vtt|ttf|otf|woff2?|json|txt)$/i;
 
 // ---------------------------------------------------------------------------- exact rationals
@@ -48,6 +50,8 @@ export interface PlanAudioOptions {
   range?: [number, number];
   /** does this video asset have an audio stream? (default: assume yes; renderAudio skips files without audio) */
   hasAudio?: (assetId: string, src: string) => boolean;
+  /** an asset's duration in seconds, when known: looped clips (`loop: true`) repeat their audio with this period */
+  duration?: (assetId: string, src: string) => number | undefined;
 }
 
 /** Map from a comp's frames to top-comp frames: top = a + f × m, visible for f in [w0, w1). */
@@ -62,22 +66,74 @@ function compLength(p: ProjectFile, comp: Comp, clipsByComp: Map<string, Clip[]>
 
 const speedOf = (c: Clip): Q => { const s = parseSpeed(c.speed ?? 1); return q(s.num, s.den); };
 
-interface Piece { at: number; len: number; in: Q; speed: Q }
+/** clip-local frames [at, at + len) play the source from `in` (frames of the comp's rate) at `speed` */
+interface Piece { at: Q; len: Q; in: Q; speed: Q }
 
-/** A clip's playback as constant-speed pieces in clip-local frames (remap keyframes become pieces). */
+/** Most a remap piece may stray from the eased curve (source frames) before it is split. */
+const REMAP_TOLERANCE = 0.5;
+/** Eased remap pieces slower than this play silent, as a freeze does (atempo cannot stretch sound that far usefully). */
+const MIN_EASED_SPEED = 1 / 16;
+
+/**
+ * A clip's playback as constant-speed pieces in clip-local frames (remap keyframes become pieces). Eased remap
+ * segments follow the same easing as the picture (evaluate's interpolate): they are cut into short linear pieces
+ * that stay within REMAP_TOLERANCE source frames of the curve; frames where the curve stands still or runs
+ * backwards are silent.
+ */
 function piecesOf(c: Clip): Piece[] {
   const r = c.remap;
-  if (r === undefined) return [{ at: 0, len: c.len, in: q(c.in ?? 0), speed: speedOf(c) }];
+  if (r === undefined) return [{ at: q(0), len: q(c.len), in: q(c.in ?? 0), speed: speedOf(c) }];
   if (typeof r === 'number') return []; // a constant remap is a freeze: silent
-  const keys = (r as [number, number, unknown?][]).map(([f, v, e]) => ({ f, v: fromFloat(v), hold: e === 'hold' })).sort((x, y) => x.f - y.f);
+  const keys = (r as [number, number, Easing?][]).map(([f, v, e]) => ({ f, v, e })).sort((x, y) => x.f - y.f);
   const out: Piece[] = [];
   for (let i = 0; i + 1 < keys.length; i++) {
     const k = keys[i]!, k2 = keys[i + 1]!;
     const s = Math.max(0, k.f), e = Math.min(c.len, k2.f);
-    if (e <= s || k.hold) continue;
-    const speed = div(sub(k2.v, k.v), q(k2.f - k.f));
-    if (cmp(speed, q(0)) <= 0) continue; // frozen or reversed: silent
-    out.push({ at: s, len: e - s, in: add(k.v, mul(speed, q(s - k.f))), speed });
+    if (e <= s || k.e === 'hold') continue;
+    if (k.e === undefined || k.e === 'linear') {
+      const v0 = fromFloat(k.v), v1 = fromFloat(k2.v);
+      const speed = div(sub(v1, v0), q(k2.f - k.f));
+      if (cmp(speed, q(0)) <= 0) continue; // frozen or reversed: silent
+      out.push({ at: q(s), len: q(e - s), in: add(v0, mul(speed, q(s - k.f))), speed });
+      continue;
+    }
+    const fn = easingFn(k.e);
+    const val = (f: number) => k.v + (k2.v - k.v) * fn((f - k.f) / (k2.f - k.f));
+    const vq = (f: number) => fromFloat(Math.round(val(f) * 1000) / 1000);
+    let a = s;
+    while (a < e) {
+      if (!(val(a + 1) > val(a))) { a++; continue; } // standing still or reversing: silent
+      let b = a + 1;
+      // extend while the chord stays close to the curve and the curve keeps moving forward
+      while (b < e && val(b + 1) > val(b)) {
+        const nb = b + 1, va = val(a), vb = val(nb);
+        let ok = true;
+        for (let f = a + 1; f < nb && ok; f++) ok = Math.abs(val(f) - (va + ((vb - va) * (f - a)) / (nb - a))) <= REMAP_TOLERANCE;
+        if (!ok) break;
+        b = nb;
+      }
+      const v0 = vq(a), speed = div(sub(vq(b), v0), q(b - a));
+      if (toNum(speed) >= MIN_EASED_SPEED) out.push({ at: q(a), len: q(b - a), in: v0, speed }); // slower is a near-freeze: silent
+      a = b;
+    }
+  }
+  return out;
+}
+
+/** Split pieces where a looped source wraps (source frames ≥ period start again at 0, as the picture does). */
+function loopPieces(pieces: Piece[], period: Q): Piece[] {
+  const out: Piece[] = [];
+  for (const p of pieces) {
+    const end = add(p.at, p.len);
+    let at = p.at, src = p.in;
+    for (let guard = 0; cmp(at, end) < 0 && guard < 100_000; guard++) {
+      const local = sub(src, mul(q(floorQ(div(src, period))), period));
+      // clip frames until this period ends
+      const stop = min(end, add(at, div(sub(period, local), p.speed)));
+      out.push({ at, len: sub(stop, at), in: local, speed: p.speed });
+      src = add(src, mul(sub(stop, at), p.speed));
+      at = stop;
+    }
   }
   return out;
 }
@@ -144,6 +200,19 @@ export function planAudio(project: ProjectFile, compId: string, opts: PlanAudioO
     }
   };
 
+  /**
+   * A looped clip's source period in frames of `rate`: the picture wraps after floor(duration × rate) frames
+   * (evaluate's mediaSource), so a video's sound does too; an audio asset loops over its exact duration.
+   */
+  const loopPeriod = (c: Clip, rate: Rate, src: string): Q | undefined => {
+    const d = opts.duration?.(c.asset!, src);
+    if (!(d !== undefined && d > 0)) return undefined;
+    const asset = assets.get(c.asset!);
+    const isAudio = asset?.kind ? asset.kind === 'audio' : AUDIO_EXT.test(asset?.src ?? '');
+    if (isAudio) return mul(fromFloat(Math.round(d * 1000) / 1000), fromRate(rate));
+    return q(Math.max(1, Math.floor((d * rate.num) / rate.den)));
+  };
+
   const leaf = (ctx: Ctx, c: Clip, track: Track, src: string, rate: Rate) => {
     const bus = track.bus ?? 'master';
     /** output sample of a clip-local frame */
@@ -151,16 +220,19 @@ export function planAudio(project: ProjectFile, compId: string, opts: PlanAudioO
     const [fin, fout] = c.fade ?? [0, 0];
     const fadeInEnd = S(q(Math.min(fin, c.len))), fadeOutStart = S(q(c.len - Math.min(fout, c.len)));
     const gk = gainKeys(c).map(([f, db]) => [S(fromFloat(f)), db] as [number, number]);
-    for (const p of piecesOf(c)) {
+    const period = c.loop ? loopPeriod(c, rate, src) : undefined;
+    const pieces = period ? loopPieces(piecesOf(c), period) : piecesOf(c);
+    for (const p of pieces) {
       if (cmp(p.speed, q(0)) <= 0) continue; // freeze: silent
-      const v0 = max(q(c.at + p.at), ctx.w0), v1 = min(q(c.at + p.at + p.len), ctx.w1);
+      const pAt = add(q(c.at), p.at);
+      const v0 = max(pAt, ctx.w0), v1 = min(add(pAt, p.len), ctx.w1);
       if (cmp(v1, v0) <= 0) continue;
       const t0 = max(add(ctx.a, mul(v0, ctx.m)), q(r0)), t1 = min(add(ctx.a, mul(v1, ctx.m)), q(r1));
       if (cmp(t1, t0) <= 0) continue;
       const start = sampleOf(t0, topRate) - base, end = sampleOf(t1, topRate) - base;
       if (end <= start) continue;
       // source position at t0, in frames of this comp's rate: in + (local frames since piece start) × speed
-      const local = sub(div(sub(t0, ctx.a), ctx.m), q(c.at + p.at));
+      const local = sub(div(sub(t0, ctx.a), ctx.m), pAt);
       const srcFrame = add(p.in, mul(local, p.speed));
       // output speed: source seconds per output second
       const speed = div(mul(p.speed, fromRate(topRate)), mul(fromRate(rate), ctx.m));

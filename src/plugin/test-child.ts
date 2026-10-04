@@ -8,6 +8,7 @@ import { readFileSync } from 'node:fs';
 import type { PluginDef, Surface } from './api.js';
 import { pluginEntry } from './loader.js';
 import { checkPluginDef, kindsOf } from './validate.js';
+import { builtinRegistry } from '../builtin/index.js';
 import { renderEffect, renderGenerator, renderTransition, savePNG, solid } from './testing.js';
 
 interface Result { name?: string; errors: string[]; kinds: string[]; preview?: string; previewOf?: string }
@@ -30,6 +31,11 @@ async function main(dir: string): Promise<Result> {
   }
   const errors = checkPluginDef(def, true);
   if (errors.length) return { errors, kinds: [] };
+  // the same clash check the loader does: an item named like a built-in cannot load in a project
+  if (builtinRegistry().plugins.has(def.name)) return { errors: [`plugin name "${def.name}" is a built-in plugin's name, so projects would never load it (fix: rename the plugin in package.json and definePlugin).`], kinds: [] };
+  try { builtinRegistry().add(def, dir); } catch (e) {
+    return { errors: [`${(e as Error).message} by a built-in, so the plugin cannot load in a project (fix: rename it, e.g. prefix it with the plugin name).`], kinds: [] };
+  }
   const r: Result = { name: def.name, errors, kinds: kindsOf(def) };
   const W = 480, H = 270, file = join(dir, '.preview.png');
   try {

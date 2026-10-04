@@ -8,20 +8,28 @@
  "isolation": "audit",
  "packageVersion": "0.1.0",
  "timeoutScale": 1,
+ "agentHome": "/tmp/mgl-eval-home-IPvGL0",
+ "resummarisedAt": "2026-10-04T04:04:39.714Z",
  "tasks": 30,
  "passed": 25,
  "successRate": 0.8333,
  "meanScore": 0.9056,
- "meanTurns": 14,
- "meanTokens": 533022,
- "totalTokens": 15990668,
- "totalOutputTokens": 103740,
- "totalCostUsd": 10.94,
+ "meanTurns": 14.8,
+ "meanTokens": 565230,
+ "totalTokens": 16956909,
+ "totalOutputTokens": 107044,
+ "totalCostUsd": 11.42,
  "meanWallSec": 99.2,
  "timeouts": 0,
- "bashTimeouts": 0,
+ "bashTimeouts": 3,
  "failedEdits": 0,
- "violations": 0,
+ "permissionDenials": 59,
+ "violations": 2,
+ "fatalViolations": 0,
+ "violationFails": 0,
+ "meanBaselineScore": 0.0556,
+ "meanDeltaScore": 0.85,
+ "baselineTasks": 30,
  "topErrors": [
   [
    "E_REF",
@@ -115,6 +123,7 @@
     },
     "bashTimeouts": 0,
     "failedEdits": 0,
+    "permissionDenials": 5,
     "errorCodes": {},
     "verbs": {
      "docs": 3,
@@ -124,17 +133,25 @@
      "look": 6,
      "render": 2
     },
-    "violations": [],
+    "violations": [
+     "Bash: cd /tmp/mgl-eval-beat-cut-IbP0j0; npx mgl new square -o beat.mgl.json && npx mgl show beat.mgl.json && npx mgl edit beat.mgl.json clip.add src=beat.wav id=music track=A1 && npx mgl look beat.mgl.json -n 2 --json > /tmp/claude-0/look.json; python3 -c \"\nimport json;d=json.load(open('/tmp/claude-"
+    ],
+    "fatalViolations": [],
     "resultSubtype": "success",
     "isError": false,
-    "apiMs": 71364
+    "apiMs": 71364,
+    "results": 1
    },
    "wallSec": 89.385,
    "timedOut": false,
    "dir": "/tmp/mgl-eval-beat-cut-IbP0j0",
    "timeoutMin": 20,
    "expectsWeak": true,
-   "exitCode": 0
+   "exitCode": 0,
+   "outputs": 4,
+   "dirRemoved": true,
+   "baselineScore": 0,
+   "deltaScore": 0.5
   },
   {
    "task": "captions-from-srt",
@@ -172,6 +189,7 @@
     },
     "bashTimeouts": 0,
     "failedEdits": 0,
+    "permissionDenials": 1,
     "errorCodes": {
      "E_REF": 1
     },
@@ -183,16 +201,22 @@
      "render": 1
     },
     "violations": [],
+    "fatalViolations": [],
     "resultSubtype": "success",
     "isError": false,
-    "apiMs": 30708
+    "apiMs": 30708,
+    "results": 1
    },
    "wallSec": 55.049,
    "timedOut": false,
    "dir": "/tmp/mgl-eval-captions-from-srt-sKCguW",
    "timeoutMin": 15,
    "expectsWeak": false,
-   "exitCode": 0
+   "exitCode": 0,
+   "outputs": 3,
+   "dirRemoved": true,
+   "baselineScore": 0,
+   "deltaScore": 0.6667
   },
   {
    "task": "captions-vtt-words",
@@ -224,6 +248,7 @@
     },
     "bashTimeouts": 0,
     "failedEdits": 0,
+    "permissionDenials": 0,
     "errorCodes": {},
     "verbs": {
      "docs": 5,
@@ -233,16 +258,22 @@
      "render": 1
     },
     "violations": [],
+    "fatalViolations": [],
     "resultSubtype": "success",
     "isError": false,
-    "apiMs": 20045
+    "apiMs": 20045,
+    "results": 1
    },
    "wallSec": 28.564,
    "timedOut": false,
    "dir": "/tmp/mgl-eval-captions-vtt-words-UBZZiN",
    "timeoutMin": 15,
    "expectsWeak": false,
-   "exitCode": 0
+   "exitCode": 0,
+   "outputs": 3,
+   "dirRemoved": true,
+   "baselineScore": 0,
+   "deltaScore": 1
   },
   {
    "task": "color-match",
@@ -275,6 +306,7 @@
     },
     "bashTimeouts": 0,
     "failedEdits": 0,
+    "permissionDenials": 6,
     "errorCodes": {},
     "verbs": {
      "docs": 6,
@@ -286,16 +318,22 @@
      "look": 2
     },
     "violations": [],
+    "fatalViolations": [],
     "resultSubtype": "success",
     "isError": false,
-    "apiMs": 180821
+    "apiMs": 180821,
+    "results": 1
    },
    "wallSec": 285.475,
    "timedOut": false,
    "dir": "/tmp/mgl-eval-color-match-exkupL",
    "timeoutMin": 20,
    "expectsWeak": true,
-   "exitCode": 0
+   "exitCode": 0,
+   "outputs": 11,
+   "dirRemoved": true,
+   "baselineScore": 0,
+   "deltaScore": 1
   },
   {
    "task": "csv-variants-sdk",
@@ -338,22 +376,29 @@
     },
     "bashTimeouts": 0,
     "failedEdits": 0,
+    "permissionDenials": 1,
     "errorCodes": {},
     "verbs": {
      "docs": 2,
      "show": 2
     },
     "violations": [],
+    "fatalViolations": [],
     "resultSubtype": "success",
     "isError": false,
-    "apiMs": 22216
+    "apiMs": 22216,
+    "results": 1
    },
    "wallSec": 28.976,
    "timedOut": false,
    "dir": "/tmp/mgl-eval-csv-variants-sdk-7s7LNQ",
    "timeoutMin": 20,
    "expectsWeak": false,
-   "exitCode": 0
+   "exitCode": 0,
+   "outputs": 33,
+   "dirRemoved": true,
+   "baselineScore": 0,
+   "deltaScore": 1
   },
   {
    "task": "cta-end",
@@ -396,6 +441,7 @@
     },
     "bashTimeouts": 0,
     "failedEdits": 0,
+    "permissionDenials": 0,
     "errorCodes": {},
     "verbs": {
      "docs": 3,
@@ -406,16 +452,22 @@
      "render": 1
     },
     "violations": [],
+    "fatalViolations": [],
     "resultSubtype": "success",
     "isError": false,
-    "apiMs": 15896
+    "apiMs": 15896,
+    "results": 1
    },
    "wallSec": 31.064,
    "timedOut": false,
    "dir": "/tmp/mgl-eval-cta-end-8DY8eD",
    "timeoutMin": 15,
    "expectsWeak": false,
-   "exitCode": 0
+   "exitCode": 0,
+   "outputs": 2,
+   "dirRemoved": true,
+   "baselineScore": 0,
+   "deltaScore": 1
   },
   {
    "task": "cut-silences",
@@ -452,6 +504,7 @@
     },
     "bashTimeouts": 0,
     "failedEdits": 0,
+    "permissionDenials": 2,
     "errorCodes": {},
     "verbs": {
      "docs": 4,
@@ -462,16 +515,22 @@
      "render": 2
     },
     "violations": [],
+    "fatalViolations": [],
     "resultSubtype": "success",
     "isError": false,
-    "apiMs": 32569
+    "apiMs": 32569,
+    "results": 1
    },
    "wallSec": 43.946,
    "timedOut": false,
    "dir": "/tmp/mgl-eval-cut-silences-jZoQSM",
    "timeoutMin": 20,
    "expectsWeak": false,
-   "exitCode": 0
+   "exitCode": 0,
+   "outputs": 2,
+   "dirRemoved": true,
+   "baselineScore": 0,
+   "deltaScore": 1
   },
   {
    "task": "duck-music-under-vo",
@@ -515,6 +574,7 @@
     },
     "bashTimeouts": 0,
     "failedEdits": 0,
+    "permissionDenials": 8,
     "errorCodes": {
      "E_NO_FILE": 1
     },
@@ -525,16 +585,22 @@
      "check": 1
     },
     "violations": [],
+    "fatalViolations": [],
     "resultSubtype": "success",
     "isError": false,
-    "apiMs": 101664
+    "apiMs": 101664,
+    "results": 1
    },
    "wallSec": 115.318,
    "timedOut": false,
    "dir": "/tmp/mgl-eval-duck-music-under-vo-i0B1QU",
    "timeoutMin": 15,
    "expectsWeak": false,
-   "exitCode": 0
+   "exitCode": 0,
+   "outputs": 2,
+   "dirRemoved": true,
+   "baselineScore": 0,
+   "deltaScore": 1
   },
   {
    "task": "edit-200-clips",
@@ -578,6 +644,7 @@
     },
     "bashTimeouts": 0,
     "failedEdits": 0,
+    "permissionDenials": 4,
     "errorCodes": {},
     "verbs": {
      "show": 3,
@@ -585,16 +652,22 @@
      "check": 4
     },
     "violations": [],
+    "fatalViolations": [],
     "resultSubtype": "success",
     "isError": false,
-    "apiMs": 42757
+    "apiMs": 42757,
+    "results": 1
    },
    "wallSec": 47.633,
    "timedOut": false,
    "dir": "/tmp/mgl-eval-edit-200-clips-PA7hrg",
    "timeoutMin": 20,
    "expectsWeak": false,
-   "exitCode": 0
+   "exitCode": 0,
+   "outputs": 2,
+   "dirRemoved": true,
+   "baselineScore": 0.25,
+   "deltaScore": 0.75
   },
   {
    "task": "fix-broken-file",
@@ -627,6 +700,7 @@
     },
     "bashTimeouts": 0,
     "failedEdits": 0,
+    "permissionDenials": 1,
     "errorCodes": {
      "E_UNKNOWN_KEY": 1,
      "E_REF": 1,
@@ -639,16 +713,22 @@
      "look": 1
     },
     "violations": [],
+    "fatalViolations": [],
     "resultSubtype": "success",
     "isError": false,
-    "apiMs": 42483
+    "apiMs": 42483,
+    "results": 1
    },
    "wallSec": 53.756,
    "timedOut": false,
    "dir": "/tmp/mgl-eval-fix-broken-file-tYrZ5F",
    "timeoutMin": 10,
    "expectsWeak": false,
-   "exitCode": 0
+   "exitCode": 0,
+   "outputs": 2,
+   "dirRemoved": true,
+   "baselineScore": 0,
+   "deltaScore": 1
   },
   {
    "task": "fix-caption-logo-overlap",
@@ -691,6 +771,7 @@
     },
     "bashTimeouts": 0,
     "failedEdits": 0,
+    "permissionDenials": 1,
     "errorCodes": {},
     "verbs": {
      "check": 7,
@@ -700,16 +781,22 @@
      "docs": 3
     },
     "violations": [],
+    "fatalViolations": [],
     "resultSubtype": "success",
     "isError": false,
-    "apiMs": 55388
+    "apiMs": 55388,
+    "results": 1
    },
    "wallSec": 81.367,
    "timedOut": false,
    "dir": "/tmp/mgl-eval-fix-caption-logo-overlap-H9SLGu",
    "timeoutMin": 15,
    "expectsWeak": false,
-   "exitCode": 0
+   "exitCode": 0,
+   "outputs": 1,
+   "dirRemoved": true,
+   "baselineScore": 0.75,
+   "deltaScore": 0.25
   },
   {
    "task": "gif-export",
@@ -742,6 +829,7 @@
     },
     "bashTimeouts": 0,
     "failedEdits": 0,
+    "permissionDenials": 1,
     "errorCodes": {},
     "verbs": {
      "docs": 3,
@@ -749,16 +837,22 @@
      "render": 3
     },
     "violations": [],
+    "fatalViolations": [],
     "resultSubtype": "success",
     "isError": false,
-    "apiMs": 25882
+    "apiMs": 25882,
+    "results": 1
    },
    "wallSec": 42.157,
    "timedOut": false,
    "dir": "/tmp/mgl-eval-gif-export-L32XX6",
    "timeoutMin": 10,
    "expectsWeak": false,
-   "exitCode": 0
+   "exitCode": 0,
+   "outputs": 2,
+   "dirRemoved": true,
+   "baselineScore": 0,
+   "deltaScore": 1
   },
   {
    "task": "green-screen",
@@ -789,8 +883,9 @@
      "Bash": 10,
      "Read": 2
     },
-    "bashTimeouts": 0,
+    "bashTimeouts": 1,
     "failedEdits": 0,
+    "permissionDenials": 2,
     "errorCodes": {
      "E_REF": 1
     },
@@ -803,6 +898,7 @@
      "render": 1
     },
     "violations": [],
+    "fatalViolations": [],
     "resultSubtype": null,
     "isError": false,
     "apiMs": null
@@ -812,7 +908,11 @@
    "dir": "/tmp/mgl-eval-green-screen-w6dmMH",
    "timeoutMin": 20,
    "expectsWeak": true,
-   "exitCode": null
+   "exitCode": null,
+   "outputs": 2,
+   "dirRemoved": true,
+   "baselineScore": 0,
+   "deltaScore": 0
   },
   {
    "task": "import-hevc",
@@ -836,12 +936,12 @@
     }
    ],
    "metrics": {
-    "turns": 1,
-    "inputTokens": 4,
-    "outputTokens": 86,
-    "cacheReadTokens": 54842,
-    "cacheCreationTokens": 619,
-    "costUsd": 0.5009044,
+    "turns": 23,
+    "inputTokens": 44,
+    "outputTokens": 3390,
+    "cacheReadTokens": 989117,
+    "cacheCreationTokens": 29241,
+    "costUsd": 0.9841524,
     "toolCalls": 20,
     "toolCounts": {
      "Skill": 1,
@@ -850,8 +950,9 @@
      "Read": 4,
      "Monitor": 2
     },
-    "bashTimeouts": 0,
+    "bashTimeouts": 1,
     "failedEdits": 0,
+    "permissionDenials": 2,
     "errorCodes": {
      "E_UNKNOWN_TOPIC": 1
     },
@@ -865,16 +966,22 @@
      "render": 9
     },
     "violations": [],
+    "fatalViolations": [],
     "resultSubtype": "success",
     "isError": false,
-    "apiMs": 50728
+    "apiMs": 97604,
+    "results": 2
    },
    "wallSec": 786.282,
    "timedOut": false,
    "dir": "/tmp/mgl-eval-import-hevc-H9doAl",
    "timeoutMin": 15,
    "expectsWeak": false,
-   "exitCode": 0
+   "exitCode": 0,
+   "outputs": 2,
+   "dirRemoved": true,
+   "baselineScore": 0,
+   "deltaScore": 1
   },
   {
    "task": "import-prores",
@@ -910,8 +1017,9 @@
      "TaskStop": 1,
      "Read": 1
     },
-    "bashTimeouts": 0,
+    "bashTimeouts": 1,
     "failedEdits": 0,
+    "permissionDenials": 2,
     "errorCodes": {},
     "verbs": {
      "docs": 4,
@@ -923,16 +1031,22 @@
      "render": 1
     },
     "violations": [],
+    "fatalViolations": [],
     "resultSubtype": "success",
     "isError": false,
-    "apiMs": 39696
+    "apiMs": 39696,
+    "results": 1
    },
    "wallSec": 197.886,
    "timedOut": false,
    "dir": "/tmp/mgl-eval-import-prores-euVu45",
    "timeoutMin": 15,
    "expectsWeak": false,
-   "exitCode": 0
+   "exitCode": 0,
+   "outputs": 2,
+   "dirRemoved": true,
+   "baselineScore": 0,
+   "deltaScore": 1
   },
   {
    "task": "intro-template",
@@ -970,6 +1084,7 @@
     },
     "bashTimeouts": 0,
     "failedEdits": 0,
+    "permissionDenials": 0,
     "errorCodes": {},
     "verbs": {
      "docs": 2,
@@ -981,16 +1096,22 @@
      "render": 1
     },
     "violations": [],
+    "fatalViolations": [],
     "resultSubtype": "success",
     "isError": false,
-    "apiMs": 18788
+    "apiMs": 18788,
+    "results": 1
    },
    "wallSec": 53.556,
    "timedOut": false,
    "dir": "/tmp/mgl-eval-intro-template-1gSh6Y",
    "timeoutMin": 15,
    "expectsWeak": false,
-   "exitCode": 0
+   "exitCode": 0,
+   "outputs": 2,
+   "dirRemoved": true,
+   "baselineScore": 0,
+   "deltaScore": 0.6667
   },
   {
    "task": "j-and-l-cuts",
@@ -1027,6 +1148,7 @@
     },
     "bashTimeouts": 0,
     "failedEdits": 0,
+    "permissionDenials": 1,
     "errorCodes": {},
     "verbs": {
      "docs": 2,
@@ -1036,16 +1158,22 @@
      "look": 1
     },
     "violations": [],
+    "fatalViolations": [],
     "resultSubtype": "success",
     "isError": false,
-    "apiMs": 29444
+    "apiMs": 29444,
+    "results": 1
    },
    "wallSec": 37.301,
    "timedOut": false,
    "dir": "/tmp/mgl-eval-j-and-l-cuts-f4YlBq",
    "timeoutMin": 15,
    "expectsWeak": false,
-   "exitCode": 0
+   "exitCode": 0,
+   "outputs": 1,
+   "dirRemoved": true,
+   "baselineScore": 0.6667,
+   "deltaScore": 0.3333
   },
   {
    "task": "keyframed-title",
@@ -1085,6 +1213,7 @@
     },
     "bashTimeouts": 0,
     "failedEdits": 0,
+    "permissionDenials": 2,
     "errorCodes": {},
     "verbs": {
      "docs": 3,
@@ -1093,16 +1222,22 @@
      "render": 7
     },
     "violations": [],
+    "fatalViolations": [],
     "resultSubtype": "success",
     "isError": false,
-    "apiMs": 49446
+    "apiMs": 49446,
+    "results": 1
    },
    "wallSec": 61.189,
    "timedOut": false,
    "dir": "/tmp/mgl-eval-keyframed-title-T1Ovy3",
    "timeoutMin": 15,
    "expectsWeak": false,
-   "exitCode": 0
+   "exitCode": 0,
+   "outputs": 4,
+   "dirRemoved": true,
+   "baselineScore": 0,
+   "deltaScore": 1
   },
   {
    "task": "loudness-normalize",
@@ -1133,6 +1268,7 @@
     },
     "bashTimeouts": 0,
     "failedEdits": 0,
+    "permissionDenials": 2,
     "errorCodes": {},
     "verbs": {
      "docs": 4,
@@ -1141,16 +1277,22 @@
      "render": 4
     },
     "violations": [],
+    "fatalViolations": [],
     "resultSubtype": "success",
     "isError": false,
-    "apiMs": 23898
+    "apiMs": 23898,
+    "results": 1
    },
    "wallSec": 36.115,
    "timedOut": false,
    "dir": "/tmp/mgl-eval-loudness-normalize-cAvP3H",
    "timeoutMin": 15,
    "expectsWeak": false,
-   "exitCode": 0
+   "exitCode": 0,
+   "outputs": 3,
+   "dirRemoved": true,
+   "baselineScore": 0,
+   "deltaScore": 1
   },
   {
    "task": "lower-third",
@@ -1188,6 +1330,7 @@
     },
     "bashTimeouts": 0,
     "failedEdits": 0,
+    "permissionDenials": 0,
     "errorCodes": {},
     "verbs": {
      "docs": 2,
@@ -1198,16 +1341,22 @@
      "look": 1
     },
     "violations": [],
+    "fatalViolations": [],
     "resultSubtype": "success",
     "isError": false,
-    "apiMs": 16733
+    "apiMs": 16733,
+    "results": 1
    },
    "wallSec": 26.741,
    "timedOut": false,
    "dir": "/tmp/mgl-eval-lower-third-XpNv1O",
    "timeoutMin": 15,
    "expectsWeak": false,
-   "exitCode": 0
+   "exitCode": 0,
+   "outputs": 3,
+   "dirRemoved": true,
+   "baselineScore": 0,
+   "deltaScore": 1
   },
   {
    "task": "masks-and-blend",
@@ -1245,6 +1394,7 @@
     },
     "bashTimeouts": 0,
     "failedEdits": 0,
+    "permissionDenials": 0,
     "errorCodes": {},
     "verbs": {
      "docs": 5,
@@ -1254,16 +1404,22 @@
      "render": 1
     },
     "violations": [],
+    "fatalViolations": [],
     "resultSubtype": "success",
     "isError": false,
-    "apiMs": 15330
+    "apiMs": 15330,
+    "results": 1
    },
    "wallSec": 24.175,
    "timedOut": false,
    "dir": "/tmp/mgl-eval-masks-and-blend-8VS14F",
    "timeoutMin": 15,
    "expectsWeak": false,
-   "exitCode": 0
+   "exitCode": 0,
+   "outputs": 2,
+   "dirRemoved": true,
+   "baselineScore": 0,
+   "deltaScore": 1
   },
   {
    "task": "nested-comp",
@@ -1302,6 +1458,7 @@
     },
     "bashTimeouts": 0,
     "failedEdits": 0,
+    "permissionDenials": 3,
     "errorCodes": {
      "E_DUPLICATE_ID": 1
     },
@@ -1314,17 +1471,25 @@
      "look": 3,
      "render": 1
     },
-    "violations": [],
+    "violations": [
+     "Bash: cd /tmp/mgl-eval-nested-comp-cqYCpt; npx mgl new youtube -o badges.mgl.json && cat > /tmp/claude-0/edits.jsonl <<'EOF'\n{\"op\":\"comp.add\",\"id\":\"badge\",\"size\":[1080,1080],\"fps\":30,\"length\":\"5s\"}\n{\"op\":\"track.add\",\"id\":\"B1\",\"comp\":\"badge\"}\n{\"op\":\"track.add\",\"id\":\"B2\",\"comp\":\"badge\"}\n{\"op\":\"clip.ad"
+    ],
+    "fatalViolations": [],
     "resultSubtype": "success",
     "isError": false,
-    "apiMs": 48572
+    "apiMs": 48572,
+    "results": 1
    },
    "wallSec": 77.181,
    "timedOut": false,
    "dir": "/tmp/mgl-eval-nested-comp-cqYCpt",
    "timeoutMin": 20,
    "expectsWeak": false,
-   "exitCode": 0
+   "exitCode": 0,
+   "outputs": 2,
+   "dirRemoved": true,
+   "baselineScore": 0,
+   "deltaScore": 1
   },
   {
    "task": "per-word-animation",
@@ -1361,6 +1526,7 @@
     },
     "bashTimeouts": 0,
     "failedEdits": 0,
+    "permissionDenials": 1,
     "errorCodes": {},
     "verbs": {
      "docs": 4,
@@ -1372,16 +1538,22 @@
      "render": 1
     },
     "violations": [],
+    "fatalViolations": [],
     "resultSubtype": "success",
     "isError": false,
-    "apiMs": 29683
+    "apiMs": 29683,
+    "results": 1
    },
    "wallSec": 40.856,
    "timedOut": false,
    "dir": "/tmp/mgl-eval-per-word-animation-pUQHP4",
    "timeoutMin": 15,
    "expectsWeak": false,
-   "exitCode": 0
+   "exitCode": 0,
+   "outputs": 2,
+   "dirRemoved": true,
+   "baselineScore": 0,
+   "deltaScore": 1
   },
   {
    "task": "pip",
@@ -1418,6 +1590,7 @@
     },
     "bashTimeouts": 0,
     "failedEdits": 0,
+    "permissionDenials": 1,
     "errorCodes": {
      "E_REF": 1
     },
@@ -1431,16 +1604,22 @@
      "render": 1
     },
     "violations": [],
+    "fatalViolations": [],
     "resultSubtype": "success",
     "isError": false,
-    "apiMs": 65128
+    "apiMs": 65128,
+    "results": 1
    },
    "wallSec": 101.888,
    "timedOut": false,
    "dir": "/tmp/mgl-eval-pip-j2a5Hx",
    "timeoutMin": 15,
    "expectsWeak": false,
-   "exitCode": 0
+   "exitCode": 0,
+   "outputs": 2,
+   "dirRemoved": true,
+   "baselineScore": 0,
+   "deltaScore": 0.3333
   },
   {
    "task": "plugin-effect-new",
@@ -1479,6 +1658,7 @@
     },
     "bashTimeouts": 0,
     "failedEdits": 0,
+    "permissionDenials": 3,
     "errorCodes": {},
     "verbs": {
      "docs": 2,
@@ -1488,16 +1668,22 @@
      "render": 1
     },
     "violations": [],
+    "fatalViolations": [],
     "resultSubtype": "success",
     "isError": false,
-    "apiMs": 57581
+    "apiMs": 57581,
+    "results": 1
    },
    "wallSec": 68.969,
    "timedOut": false,
    "dir": "/tmp/mgl-eval-plugin-effect-new-0OOwPU",
    "timeoutMin": 25,
    "expectsWeak": false,
-   "exitCode": 0
+   "exitCode": 0,
+   "outputs": 8,
+   "dirRemoved": true,
+   "baselineScore": 0,
+   "deltaScore": 1
   },
   {
    "task": "plugin-transition-new",
@@ -1541,6 +1727,7 @@
     },
     "bashTimeouts": 0,
     "failedEdits": 0,
+    "permissionDenials": 3,
     "errorCodes": {},
     "verbs": {
      "docs": 4,
@@ -1551,16 +1738,22 @@
      "render": 1
     },
     "violations": [],
+    "fatalViolations": [],
     "resultSubtype": "success",
     "isError": false,
-    "apiMs": 57255
+    "apiMs": 57255,
+    "results": 1
    },
    "wallSec": 71.949,
    "timedOut": false,
    "dir": "/tmp/mgl-eval-plugin-transition-new-f7vDgw",
    "timeoutMin": 25,
    "expectsWeak": false,
-   "exitCode": 0
+   "exitCode": 0,
+   "outputs": 8,
+   "dirRemoved": true,
+   "baselineScore": 0,
+   "deltaScore": 1
   },
   {
    "task": "reframe-16-9-to-9-16",
@@ -1597,6 +1790,7 @@
     },
     "bashTimeouts": 0,
     "failedEdits": 0,
+    "permissionDenials": 0,
     "errorCodes": {},
     "verbs": {
      "docs": 1,
@@ -1606,16 +1800,22 @@
      "render": 1
     },
     "violations": [],
+    "fatalViolations": [],
     "resultSubtype": "success",
     "isError": false,
-    "apiMs": 24560
+    "apiMs": 24560,
+    "results": 1
    },
    "wallSec": 41.145,
    "timedOut": false,
    "dir": "/tmp/mgl-eval-reframe-16-9-to-9-16-WZnk3i",
    "timeoutMin": 20,
    "expectsWeak": false,
-   "exitCode": 0
+   "exitCode": 0,
+   "outputs": 3,
+   "dirRemoved": true,
+   "baselineScore": 0,
+   "deltaScore": 1
   },
   {
    "task": "short-from-script",
@@ -1658,6 +1858,7 @@
     },
     "bashTimeouts": 0,
     "failedEdits": 0,
+    "permissionDenials": 5,
     "errorCodes": {},
     "verbs": {
      "docs": 7,
@@ -1669,16 +1870,22 @@
      "render": 1
     },
     "violations": [],
+    "fatalViolations": [],
     "resultSubtype": "success",
     "isError": false,
-    "apiMs": 45191
+    "apiMs": 45191,
+    "results": 1
    },
    "wallSec": 82.681,
    "timedOut": false,
    "dir": "/tmp/mgl-eval-short-from-script-fVvA5p",
    "timeoutMin": 25,
    "expectsWeak": false,
-   "exitCode": 0
+   "exitCode": 0,
+   "outputs": 3,
+   "dirRemoved": true,
+   "baselineScore": 0,
+   "deltaScore": 1
   },
   {
    "task": "slip-roll",
@@ -1709,6 +1916,7 @@
     },
     "bashTimeouts": 0,
     "failedEdits": 0,
+    "permissionDenials": 0,
     "errorCodes": {},
     "verbs": {
      "docs": 2,
@@ -1716,16 +1924,22 @@
      "check": 1
     },
     "violations": [],
+    "fatalViolations": [],
     "resultSubtype": "success",
     "isError": false,
-    "apiMs": 18354
+    "apiMs": 18354,
+    "results": 1
    },
    "wallSec": 23.932,
    "timedOut": false,
    "dir": "/tmp/mgl-eval-slip-roll-gOdCcF",
    "timeoutMin": 15,
    "expectsWeak": false,
-   "exitCode": 0
+   "exitCode": 0,
+   "outputs": 1,
+   "dirRemoved": true,
+   "baselineScore": 0,
+   "deltaScore": 1
   },
   {
    "task": "speed-and-freeze",
@@ -1757,6 +1971,7 @@
     },
     "bashTimeouts": 0,
     "failedEdits": 0,
+    "permissionDenials": 2,
     "errorCodes": {
      "E_OVERLAP": 1
     },
@@ -1769,16 +1984,22 @@
      "look": 1
     },
     "violations": [],
+    "fatalViolations": [],
     "resultSubtype": "success",
     "isError": false,
-    "apiMs": 36113
+    "apiMs": 36113,
+    "results": 1
    },
    "wallSec": 55.491,
    "timedOut": false,
    "dir": "/tmp/mgl-eval-speed-and-freeze-u93vgh",
    "timeoutMin": 20,
    "expectsWeak": false,
-   "exitCode": 0
+   "exitCode": 0,
+   "outputs": 2,
+   "dirRemoved": true,
+   "baselineScore": 0,
+   "deltaScore": 1
   }
  ]
 }

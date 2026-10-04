@@ -1,5 +1,5 @@
 import { join } from 'node:path';
-import { grader, probe, frameAt, resize, crop, round, assertNotEmpty } from '../../lib/index.mjs';
+import { grader, probe, frameAt, resize, crop, round, assertNotEmpty, findProjectUsing } from '../../lib/index.mjs';
 
 /** Pixels that are the PiP: far from the screen, and not just a darkened screen pixel (the shadow). */
 function pipMask(img, scr) {
@@ -56,5 +56,12 @@ export async function grade(dir) {
     const mid = [[box[0] + box[2] / 2, box[1] + 2], [box[0] + 2, box[1] + box[3] / 2]].map(([x, y]) => m[Math.round(y) * 1920 + Math.round(x)]);
     return c.filter(([x, y]) => !m[y * 1920 + x]).length >= 3 && mid.every(Boolean);
   })(), box ? 'corner pixels checked' : 'no PiP');
+  // made with the library: the edit is in a valid project that uses the task's inputs (not only in an ffmpeg output)
+  const proj = findProjectUsing(dir, { inputs: ['screen.mp4', 'cam.mp4'], size: [1920, 1080], pred: (pp) => {
+    const srcOf = new Map((pp.assets ?? []).map((a) => [a.id, String(a.src ?? '')]));
+    const cam = (pp.clips ?? []).find((c) => srcOf.get(c.asset)?.endsWith('cam.mp4'));
+    return (!!cam && ['scale', 'x', 'y', 'anchor', 'crop'].some((k) => cam[k] !== undefined)) || 'the cam clip is not scaled or placed';
+  } });
+  g.check('a 1920x1080 project uses screen.mp4 and cam.mp4, with the cam clip scaled and placed', !!proj.p, proj.p ? proj.f : proj.why);
   return g.result();
 }

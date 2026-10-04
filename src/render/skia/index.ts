@@ -16,6 +16,7 @@ import type {
 } from '../types.js';
 import { createTextLayouter, registerFontAsset, registerFonts, BUNDLED_FONTS_DIR } from '../text.js';
 import { fitBox } from '../evaluate.js';
+import { decodeSize } from '../frames.js';
 import { invert, multiply, scaling } from '../matrix.js';
 import { drawShape, shapeOverhang } from './shapes.js';
 import { drawTextLayer, textOverhang } from './text.js';
@@ -81,7 +82,8 @@ async function mediaImage(dc: DrawCtx, src: MediaSource, w: number, h: number): 
 
 /** Draw a media frame into the layer box (layer px) with crop and fit. */
 async function drawMedia(dc: DrawCtx, target: Surface, src: MediaSource, box: { w: number; h: number }, k: number): Promise<void> {
-  const img = await mediaImage(dc, src, box.w * k, box.h * k);
+  const want = decodeSize(src, box.w * k, box.h * k);
+  const img = await mediaImage(dc, src, want.w, want.h);
   const srcW = src.size?.w ?? img.width, srcH = src.size?.h ?? img.height;
   const sc = img.width / srcW;
   const [l, t, r, b] = src.crop ?? [0, 0, 0, 0];
@@ -178,27 +180,67 @@ async function drawLayer(dc: DrawCtx, target: Surface, node: LayerNode, toTarget
   composite(target, tmp.canvas, [1, 0, 0, 1, 0, 0], 1, node.blend);
 }
 
+/** Is a toTarget matrix scaled (draft renders, scaled stills, nested comps at k ≠ 1)? */
+function offScale(toTarget: Matrix): boolean {
+  return Math.abs(toTarget[0] - 1) > 1e-6 || Math.abs(toTarget[3] - 1) > 1e-6 || toTarget[1] !== 0 || toTarget[2] !== 0;
+}
+
+/**
+ * Run `fn` on comp-px surfaces when the target is scaled, so effect and transition parameters in px (blur radius,
+ * feather, offsets) mean the same at every output size: `fn` gets a surface factory and the comp px → surface
+ * matrix, and returns the surface to place; it is drawn back onto the target through `toTarget`.
+ */
+async function inCompPx(dc: DrawCtx, target: Surface, toTarget: Matrix, fn: (make: () => Surface, toS: Matrix) => Promise<{ s: Surface; opacity: number; blend: BlendMode } | null>): Promise<void> {
+  if (!offScale(toTarget)) {
+    const r = await fn(() => target.scratch(), toTarget);
+    if (r) composite(target, r.s.canvas, [1, 0, 0, 1, 0, 0], r.opacity, r.blend);
+    return;
+  }
+  const W = Math.max(1, Math.round(dc.list.width)), H = Math.max(1, Math.round(dc.list.height));
+  const r = await fn(() => createSurface(W, H), [1, 0, 0, 1, 0, 0]);
+  if (!r) return;
+  const c = target.ctx;
+  c.save();
+  setT(target, toTarget);
+  c.imageSmoothingEnabled = true;
+  c.globalAlpha = r.opacity;
+  c.globalCompositeOperation = BLEND_OPS[r.blend] ?? 'source-over';
+  c.drawImage(r.s.canvas, 0, 0, W, H);
+  c.restore();
+}
+
 async function drawTransition(dc: DrawCtx, target: Surface, node: TransitionNode, toTarget: Matrix): Promise<void> {
   const def = dc.registry.transitions.get(node.transition.type);
   if (!def) {
     const dym = suggest(node.transition.type, dc.registry.transitions.keys());
     fail('E_UNKNOWN_TRANSITION', `transition "${node.transition.type}" is not known to the renderer.`, dym.length ? `did you mean "${dym[0]}"?` : 'pass the project\'s plugin registry to renderer.open({ registry }).');
   }
-  const from = target.scratch(), to = target.scratch(), dst = target.scratch();
-  await drawNodes(dc, node.from, from, toTarget);
-  await drawNodes(dc, node.to, to, toTarget);
-  const lf = (node.to[0] ?? node.from[0]) as LayerNode | undefined;
-  def.draw({ from, to, dst, progress: node.progress, params: node.transition.params as never, ...frameInfo(dc, lf?.localFrame ?? dc.list.frame, lf?.seed ?? 0) });
-  composite(target, dst.canvas, [1, 0, 0, 1, 0, 0], 1, 'normal');
+  await inCompPx(dc, target, toTarget, async (make, toS) => {
+    const from = make(), to = make(), dst = make();
+    await drawNodes(dc, node.from, from, toS);
+    await drawNodes(dc, node.to, to, toS);
+    const lf = (node.to[0] ?? node.from[0]) as LayerNode | undefined;
+    def.draw({ from, to, dst, progress: node.progress, params: node.transition.params as never, ...frameInfo(dc, lf?.localFrame ?? dc.list.frame, lf?.seed ?? 0) });
+    return { s: dst, opacity: 1, blend: 'normal' };
+  });
 }
 
 async function drawAdjustment(dc: DrawCtx, target: Surface, node: AdjustmentNode, toTarget: Matrix): Promise<void> {
   if (node.opacity <= 0 || !node.fx.length) return;
-  const copy = target.scratch();
-  copy.ctx.drawImage(target.canvas, 0, 0);
-  const out = runEffects(dc, copy, node.fx, node.localFrame, node.seed);
-  if (node.masks.length) applyMasks(out, node.masks, toTarget, multiply(toTarget, node.matrix));
-  composite(target, out.canvas, [1, 0, 0, 1, 0, 0], node.opacity, node.blend);
+  await inCompPx(dc, target, toTarget, async (make, toS) => {
+    const copy = make();
+    // what is below, in the working space (comp px when the target is scaled)
+    const c = copy.ctx;
+    c.save();
+    const inv = multiply(toS, invert(toTarget));
+    c.setTransform(inv[0], inv[1], inv[2], inv[3], inv[4], inv[5]);
+    c.drawImage(target.canvas, 0, 0);
+    c.restore();
+    const out = runEffects(dc, copy, node.fx, node.localFrame, node.seed);
+    if (node.masks.length) applyMasks(out, node.masks, toS, multiply(toS, node.matrix));
+    // drawn back with the same blend; the part of the target it covers is replaced by the adjusted copy
+    return { s: out, opacity: node.opacity, blend: node.blend };
+  });
 }
 
 async function drawNodes(dc: DrawCtx, nodes: DisplayNode[], target: Surface, toTarget: Matrix): Promise<void> {

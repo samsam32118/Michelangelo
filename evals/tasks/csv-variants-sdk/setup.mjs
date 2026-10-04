@@ -19,5 +19,5 @@ export async function setup(dir) {
       { id: 'price', track: 'T2', at: 0, len: 90, text: '$0.00', style: { base: 'subtitle', size: 90 }, y: 660 },
     ],
   });
-  return F.finish(dir, { products: PRODUCTS, nameBand: [0, 300, 1080, 240] });
+  return F.finish(dir, { products: PRODUCTS, nameBand: [0, 300, 1080, 240], priceBand: [0, 560, 1080, 220] });
 }

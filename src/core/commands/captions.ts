@@ -6,6 +6,7 @@ import { Id, inputSchemas, type Clip, type Cue, type TextStyle } from '../schema
 import { parseCaptions, splitScript, estimateWordTimes, wordsOf, type CaptionCue } from '../captions.js';
 import { BUILTIN_STYLES } from '../load.js';
 import { speedOf } from './clip.js';
+import { keyLists } from '../keylists.js';
 import { defaultCompId, placeLayers } from './template.js';
 
 // ---------------------------------------------------------------------------
@@ -75,6 +76,19 @@ function writeCues(ctx: CommandContext, c: Clip, cues: { at: number; len: number
   if (old.length) {
     ctx.project.cues = (ctx.project.cues ?? []).filter((q) => q.clip !== c.id);
     ctx.note(`replaced the ${old.length} existing cue(s) of "${c.id}".`);
+  }
+  // cue times are local to the clip and never negative: start the clip at the first cue when it is earlier
+  const start = cues.reduce((m, k) => Math.min(m, k.at), Infinity);
+  if (start < c.at) {
+    const prev = (ctx.project.clips ?? []).filter((x) => x.track === c.track && x.id !== c.id && x.at < c.at && x.at + x.len > start).sort((a, b) => b.at + b.len - (a.at + a.len))[0];
+    if (prev) fail('E_OVERLAP', `the first cue starts at frame ${start}, before captions clip "${c.id}" (frame ${c.at}), and "${prev.id}" on ${c.track} is in the way of moving its start.`, `make room first: mgl edit <file> clip.trim ${prev.id} end=${start}${prev.at >= start ? ` (or clip.move ${prev.id} track=<another track>)` : ''}, then run this again.`);
+    const delta = start - c.at; // negative: the clip start moves earlier, its content stays in place
+    c.at = start;
+    c.len -= delta;
+    c.clock = (c.clock ?? 0) + delta;
+    if (c.clock === 0) delete c.clock;
+    for (const l of keyLists(c)) l.keys.forEach((kf) => { kf[0] -= delta; });
+    ctx.note(`moved the start of "${c.id}" to frame ${start} so the first cue shows.`);
   }
   const ids: string[] = [];
   for (const k of cues) {

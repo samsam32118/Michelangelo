@@ -124,12 +124,18 @@ describe('loadRegistry', () => {
     }
   });
 
-  it('trusts npm plugins the project depends on, and refuses ones it does not', async () => {
+  it('npm plugins need trust too, even when the project depends on them (a clone can ship node_modules)', async () => {
+    const r0 = await loadRegistry(project({ npmfx: '^3.0.0' }), dir, { trustStore: store });
+    expect(r0.problems[0]).toMatchObject({ code: 'E_PLUGIN_UNTRUSTED' });
+    expect(r0.problems[0]!.fix).toMatch(/mgl plugin trust .*node_modules[/\\]npmfx/);
+    expect(r0.loaded).toEqual([]);
+    trustPlugin(join(dir, 'node_modules/npmfx'), { trustStore: store });
     const r = await loadRegistry(project({ npmfx: '^3.0.0' }), dir, { trustStore: store });
     expect(r.problems).toEqual([]);
-    expect(r.loaded[0]).toMatchObject({ name: 'npmfx', trust: 'npm' });
+    expect(r.loaded[0]).toMatchObject({ name: 'npmfx', trust: 'store' });
     expect(r.styles.has('npm-style')).toBe(true);
     writeFiles(dir, { 'package.json': JSON.stringify({ name: 'proj', private: true }) });
+    untrustPlugin('npmfx', { trustStore: store });
     try {
       const r2 = await loadRegistry(project({ npmfx: '^3.0.0' }), dir, { trustStore: store });
       expect(r2.problems[0]).toMatchObject({ code: 'E_PLUGIN_UNTRUSTED' });

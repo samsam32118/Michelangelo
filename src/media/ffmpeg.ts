@@ -66,8 +66,10 @@ function which(name: string): string | null {
 
 async function describe(ffmpeg: string, ffprobe: string, source: FfmpegInfo['source'], licence?: string): Promise<FfmpegInfo | { error: string }> {
   let v;
+  const t0 = Date.now();
   try { v = await run(ffmpeg, ['-hide_banner', '-version'], { allowFail: true, timeoutMs: 20_000 }); } catch (e) { return { error: `${ffmpeg} does not run (${(e as Error).message})` }; }
   const ver = parseVersion(v.stdout.toString());
+  if (!ver && Date.now() - t0 >= 19_000) return { error: `${ffmpeg} -version did not answer within 20 s (the machine may be overloaded)` };
   if (!ver) return { error: `${ffmpeg} is not ffmpeg` };
   if (!(await exists(ffprobe))) return { error: `ffprobe not found next to ${ffmpeg}` };
   const [enc, dec, fil] = await Promise.all(['-encoders', '-decoders', '-filters'].map((f) => run(ffmpeg, ['-hide_banner', f], { allowFail: true, timeoutMs: 20_000 })));

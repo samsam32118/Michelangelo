@@ -109,7 +109,7 @@ Built-in text styles, usable as `"style": "<id>"` or as `base` of your own style
 
 - **title**: Big bold title: Anton 120, white with a black stroke. `{"font":"Anton","size":120,"weight":"normal","color":"#ffffff","stroke":"#000000","strokeWidth":8,"align":"center","lineHeight":1.05}`
 - **subtitle**: Secondary line under a title: Inter 56 semibold, soft shadow. `{"font":"Inter","size":56,"weight":600,"color":"#ffffff","shadow":"#00000099","shadowBlur":8,"shadowOffset":[0,3],"align":"center","lineHeight":1.2}`
-- **caption**: Readable captions: Inter 64 bold, white with a black stroke, 900 px wide, 2 lines. `{"font":"Inter","size":64,"weight":"bold","color":"#ffffff","stroke":"#000000","strokeWidth":6,"maxWidth":900,"maxLines":2,"align":"center","lineHeight":1.15}`
+- **caption**: Readable captions: Inter 64 bold, white with a black stroke, 800 px wide (inside the Shorts safe area when centred), 2 lines. `{"font":"Inter","size":64,"weight":"bold","color":"#ffffff","stroke":"#000000","strokeWidth":6,"maxWidth":800,"maxLines":2,"align":"center","lineHeight":1.15}`
 - **karaoke**: Captions with the spoken word highlighted in yellow. `{"base":"caption","highlight":"#ffd400"}`
 - **pop**: Loud punchy words: Inter Black 96, yellow with a black stroke, upper case. `{"font":"Inter","size":96,"weight":900,"color":"#ffd400","stroke":"#000000","strokeWidth":8,"uppercase":true,"align":"center","lineHeight":1.05}`
 - **boxed**: Dark text on a white rounded box. `{"font":"Inter","size":56,"weight":"bold","color":"#111111","bg":"#ffffff","bgPadding":[28,14],"bgRadius":18,"align":"center"}`

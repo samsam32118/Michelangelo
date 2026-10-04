@@ -1,5 +1,5 @@
 import { join } from 'node:path';
-import { grader, probe, loudness, round, assertNotEmpty, bandpassRmsDb } from '../../lib/index.mjs';
+import { grader, probe, loudness, round, assertNotEmpty, bandpassRmsDb, findProjectUsing } from '../../lib/index.mjs';
 
 export async function grade(dir) {
   const g = grader();
@@ -15,5 +15,13 @@ export async function grade(dir) {
     const l = await loudness(mp3);
     return { pass: pm.audio.codec === 'mp3' && Math.abs(l.integrated + 14) <= 1.5, detail: `${pm.audio.codec}, ${l.integrated} LUFS` };
   });
+  // made with the library: the edit is in a valid project that uses the task's inputs (not only in an ffmpeg output)
+  const proj = findProjectUsing(dir, { inputs: ['media/speech.wav', 'media/tones.wav'], pred: (pp) => {
+    const target = (pp.buses ?? []).some((b) => b?.loudness && Math.abs(Number(b.loudness.lufs ?? -14) + 14) <= 1);
+    const platform = ['shorts', 'tiktok', 'reels', 'youtube'].includes(pp.project?.platform);
+    const gains = (pp.buses ?? []).some((b) => b?.gain !== undefined) || (pp.clips ?? []).some((c) => c.gain !== undefined);
+    return target || platform || gains || 'no loudness target (-14 LUFS), platform or gain change in the project';
+  } });
+  g.check('the mix project (speech + tones) carries the normalisation: a -14 LUFS loudness target, platform or gains', !!proj.p, proj.p ? proj.f : proj.why);
   return g.result();
 }

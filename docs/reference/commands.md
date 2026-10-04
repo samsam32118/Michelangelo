@@ -6,7 +6,7 @@ Every change to a project is a command `{"op": ..., fields}`, run with `mgl edit
 (`mgl edit <file> '{"op": ...}'`, `--batch f.jsonl`) or from the SDK (`p.edit({op, ...})`). Times accept frames (75),
 "2.5s", "1:02.5" and "00:01:02:15". `k=v` values are JSON when they parse, else strings. `mgl docs <op>` prints one entry.
 
-65 commands: [asset](#asset) · [audio](#audio) · [captions](#captions) · [clip](#clip) · [comp](#comp) · [effects](#effects) · [project](#project) · [keyframes](#keyframes) · [marker](#marker) · [masks](#masks) · [text](#text) · [templates](#templates) · [track](#track)
+67 commands: [asset](#asset) · [audio](#audio) · [captions](#captions) · [clip](#clip) · [comp](#comp) · [effects](#effects) · [project](#project) · [keyframes](#keyframes) · [marker](#marker) · [masks](#masks) · [text](#text) · [templates](#templates) · [track](#track)
 
 ## asset
 
@@ -164,7 +164,7 @@ Style a captions clip: a style id replaces its style, an object merges into it (
 fields: `id` string (bare word); `style` string\|object
 
 ```text
-mgl edit video.mgl.json captions.style subs style={"highlight":"#00e5ff","maxWords":3}
+mgl edit video.mgl.json captions.style subs style='{"highlight":"#00e5ff","maxWords":3}'
 {"op":"captions.style","id":"subs","style":{"highlight":"#00e5ff","maxWords":3}}
 ```
 
@@ -175,7 +175,7 @@ Add a cue to a captions clip (at = frames from the clip start); words are per-wo
 fields: `clip` string; `at` time; `len` time; `text` string; `words?` time[]; `speaker?` string; `id?` string
 
 ```text
-mgl edit video.mgl.json cue.add clip=subs at=1s len=1.5s text=Put your phone away
+mgl edit video.mgl.json cue.add clip=subs at=1s len=1.5s text='Put your phone away'
 {"op":"cue.add","clip":"subs","at":"1s","len":"1.5s","text":"Put your phone away"}
 ```
 
@@ -186,7 +186,7 @@ Merge consecutive cues of one captions clip into the first (text joined, word ti
 fields: `ids` string[]
 
 ```text
-mgl edit video.mgl.json cue.merge ids=["c3","c4"]
+mgl edit video.mgl.json cue.merge ids='["c3","c4"]'
 {"op":"cue.merge","ids":["c3","c4"]}
 ```
 
@@ -208,7 +208,7 @@ Change a cue: text (word times are re-estimated when the word count changes), at
 fields: `id` string (bare word); `text?` string; `at?` time; `len?` time; `words?` time[]\|null; `speaker?` string\|null
 
 ```text
-mgl edit video.mgl.json cue.set c3 text=Put your phone in a drawer
+mgl edit video.mgl.json cue.set c3 text='Put your phone in a drawer'
 {"op":"cue.set","id":"c3","text":"Put your phone in a drawer"}
 ```
 
@@ -249,9 +249,9 @@ mgl edit video.mgl.json clip.detach-audio shotA
 
 ### clip.freeze
 
-Freeze the frame shown at comp time at= for len= (a held clip is inserted, later clips on the track ripple; audio is silent during the hold).
+Freeze the frame shown at comp time at= for len= (a held clip is inserted; later clips on the track and its linked tracks ripple; audio is silent during the hold).
 
-fields: `id` string (bare word); `at` time; `len` time
+fields: `id` string (bare word); `at` time; `len` time; `unlinked?` boolean
 
 ```text
 mgl edit video.mgl.json clip.freeze run at=3s len=1s
@@ -265,7 +265,7 @@ Link clips so edits (move, trim, split, ripple) apply to all of them; ids=[] wit
 fields: `ids` string[]; `link?` string\|null
 
 ```text
-mgl edit video.mgl.json clip.link ids=["shotA","shotA-audio"]
+mgl edit video.mgl.json clip.link ids='["shotA","shotA-audio"]'
 {"op":"clip.link","ids":["shotA","shotA-audio"]}
 ```
 
@@ -282,12 +282,12 @@ mgl edit video.mgl.json clip.move title at=4s
 
 ### clip.nest
 
-Move clips into a new comp and replace them with one clip of that comp (pre-compose).
+Move clips (with their linked clips, unless unlinked=true) into a new comp and replace them with one clip of that comp (pre-compose).
 
-fields: `ids` string[]; `id?` string
+fields: `ids` string[]; `id?` string; `unlinked?` boolean
 
 ```text
-mgl edit video.mgl.json clip.nest ids=["badge-bg","badge-text"] id=badge
+mgl edit video.mgl.json clip.nest ids='["badge-bg","badge-text"]' id=badge
 {"op":"clip.nest","ids":["badge-bg","badge-text"],"id":"badge"}
 ```
 
@@ -324,6 +324,17 @@ mgl edit video.mgl.json clip.roll a by=12
 {"op":"clip.roll","id":"a","by":12}
 ```
 
+### clip.sequence
+
+Place one clip per file (srcs) or asset (assets) back to back on a track from at= (default 0), each len= long (default 2s); on=markers cuts on the markers whose id starts with prefix= (default "beat"), on=beats cuts on the beats of clip=<id>: each item starts on a beat and lasts until the next (the last lasts the median beat interval). Optional fit= and transition={type, len} between items; refuses overlaps.
+
+fields: `srcs?` string[]; `assets?` string[]; `track?` string; `at?` time; `len?` time; `on?` "markers"\|"beats"; `prefix?` string; `clip?` string; `fit?` "contain"\|"cover"\|"fill"\|"none"; `transition?` object
+
+```text
+mgl edit video.mgl.json clip.sequence srcs='["media/a.mp4","media/b.mp4","media/c.mp4"]' on=markers prefix=beat fit=cover
+{"op":"clip.sequence","srcs":["media/a.mp4","media/b.mp4","media/c.mp4"],"on":"markers","prefix":"beat","fit":"cover"}
+```
+
 ### clip.set
 
 Set clip properties by name or dotted path (y=380, style.color=#ffcc00, fx.blur.radius=8, fx.0.amount=0.5); null resets to the default.
@@ -331,7 +342,7 @@ Set clip properties by name or dotted path (y=380, style.color=#ffcc00, fx.blur.
 fields: `id` string (bare word)
 
 ```text
-mgl edit video.mgl.json clip.set title y=380 style.color=#ffcc00
+mgl edit video.mgl.json clip.set title y=380 style.color='#ffcc00'
 {"op":"clip.set","id":"title","y":380,"style.color":"#ffcc00"}
 ```
 
@@ -399,7 +410,7 @@ Add a composition (a timeline): size or preset, fps, length.
 fields: `id?` string; `preset?` "shorts"\|"tiktok"\|"reels"\|"vertical"\|"youtube"\|"landscape"\|"square"\|"portrait"\|"4k"; `size?` [int, int]; `fps?` number\|string; `length?` time\|"auto"; `bg?` string; `tracks?` boolean
 
 ```text
-mgl edit video.mgl.json comp.add id=badge size=[1080,1080] fps=30 length=5s
+mgl edit video.mgl.json comp.add id=badge size='[1080,1080]' fps=30 length=5s
 {"op":"comp.add","id":"badge","size":[1080,1080],"fps":30,"length":"5s"}
 ```
 
@@ -513,7 +524,7 @@ Set project settings: name, platform (safe zones, loudness), main comp, plugins.
 fields: `name?` string; `platform?` "shorts"\|"tiktok"\|"reels"\|"youtube"\|"none"; `main?` string; `plugins?` object
 
 ```text
-mgl edit video.mgl.json project.set name=Focus tips platform=shorts
+mgl edit video.mgl.json project.set name='Focus tips' platform=shorts
 {"op":"project.set","name":"Focus tips","platform":"shorts"}
 ```
 
@@ -572,8 +583,19 @@ Add a marker (a named point or range) to a comp.
 fields: `at` time; `id?` string; `comp?` string; `len?` time; `note?` string
 
 ```text
-mgl edit video.mgl.json marker.add at=15s id=drop note=beat drop
+mgl edit video.mgl.json marker.add at=15s id=drop note='beat drop'
 {"op":"marker.add","at":"15s","id":"drop","note":"beat drop"}
+```
+
+### marker.beats
+
+Add a marker on every beat of a clip's audio (music, or a video with sound), inside the part of the source the clip plays: ids <prefix>1, <prefix>2, ... (re-running replaces them); every=n keeps every nth beat, max= caps the count, min= requires at least that many.
+
+fields: `clip` string (bare word); `prefix?` string; `min?` int; `max?` int; `every?` int
+
+```text
+mgl edit video.mgl.json marker.beats bed every=2 max=16
+{"op":"marker.beats","clip":"bed","every":2,"max":16}
 ```
 
 ### marker.remove
@@ -596,7 +618,7 @@ Add a mask (rect, ellipse or SVG path) that cuts a clip; box is [x, y, w, h] in 
 fields: `id` string (bare word); `shape` "rect"\|"ellipse"\|"path"; `box?` [number, number, number, number]\|null; `d?` string\|null; `space?` "comp"\|"clip"\|null; `feather?` number\|null; `radius?` number\|null; `invert?` boolean\|null; `mode?` "add"\|"subtract"\|"intersect"\|null; `opacity?` number\|null
 
 ```text
-mgl edit video.mgl.json mask.add shot1 shape=ellipse box=[140,560,800,800] feather=40
+mgl edit video.mgl.json mask.add shot1 shape=ellipse box='[140,560,800,800]' feather=40
 {"op":"mask.add","id":"shot1","shape":"ellipse","box":[140,560,800,800],"feather":40}
 ```
 
@@ -642,7 +664,7 @@ Add a named text style to the project (any TextStyle field; base inherits from a
 fields: `id` string (bare word); `font?` string; `size?` number; `weight?` number\|"normal"\|"bold"; `italic?` boolean; `color?` string; `align?` "left"\|"center"\|"right"; `lineHeight?` number; `letterSpacing?` number; `stroke?` string; `strokeWidth?` number; `shadow?` string; `shadowBlur?` number; `shadowOffset?` [number, number]; `bg?` string; `bgPadding?` number\|[number, number]; `bgRadius?` number; `maxWidth?` number; `uppercase?` boolean; `highlight?` string; `maxWords?` int; `maxLines?` int; `box?` [number, number]; `base?` string
 
 ```text
-mgl edit video.mgl.json style.add brand base=caption color=#00e5ff font=Inter size=70
+mgl edit video.mgl.json style.add brand base=caption color='#00e5ff' font=Inter size=70
 {"op":"style.add","id":"brand","base":"caption","color":"#00e5ff","font":"Inter","size":70}
 ```
 
@@ -664,7 +686,7 @@ Change fields of a project style; null removes a field (it then inherits from ba
 fields: `font?` string\|null; `size?` number\|null; `weight?` number\|"normal"\|"bold"\|null; `italic?` boolean\|null; `color?` string\|null; `align?` "left"\|"center"\|"right"\|null; `lineHeight?` number\|null; `letterSpacing?` number\|null; `stroke?` string\|null; `strokeWidth?` number\|null; `shadow?` string\|null; `shadowBlur?` number\|null; `shadowOffset?` [number, number]\|null; `bg?` string\|null; `bgPadding?` number\|[number, number]\|null; `bgRadius?` number\|null; `maxWidth?` number\|null; `uppercase?` boolean\|null; `highlight?` string\|null; `maxWords?` int\|null; `maxLines?` int\|null; `box?` [number, number]\|null; `base?` string\|null; `id` string (bare word)
 
 ```text
-mgl edit video.mgl.json style.set brand color=#ffcc00 stroke=null
+mgl edit video.mgl.json style.set brand color='#ffcc00' stroke=null
 {"op":"style.set","id":"brand","color":"#ffcc00","stroke":null}
 ```
 
@@ -686,7 +708,7 @@ Change the text of a text clip or a caption cue; a cue's word times are re-estim
 fields: `id` string (bare word); `text` string; `keepWords?` boolean
 
 ```text
-mgl edit video.mgl.json text.set title text=Three tips to focus
+mgl edit video.mgl.json text.set title text='Three tips to focus'
 {"op":"text.set","id":"title","text":"Three tips to focus"}
 ```
 
@@ -699,7 +721,7 @@ Insert a template (intro, lower-third, cta, title, end-card, progress-bar, quote
 fields: `template` string (bare word); `at?` time; `len?` time; `track?` string; `comp?` string; `prefix?` string; `params?` object
 
 ```text
-mgl edit video.mgl.json template.apply lower-third at=2s params={"name":"Ada Lovelace","role":"Engineer"}
+mgl edit video.mgl.json template.apply lower-third at=2s params='{"name":"Ada Lovelace","role":"Engineer"}'
 {"op":"template.apply","template":"lower-third","at":"2s","params":{"name":"Ada Lovelace","role":"Engineer"}}
 ```
 

@@ -81,6 +81,26 @@ describe('captions.from-text', () => {
     expect(project.data.cues!.every((q) => q.words?.length === 4)).toBe(true);
     expect(clip.style).toBe('karaoke');
   });
+  it('into an existing clip that starts after the speech: moves the clip start, cue times stay >= 0', async () => {
+    // speech 0–2 s and 4–6 s of the source; the voice starts at frame 30, the captions clip at 75
+    const analyzeAudio = async () => ({ duration: 10, silences: [{ start: 2, end: 4 }, { start: 6, end: 10 }] });
+    const { project, edit } = makeProject({ edit: (p) => { voice(p); p.clips!.push({ id: 'subs', track: 'T1', at: 75, len: 60, captions: true, x: [[0, 100], [30, 200]] }); }, services: { analyzeAudio } });
+    const r = await edit({ op: 'captions.from-text', text: 'One two three four. Five six seven eight.', voice: 'vo', clip: 'subs', maxWords: 4 });
+    const clip = project.clip('subs')!;
+    expect(clip.at).toBe(30);
+    expect(project.data.cues!.every((q) => q.at >= 0)).toBe(true);
+    expect(project.data.cues!.map((q) => [clip.at + q.at, q.text])).toEqual([[30, 'One two three four.'], [150, 'Five six seven eight.']]);
+    expect(clip.x).toEqual([[45, 100], [75, 200]]); // keyframes stay at the same comp frames
+    expect(clip.at + clip.len).toBe(210);
+    expect(r.notes.join(' ')).toMatch(/moved the start of "subs"/);
+    expect(project.issues).toEqual([]);
+  });
+  it('into an existing clip blocked by an earlier clip on its track: refuses with a ready command', async () => {
+    const analyzeAudio = async () => ({ duration: 10, silences: [{ start: 2, end: 4 }, { start: 6, end: 10 }] });
+    const { project, edit } = makeProject({ edit: (p) => { voice(p); p.clips!.push({ id: 't', track: 'T1', at: 0, len: 75, text: 'Hi' }, { id: 'subs', track: 'T1', at: 75, len: 60, captions: true }); }, services: { analyzeAudio } });
+    await expect(edit({ op: 'captions.from-text', text: 'One two three four.', voice: 'vo', clip: 'subs' })).rejects.toMatchObject({ code: 'E_OVERLAP', fix: expect.stringMatching(/clip\.trim t end=30/) });
+    expect(project.data.cues ?? []).toEqual([]);
+  });
   it('spreads chunks evenly without a voice and respects maxWords', async () => {
     const { project, edit } = makeProject({ files: { 'script.txt': 'a b c d e f\ng h' } });
     await edit({ op: 'captions.from-text', file: 'script.txt', at: 0, len: 80, maxWords: 3, words: false });

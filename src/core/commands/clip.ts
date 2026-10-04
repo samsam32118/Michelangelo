@@ -6,6 +6,8 @@ import { Id, inputSchemas, type Clip, type Cue, type Track } from '../schema/ind
 import { kindFromExtension } from './structure.js';
 import { parseSpeed, secondsToNearestFrame } from '../time.js';
 import { isKeyframes, ANIMATABLE_CLIP_KEYS } from '../load.js';
+import { keyLists } from '../keylists.js';
+import { interpolate } from '../../render/keyframes.js';
 
 // ---------------------------------------------------------------------------
 // helpers
@@ -20,6 +22,53 @@ export function srcFrames(c: Clip, frames: number): number {
   return Math.floor((frames * s.num) / s.den);
 }
 export function clipEnd(c: Clip): number { return c.at + c.len; }
+
+const gcd = (a: number, b: number): number => (b ? gcd(b, a % b) : Math.abs(a));
+
+/** Source frames (in the units of the clip's `in`) per timeline frame: speed, × childRate/parentRate for a nested comp. */
+export function srcRatio(ctx: CommandContext, c: Clip): { num: number; den: number } {
+  const s = speedOf(c);
+  if (c.comp === undefined) return s;
+  const cr = ctx.rate(c.comp), pr = ctx.rate(ctx.compOfClip(c));
+  const num = s.num * cr.num * pr.den, den = s.den * cr.den * pr.num;
+  const g = gcd(num, den) || 1;
+  return { num: num / g, den: den / g };
+}
+
+/** Whether the clip's `in` selects what it shows (video/audio media without remap, or a nested comp). */
+function usesIn(ctx: CommandContext, c: Clip): boolean {
+  if (c.remap !== undefined) return false;
+  if (c.comp !== undefined) return true;
+  if (c.asset === undefined) return false;
+  const a = (ctx.project.assets ?? []).find((x) => x.id === c.asset);
+  return (a ? a.kind ?? kindFromExtension(a.src) : undefined) !== 'image';
+}
+
+/** Source offset of `frames` timeline frames; `exact` is false when it falls between source frames. */
+function srcOffset(ctx: CommandContext, c: Clip, frames: number): { frames: number; exact: boolean } {
+  const r = srcRatio(ctx, c);
+  return { frames: Math.floor((frames * r.num) / r.den), exact: (frames * r.num) % r.den === 0 };
+}
+
+/** Refuse a cut that would fall between two source frames (the second part would show other frames). */
+function assertExactCut(ctx: CommandContext, c: Clip, off: number, what: string) {
+  if (!usesIn(ctx, c) || srcOffset(ctx, c, off).exact) return;
+  const r = srcRatio(ctx, c);
+  const step = r.den / gcd(r.num, r.den);
+  const lo = Math.floor(off / step) * step, hi = lo + step;
+  const opts = [lo, hi].filter((o) => o > 0 && o < c.len).map((o) => c.at + o);
+  fail('E_RANGE', `${what} ${c.at + off} falls between two source frames of "${c.id}" (it plays ${r.num}/${r.den} source frames per frame), so the part after it would show different frames.`,
+    opts.length ? `use ${opts.join(' or ')} (cuts must be a multiple of ${step} frames from its start ${c.at}).` : `cuts in "${c.id}" must be a multiple of ${step} frames from its start ${c.at}.`);
+}
+
+/** The earliest frame a head trim can move the clip's start to without running out of source. */
+function earliestStart(ctx: CommandContext, c: Clip): number {
+  if (!usesIn(ctx, c)) return c.at - (c.in ?? 0);
+  const r = srcRatio(ctx, c);
+  const step = r.den / gcd(r.num, r.den);
+  const back = Math.floor(((c.in ?? 0) * r.den) / r.num);
+  return c.at - Math.floor(back / step) * step;
+}
 
 /** Clips of a link group (always includes `c`), unless unlinked. */
 export function linked(ctx: CommandContext, c: Clip, unlinked?: boolean): Clip[] {
@@ -39,12 +88,7 @@ function assertUnlocked(ctx: CommandContext, c: Clip) {
 
 /** Shift clip-local keyframes by -delta (used when the clip's start moves but its content must stay put). */
 function shiftKeys(c: Clip, delta: number) {
-  for (const k of ANIMATABLE_CLIP_KEYS) {
-    const v = (c as Record<string, unknown>)[k];
-    if (isKeyframes(v)) (v as [number, unknown][]).forEach((kf) => { kf[0] -= delta; });
-  }
-  for (const fx of c.fx ?? []) for (const [k, v] of Object.entries(fx)) if (k !== 'type' && isKeyframes(v)) (v as [number, unknown][]).forEach((kf) => { kf[0] -= delta; });
-  if (c.shape && isKeyframes(c.shape.trim)) (c.shape.trim as [number, unknown][]).forEach((kf) => { kf[0] -= delta; });
+  for (const l of keyLists(c)) l.keys.forEach((kf) => { kf[0] -= delta; });
 }
 
 /** Keep keyframes within [0, len) plus the nearest key on each side (so interpolation is unchanged). */
@@ -56,19 +100,22 @@ function pruneKeys(c: Clip) {
     const out = [...(before ? [before] : []), ...inside, ...(after ? [after] : [])];
     return out.length ? out : v.slice(0, 1);
   };
-  for (const k of ANIMATABLE_CLIP_KEYS) {
-    const v = (c as Record<string, unknown>)[k];
-    if (isKeyframes(v)) (c as Record<string, unknown>)[k] = prune(v as [number, unknown][]);
-  }
-  for (const fx of c.fx ?? []) for (const [k, v] of Object.entries(fx)) if (k !== 'type' && isKeyframes(v)) fx[k] = prune(v as [number, unknown][]);
-  if (c.shape && isKeyframes(c.shape.trim)) c.shape.trim = prune(c.shape.trim as [number, unknown][]) as never;
+  for (const l of keyLists(c)) l.set(prune(l.keys as [number, unknown][]));
 }
 
-/** Move a clip's start by delta while keeping its content in place (head trim). */
+/** Move a clip's start by delta while keeping its content in place (head trim); refuses when the source runs out. */
 function headTrim(ctx: CommandContext, c: Clip, delta: number) {
+  if (c.asset !== undefined || c.comp !== undefined) {
+    const exact = usesIn(ctx, c);
+    if (exact) assertExactCut(ctx, c, delta, 'the new start');
+    const nin = (c.in ?? 0) + srcOffset(ctx, c, delta).frames;
+    if (nin < 0 && exact) {
+      fail('E_RANGE', `"${c.id}" has only ${c.in ?? 0} source frames before its start, so it can't start at ${c.at + delta}.`, `the earliest start of "${c.id}" is ${earliestStart(ctx, c)} (slip it later first to make room: clip.slip ${c.id} by=<frames>).`);
+    }
+    c.in = Math.max(0, nin);
+  }
   c.at += delta;
   c.len -= delta;
-  if (c.asset !== undefined || c.comp !== undefined) c.in = Math.max(0, (c.in ?? 0) + srcFrames(c, delta));
   c.clock = (c.clock ?? 0) + delta;
   if (c.clock === 0) delete c.clock;
   shiftKeys(c, delta);
@@ -91,7 +138,7 @@ function tracksOfComp(ctx: CommandContext, compId: string): Track[] {
   return (ctx.project.tracks ?? []).filter((t) => t.comp === compId);
 }
 
-function defaultTrack(ctx: CommandContext, audio: boolean, compId?: string): string {
+export function defaultTrack(ctx: CommandContext, audio: boolean, compId?: string): string {
   const comp = compId ?? ctx.project.project?.main ?? (ctx.project.comps.find((c) => c.id === 'main') ?? ctx.project.comps[0]!).id;
   const t = tracksOfComp(ctx, comp).filter((x) => !!x.audio === audio);
   if (t.length) return audio ? t[0]!.id : t[t.length - 1]!.id;
@@ -165,11 +212,30 @@ defineCommand({
     clip.id = clip.id ?? ctx.newId(base);
     // overlap: refuse with a fix (no silent ripple)
     const at = clip.at as number, len = clip.len as number;
-    const hit = clipsOnTrack(ctx, trackId).find((c) => c.at < at + len && at < clipEnd(c));
+    const busy = (tid: string) => clipsOnTrack(ctx, tid).find((c) => c.at < at + len && at < clipEnd(c));
+    let hit = busy(trackId);
+    if (hit && fields.track === undefined) {
+      // no track was named: use the topmost free track of the same kind, or put a new one on top
+      const same = tracksOfComp(ctx, comp.id).filter((t) => !!t.audio === isAudio);
+      const free = (isAudio ? same : [...same].reverse()).find((t) => !busy(t.id));
+      if (free) clip.track = free.id;
+      else {
+        const tracks = (ctx.project.tracks ??= []);
+        const prefix = isAudio ? 'A' : 'V';
+        let n = 1;
+        while (tracks.some((x) => x.id === `${prefix}${n}`)) n++;
+        const nt: Track = { id: `${prefix}${n}`, comp: comp.id };
+        if (isAudio) nt.audio = true;
+        tracks.push(nt);
+        clip.track = nt.id;
+        ctx.note(`created track ${nt.id}.`);
+      }
+      hit = undefined;
+    }
     if (hit) fail('E_OVERLAP', `clip would overlap "${hit.id}" (${hit.at}–${clipEnd(hit)}) on track ${trackId}.`, `use at=${clipEnd(hit)}, another track (track=...), or omit at to append.`);
     (ctx.project.clips ??= []).push(clip as Clip);
     ctx.out.id = clip.id;
-    ctx.summary(`added clip "${clip.id}" on ${trackId} at ${at}–${at + len}.`);
+    ctx.summary(`added clip "${clip.id}" on ${String(clip.track)} at ${at}–${at + len}.`);
   },
 });
 
@@ -235,12 +301,19 @@ defineCommand({
     const ids = [...(p.ids ?? []), ...(p.id ? [p.id] : [])];
     if (!ids.length) fail('E_ARG', 'clip.remove needs id or ids.', 'example: mgl edit <file> clip.remove shot2');
     const targets = new Map<string, Clip>();
-    for (const id of ids) for (const c of linked(ctx, ctx.clip(id), p.unlinked)) { assertUnlocked(ctx, c); targets.set(c.id, c); }
-    // ripple from the latest clip backwards so shifts don't affect each other
-    const sorted = [...targets.values()].sort((a, b) => b.at - a.at);
+    // ripple units: a named clip with its link group; the whole group shifts by the named clip's length (keeps sync, like ripple-delete)
+    const units: { lead: Clip; tracks: Set<string> }[] = [];
+    for (const id of ids) {
+      const lead = ctx.clip(id);
+      if (targets.has(lead.id)) continue;
+      const group = linked(ctx, lead, p.unlinked);
+      for (const c of group) { assertUnlocked(ctx, c); targets.set(c.id, c); }
+      units.push({ lead, tracks: new Set(group.map((g) => g.track)) });
+    }
     ctx.project.clips = (ctx.project.clips ?? []).filter((c) => !targets.has(c.id));
     ctx.project.cues = (ctx.project.cues ?? []).filter((q) => !targets.has(q.clip));
-    if (p.ripple) for (const c of sorted) ripple(ctx, new Set([c.track]), clipEnd(c), -c.len);
+    // ripple from the latest unit backwards so shifts don't affect each other
+    if (p.ripple) for (const u of units.sort((a, b) => b.lead.at - a.lead.at)) ripple(ctx, u.tracks, clipEnd(u.lead), -u.lead.len);
     ctx.summary(`removed ${targets.size} clip(s)${p.ripple ? ' with ripple' : ''}: ${[...targets.keys()].slice(0, 6).join(', ')}${targets.size > 6 ? ', ...' : ''}.`);
   },
 });
@@ -304,7 +377,6 @@ defineCommand({
       const s = ctx.time(p.start, comp, 'start');
       const delta = s - c.at;
       if (delta >= c.len) fail('E_RANGE', `start ${s} is at or after the clip end ${clipEnd(c)}.`, 'choose a start inside the clip.');
-      if ((c.asset !== undefined) && (c.in ?? 0) + srcFrames(c, delta) < 0) fail('E_RANGE', `"${c.id}" has only ${c.in ?? 0} source frames before its start.`, `the earliest start is ${c.at - Math.floor((c.in ?? 0))}.`);
       for (const g of group) headTrim(ctx, g, delta);
       if (p.ripple) { for (const g of group) ripple(ctx, new Set([g.track]), oldEnd, -delta, new Set(group.map((x) => x.id))); for (const g of group) g.at -= delta; }
     }
@@ -329,6 +401,7 @@ defineCommand({
 
 function splitOne(ctx: CommandContext, c: Clip, at: number, newId?: string): Clip {
   const off = at - c.at;
+  assertExactCut(ctx, c, off, 'the cut at');
   const b = structuredClone(c);
   b.id = newId ?? ctx.newId(`${c.id}-2`);
   // first part
@@ -339,7 +412,7 @@ function splitOne(ctx: CommandContext, c: Clip, at: number, newId?: string): Cli
   // second part
   b.at = at;
   b.len -= off;
-  if (b.asset !== undefined || b.comp !== undefined) b.in = (b.in ?? 0) + srcFrames(c, off);
+  if (b.asset !== undefined || b.comp !== undefined) b.in = (b.in ?? 0) + srcOffset(ctx, b, off).frames;
   b.clock = (b.clock ?? 0) + off;
   shiftKeys(b, off);
   pruneKeys(b);
@@ -361,7 +434,9 @@ function splitOne(ctx: CommandContext, c: Clip, at: number, newId?: string): Cli
           const words = q.text.split(/\s+/).filter(Boolean);
           const cutAt = off - q.at;
           const k = Math.max(1, q.words.filter((w) => w < cutAt).length);
-          n.text = words.slice(k).join(' ') || words[words.length - 1]!;
+          // every word starts before the cut: the cue stays in the first part only (no duplicated word)
+          if (k >= words.length) continue;
+          n.text = words.slice(k).join(' ');
           n.words = q.words.slice(k).map((w) => Math.max(0, w - cutAt));
           if (!n.words.length) delete n.words;
           q.text = words.slice(0, k).join(' ');
@@ -408,6 +483,7 @@ defineCommand({
     const neg = typeof p.by === 'string' && p.by.trim().startsWith('-');
     const by = neg ? -ctx.time((p.by as string).trim().slice(1), comp, 'by') : ctx.time(p.by, comp, 'by');
     for (const g of linked(ctx, c, p.unlinked)) {
+      assertUnlocked(ctx, g);
       if (g.asset === undefined && g.comp === undefined) fail('E_ARG', `"${g.id}" is not a media or comp clip; slip changes the source offset.`, 'use clip.move to move it instead.');
       const nin = (g.in ?? 0) + by;
       if (nin < 0) fail('E_RANGE', `slipping "${g.id}" by ${by} would start before the source (in=${g.in ?? 0}).`, `the most you can slip earlier is ${-(g.in ?? 0)} frames.`);
@@ -437,6 +513,8 @@ defineCommand({
     for (const g of linked(ctx, c, p.unlinked)) {
       const { next } = neighbours(ctx, g);
       if (!next) { if (g === c) fail('E_NO_NEIGHBOUR', `"${c.id}" has no clip right after it on ${c.track}; roll moves a cut between two adjacent clips.`, 'use clip.trim to change one clip.'); continue; }
+      assertUnlocked(ctx, g);
+      assertUnlocked(ctx, next);
       if (g.len + by <= 0 || next.len - by <= 0) fail('E_RANGE', `rolling by ${by} would make a clip empty.`, `roll by between ${1 - g.len} and ${next.len - 1}.`);
       g.len += by;
       pruneKeys(g);
@@ -457,6 +535,7 @@ defineCommand({
     const by = typeof p.by === 'number' ? p.by : neg ? -ctx.time(p.by.trim().slice(1), comp, 'by') : ctx.time(p.by, comp, 'by');
     for (const g of linked(ctx, c, p.unlinked)) {
       const { prev, next } = neighbours(ctx, g);
+      for (const x of [g, prev, next]) if (x) assertUnlocked(ctx, x);
       if (prev) { if (prev.len + by <= 0) fail('E_RANGE', `sliding by ${by} would empty "${prev.id}".`, 'slide less.'); prev.len += by; pruneKeys(prev); }
       else if (g.at + by < 0) fail('E_RANGE', 'the clip would start before 0.', 'slide less.');
       if (next) { if (next.len - by <= 0) fail('E_RANGE', `sliding by ${by} would empty "${next.id}".`, 'slide less.'); headTrim(ctx, next, by); }
@@ -474,7 +553,9 @@ defineCommand({
     const c = ctx.clip(p.id);
     const ns = parseSpeed(p.speed);
     if (ns.num === 0) fail('E_SPEED', 'speed 0 would freeze the whole clip.', 'use clip.freeze to hold a frame for a while.');
-    for (const g of linked(ctx, c, p.unlinked)) {
+    const group = linked(ctx, c, p.unlinked);
+    group.forEach((g) => assertUnlocked(ctx, g));
+    for (const g of group) {
       const os = speedOf(g);
       const oldEnd = clipEnd(g);
       if (p.keep !== 'len') g.len = Math.max(1, Math.round((g.len * os.num * ns.den) / (os.den * ns.num)));
@@ -487,8 +568,8 @@ defineCommand({
 });
 
 defineCommand({
-  op: 'clip.freeze', group: 'clip', doc: 'Freeze the frame shown at comp time at= for len= (a held clip is inserted, later clips on the track ripple; audio is silent during the hold).',
-  schema: z.strictObject({ id: Id, at: TimeArg, len: TimeArg }),
+  op: 'clip.freeze', group: 'clip', doc: 'Freeze the frame shown at comp time at= for len= (a held clip is inserted; later clips on the track and its linked tracks ripple; audio is silent during the hold).',
+  schema: z.strictObject({ id: Id, at: TimeArg, len: TimeArg, unlinked: z.boolean().optional() }),
   primary: 'id', example: { id: 'run', at: '3s', len: '1s' },
   apply(ctx, p) {
     const c = ctx.clip(p.id);
@@ -496,15 +577,22 @@ defineCommand({
     const comp = ctx.compOfClip(c);
     const at = ctx.time(p.at, comp, 'at');
     const len = ctx.time(p.len, comp, 'len');
+    if (len < 1) fail('E_RANGE', `freeze length ${len} is not positive.`, 'give len ≥ 1 frame, e.g. len=1s.');
     if (at < c.at || at > clipEnd(c)) fail('E_RANGE', `at ${at} is not inside "${c.id}" (${c.at}–${clipEnd(c)}).`, 'choose a frame inside the clip.');
-    const srcFrame = (c.in ?? 0) + srcFrames(c, Math.min(at, clipEnd(c) - 1) - c.at);
-    let tail: Clip | undefined;
-    if (at > c.at && at < clipEnd(c)) tail = splitOne(ctx, c, at);
-    ripple(ctx, new Set([c.track]), at, len, new Set([c.id]));
-    if (tail) tail.at = at + len;
+    const group = linked(ctx, c, p.unlinked);
+    group.forEach((g) => assertUnlocked(ctx, g));
+    // the frame on screen at `at` (the last frame when at is the clip end), in clip-local time
+    const t = Math.min(at, clipEnd(c) - 1) - c.at;
+    const srcFrame = c.remap !== undefined ? Math.max(0, Math.floor(interpolate(c.remap as never, t) as number)) : (c.in ?? 0) + srcOffset(ctx, c, t).frames;
     const hold: Clip = { ...structuredClone(c), id: ctx.newId(`${c.id}-hold`), at, len, in: srcFrame, speed: 0, muted: true };
-    delete hold.transition; delete hold.fade; delete hold.link;
-    hold.clock = (c.clock ?? 0) + (at - c.at);
+    delete hold.transition; delete hold.fade; delete hold.link; delete hold.remap;
+    // the hold shows one still moment: every animated property is collapsed to its value at that moment
+    for (const l of keyLists(hold)) l.set(interpolate(l.keys as never, t));
+    hold.clock = (c.clock ?? 0) + t;
+    if (hold.clock === 0) delete hold.clock;
+    // cut every clip of the link group at `at`, then open a gap of len on all their tracks (linked audio stays in sync, silent during the hold)
+    for (const g of group) if (at > g.at && at < clipEnd(g)) splitOne(ctx, g, at);
+    ripple(ctx, new Set(group.map((g) => g.track)), at, len);
     ctx.project.clips!.push(hold);
     ctx.out.id = hold.id;
     ctx.summary(`froze "${c.id}" at ${at} for ${len} frames (hold clip "${hold.id}").`);
@@ -518,6 +606,9 @@ defineCommand({
   apply(ctx, p) {
     const c = ctx.clip(p.id);
     if (c.asset === undefined) fail('E_ARG', `"${c.id}" is not a media clip.`, 'detach-audio works on video clips with sound.');
+    if (ctx.track(c.track).audio) fail('E_ARG', `"${c.id}" is already on an audio track.`, 'detach-audio works on video clips.');
+    const already = c.link !== undefined ? (ctx.project.clips ?? []).find((x) => x.id !== c.id && x.link === c.link && x.asset === c.asset && (ctx.project.tracks ?? []).find((t) => t.id === x.track)?.audio) : undefined;
+    if (already) fail('E_ARG', `the audio of "${c.id}" is already detached to "${already.id}".`, `edit "${already.id}" instead (move it with clip.move ${already.id} track=<audio track> unlinked=true), or remove it first to detach again.`);
     const comp = ctx.compOfClip(c);
     const track = p.track ?? defaultTrack(ctx, true, comp.id);
     if (!ctx.track(track).audio) fail('E_TRACK_KIND', `track "${track}" is not an audio track.`, 'pass an audio track, or omit track.');
@@ -547,13 +638,32 @@ defineCommand({
 });
 
 defineCommand({
-  op: 'clip.nest', group: 'clip', doc: 'Move clips into a new comp and replace them with one clip of that comp (pre-compose).',
-  schema: z.strictObject({ ids: z.array(Id).min(1), id: Id.optional() }),
+  op: 'clip.nest', group: 'clip', doc: 'Move clips (with their linked clips, unless unlinked=true) into a new comp and replace them with one clip of that comp (pre-compose).',
+  schema: z.strictObject({ ids: z.array(Id).min(1), id: Id.optional(), unlinked: z.boolean().optional() }),
   example: { ids: ['badge-bg', 'badge-text'], id: 'badge' },
   apply(ctx, p) {
-    const clips = p.ids.map((id) => ctx.clip(id));
+    if (p.id !== undefined && ctx.project.comps.some((x) => x.id === p.id)) fail('E_DUPLICATE_ID', `comp "${p.id}" already exists.`, 'choose another id or omit it.');
+    const named = [...new Set(p.ids)].map((id) => ctx.clip(id));
+    const chosen = new Map(named.map((c) => [c.id, c]));
+    const added: string[] = [];
+    if (!p.unlinked) {
+      // keep link groups whole: a group split across comps could no longer be edited together
+      for (const c of named) for (const x of linked(ctx, c)) if (!chosen.has(x.id)) { chosen.set(x.id, x); added.push(x.id); }
+    } else {
+      // unlinked: members inside the nest leave their group; a lone member left outside loses its link too
+      for (const c of named) {
+        if (!c.link) continue;
+        const outside = (ctx.project.clips ?? []).filter((x) => x.link === c.link && !chosen.has(x.id));
+        if (!outside.length) continue;
+        if (outside.length === 1) delete outside[0]!.link;
+        for (const x of chosen.values()) if (x.link === c.link) delete x.link;
+      }
+    }
+    const clips = [...chosen.values()];
     const parentComp = ctx.compOfClip(clips[0]!);
-    for (const c of clips) if (ctx.compOfClip(c).id !== parentComp.id) fail('E_ARG', 'all clips must be in the same comp.', 'nest clips of one comp at a time.');
+    for (const c of clips) if (ctx.compOfClip(c).id !== parentComp.id) fail('E_ARG', `clip "${c.id}" is in another comp${added.includes(c.id) ? ' (it is linked to a clip you named; pass unlinked=true to leave it out)' : ''}.`, 'nest clips of one comp at a time.');
+    clips.forEach((c) => assertUnlocked(ctx, c));
+    if (added.length) ctx.note(`also nested linked clip(s) ${added.join(', ')} (pass unlinked=true to leave them out).`);
     const start = Math.min(...clips.map((c) => c.at));
     const end = Math.max(...clips.map(clipEnd));
     const compId = p.id ?? ctx.newId('nest');
@@ -568,11 +678,25 @@ defineCommand({
       if (t.bus) nt.bus = t.bus;
       ctx.project.tracks!.push(nt);
     }
+    const fromTracks = new Set(clips.map((c) => c.track));
     for (const c of clips) { c.track = trackMap.get(c.track)!; c.at -= start; }
-    const topVisual = parentTracks.filter((t) => !t.audio && clips.some((c) => trackMap.get(t.id) === c.track)).pop() ?? parentTracks.find((t) => !t.audio)!;
-    const nc: Clip = { id: ctx.newId(`${compId}-clip`), track: topVisual.id, at: start, len: end - start, comp: compId };
+    // the comp clip goes on a visual track that is free over [start, end): the top one the clips came from, else any other, else a new one
+    const visual = parentTracks.filter((t) => !t.audio);
+    const free = (t: Track) => !(ctx.project.clips ?? []).some((x) => x.track === t.id && x.at < end && start < clipEnd(x));
+    const order = [...visual.filter((t) => fromTracks.has(t.id)).reverse(), ...visual.filter((t) => !fromTracks.has(t.id)).reverse()];
+    let host = order.find(free);
+    if (!host) {
+      const tracks = ctx.project.tracks!;
+      const main = parentComp.id === (ctx.project.project?.main ?? ctx.project.comps[0]!.id);
+      let n = 1;
+      while (tracks.some((x) => x.id === (main ? `V${n}` : `${parentComp.id}-V${n}`))) n++;
+      host = { id: main ? `V${n}` : `${parentComp.id}-V${n}`, comp: parentComp.id };
+      tracks.push(host);
+      ctx.note(`created track ${host.id} for the nested comp clip (no visual track was free over ${start}–${end}).`);
+    }
+    const nc: Clip = { id: ctx.newId(`${compId}-clip`), track: host.id, at: start, len: end - start, comp: compId };
     ctx.project.clips!.push(nc);
     ctx.out.id = nc.id;
-    ctx.summary(`nested ${clips.length} clip(s) into comp "${compId}" (clip "${nc.id}").`);
+    ctx.summary(`nested ${clips.length} clip(s) into comp "${compId}" (clip "${nc.id}" on ${host.id}).`);
   },
 });

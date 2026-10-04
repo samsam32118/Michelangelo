@@ -1,5 +1,5 @@
 import { join } from 'node:path';
-import { grader, probe, frameAt, mask, ssim, round, assertNotEmpty } from '../../lib/index.mjs';
+import { grader, probe, frameAt, mask, ssim, round, assertNotEmpty, findProjectUsing, textClips, toFrames, compRate, compOfClip } from '../../lib/index.mjs';
 
 const CORNERS = { tl: [0, 0, 0.3, 0.3], tr: [0.7, 0, 0.3, 0.3], bl: [0, 0.7, 0.3, 0.3], br: [0.7, 0.7, 0.3, 0.3] };
 const red = (r, g, b) => r > 170 && g < 80 && b < 80;
@@ -37,5 +37,16 @@ export async function grade(dir) {
     const s = await ssim(out, golden, { ta: 0, width: 540, height: 960 });
     return { pass: s > 0.7, detail: `SSIM ${round(s, 3)}` };
   });
+  // made with the library: the edit is in a valid project that uses the task's inputs (not only in an ffmpeg output)
+  const proj = findProjectUsing(dir, { inputs: ['phone.mov'], size: [1080, 1920], pred: (pp) => {
+    const srcOf = new Map((pp.assets ?? []).map((a) => [a.id, String(a.src ?? '')]));
+    const ph = (pp.clips ?? []).find((c) => srcOf.get(c.asset)?.endsWith('phone.mov'));
+    if (!ph) return 'no clip of phone.mov';
+    const rate = compRate(compOfClip(pp, ph));
+    const inS = toFrames(ph.in ?? 0, rate) / rate;
+    if (Math.abs(inS - 2) > 2 / 30 + 1e-6) return `phone clip starts at source ${round(inS, 2)} s`;
+    return textClips(pp).some((c) => /day\s*1/i.test(c.text)) || 'no "Day 1" text clip';
+  } });
+  g.check('a 1080x1920 project plays phone.mov from 2 s with a "Day 1" text clip', !!proj.p, proj.p ? proj.f : proj.why);
   return g.result();
 }

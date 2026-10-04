@@ -1,0 +1,28 @@
+{"michelangelo": 1,
+"project": {"platform": "youtube"},
+"comps": [
+{"id": "main", "size": [1920, 1080], "fps": 30},
+{"id": "badge", "size": [1080, 1080], "fps": 30, "length": 150}
+],
+"tracks": [
+{"id": "V1", "comp": "main"},
+{"id": "T1", "comp": "main"},
+{"id": "A1", "comp": "main", "audio": true, "bus": "dialogue"},
+{"id": "A2", "comp": "main", "audio": true, "bus": "music"},
+{"id": "badge-V1", "comp": "badge"},
+{"id": "badge-A1", "comp": "badge", "audio": true},
+{"id": "B1", "comp": "badge"},
+{"id": "B2", "comp": "badge"},
+{"id": "M2", "comp": "main"},
+{"id": "M3", "comp": "main"},
+{"id": "M4", "comp": "main"}
+],
+"clips": [
+{"id": "bg", "track": "V1", "at": 0, "len": 210, "color": "#1d3557"},
+{"id": "badge-big", "track": "M2", "at": 0, "len": 150, "comp": "badge", "x": 560, "y": 540, "scale": 0.7},
+{"id": "badge-mid", "track": "M3", "at": 30, "len": 150, "comp": "badge", "x": 1300, "y": 330, "scale": 0.4},
+{"id": "badge-small", "track": "M4", "at": 60, "len": 150, "comp": "badge", "x": 1500, "y": 800, "scale": 0.25},
+{"id": "disc", "track": "B1", "at": 0, "len": 150, "shape": {"type": "ellipse", "size": [900, 900], "fill": "#e63946", "stroke": "#ffffff", "strokeWidth": 24}, "rotate": [[0, 0], [150, 360, "inOutCubic"]]},
+{"id": "label", "track": "B2", "at": 0, "len": 150, "text": "NEW", "style": {"size": 300, "color": "#ffffff", "base": "title"}, "rotate": [[0, 0], [150, 360, "inOutCubic"]]}
+]
+}

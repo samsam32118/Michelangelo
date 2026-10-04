@@ -8,7 +8,8 @@ description: Edit videos and make motion graphics from the terminal with Michela
 A project is one `*.mgl.json` file: valid JSON, one entity per line, readable ids. You change it with
 commands (`mgl edit`), by editing a line yourself, or from a Node script (the SDK). You check your work
 with `mgl look` (a contact sheet image plus QA and a sound report) because you cannot watch video.
-Every command prints ≤ 40 lines; add `--json` for one machine-readable object.
+Every command prints ≤ 40 lines (`--all` lifts the cap; `mgl docs <topic>` guides print whole); add `--json`
+for one machine-readable object.
 
 ## The loop
 
@@ -113,7 +114,8 @@ mgl edit demo.mgl.json clip.ripple-delete shot-2
 
 Also: `asset.add`, `clip.add`, `clip.move`, `clip.slip`, `clip.roll`, `clip.slide`, `clip.speed`,
 `clip.freeze`, `captions.import file=subs.srt`, `audio.duck bus=music by=dialogue db=9`,
-`audio.cut-silences <clip>`, `comp.reframe main preset=youtube to=wide`, `mask.add`, `style.add`.
+`audio.cut-silences <clip>`, `marker.beats <clip>` and `clip.sequence srcs=[...] on=markers` (cut to the beat),
+`comp.reframe main preset=youtube to=wide`, `mask.add`, `style.add`.
 `mgl docs commands` lists all of them; `mgl docs <op>` prints one with its fields and an example.
 
 ## Look and QA

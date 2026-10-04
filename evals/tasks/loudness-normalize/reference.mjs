@@ -1,7 +1,7 @@
 // Reference solution with plain ffmpeg: mix like the project, then two-pass loudnorm to -14 LUFS / -1.5 dBTP.
 import { join } from 'node:path';
-import { mkdirSync } from 'node:fs';
-import { ffmpeg, ffmpegLog } from '../../lib/index.mjs';
+import { mkdirSync, writeFileSync } from 'node:fs';
+import { ffmpeg, ffmpegLog, readProject, formatProject } from '../../lib/index.mjs';
 
 export async function solve(dir) {
   mkdirSync(join(dir, 'out'), { recursive: true });
@@ -13,4 +13,8 @@ export async function solve(dir) {
   const af = `loudnorm=I=-14:TP=-1.5:LRA=20:measured_I=${m.input_i}:measured_TP=${m.input_tp}:measured_LRA=${m.input_lra}:measured_thresh=${m.input_thresh}:offset=${m.target_offset}:linear=true`;
   await ffmpeg(['-i', mix, '-af', `${af},aresample=48000`, '-c:a', 'pcm_s16le', join(dir, 'out/mix.wav')]);
   await ffmpeg(['-i', join(dir, 'out/mix.wav'), '-c:a', 'libmp3lame', '-b:a', '192k', join(dir, 'out/mix.mp3')]);
+  // the edit as a project too (plain JSON): graders check the library's file carries it
+  const p = readProject(join(dir, 'mix.mgl.json'));
+  p.buses = [{ id: 'master', loudness: { lufs: -14, peak: -1.5 } }];
+  writeFileSync(join(dir, 'mix.mgl.json'), formatProject(p));
 }

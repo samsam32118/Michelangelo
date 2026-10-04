@@ -6,6 +6,9 @@ import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { fail } from '../core/errors.js';
 import { PLUGIN_API_VERSION } from './api.js';
+import { builtinRegistry } from '../builtin/index.js';
+import '../core/commands/index.js';
+import { listCommands } from '../core/commands/registry.js';
 
 export const SCAFFOLD_KINDS = ['effect', 'transition', 'generator', 'template', 'command', 'check', 'importer', 'exporter'] as const;
 export type ScaffoldKind = (typeof SCAFFOLD_KINDS)[number];
@@ -391,10 +394,24 @@ test('writes one line per clip in seconds', async () => {
 
 const NAME_RE = /^[a-z][a-z0-9]*(-[a-z0-9]+)*$/;
 
+/** Why `name` would clash with a built-in once loaded (the scaffold names its item after the plugin), or undefined. */
+export function builtinClash(kind: ScaffoldKind, name: string): string | undefined {
+  const r = builtinRegistry();
+  if (r.plugins.has(name)) return `"${name}" is the name of a built-in plugin`;
+  const maps: Partial<Record<ScaffoldKind, Map<string, unknown>>> = {
+    effect: r.effects, transition: r.transitions, generator: r.generators, template: r.templates, check: r.checks, importer: r.importers, exporter: r.exporters,
+  };
+  if (maps[kind]?.has(name)) return `a built-in ${kind} is already called "${name}"`;
+  if (kind === 'command' && listCommands().some((c) => c.op.split('.')[0] === name || c.group === name)) return `built-in commands already use the "${name}." prefix`;
+  return undefined;
+}
+
 /** Scaffold plugins/<name>/ under `dir` (a project folder). Returns the plugin folder and the files written. */
 export function scaffoldPlugin(kind: ScaffoldKind, name: string, dir: string): { dir: string; files: string[] } {
   if (!(SCAFFOLD_KINDS as readonly string[]).includes(kind)) fail('E_ARG', `"${kind}" is not a plugin kind.`, `use one of: ${SCAFFOLD_KINDS.join(', ')}.`);
   if (!NAME_RE.test(name)) fail('E_ARG', `"${name}" is not a valid plugin name.`, 'use lowercase letters, digits and dashes, starting with a letter (e.g. "film-burn").');
+  const clash = builtinClash(kind, name);
+  if (clash) fail('E_ARG', `cannot scaffold ${kind} "${name}": ${clash}, so the plugin would not load.`, `choose another name, e.g. "my-${name}" or "${name}-2".`);
   const root = resolve(dir, 'plugins', name);
   if (existsSync(root)) fail('E_EXISTS', `${root} already exists.`, `choose another name, or delete plugins/${name} first.`);
   const p = parts(kind, name);

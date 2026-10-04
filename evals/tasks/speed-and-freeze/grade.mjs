@@ -1,5 +1,5 @@
 import { join } from 'node:path';
-import { grader, probe, allFrames, readCounter, round, assertNotEmpty } from '../../lib/index.mjs';
+import { grader, probe, allFrames, readCounter, round, assertNotEmpty, findProjectUsing, isKeyframes } from '../../lib/index.mjs';
 
 /** Expected: source 0..29 at 1x, source 30..89 at 2x (30 frames), source 90 held 30 frames, then 1x from 90/91. */
 function analyse(v) {
@@ -33,5 +33,12 @@ export async function grade(dir) {
   });
   g.check('duration consistent (frame count matches the edit: 90 + the 1x tail to the end of the original range)', !!p && !!a?.ok && Math.abs((p.frames ?? 0) - (a.freezeEnd + (a.last - 90))) <= 2 && a.last >= 230 && Math.abs(p.duration - p.frames / 30) < 0.1,
     p ? `${p.frames} frames, ${round(p.duration, 2)} s; last source frame ${a?.last}` : 'missing');
+  // made with the library: the edit is in a valid project that uses the task's inputs (not only in an ffmpeg output)
+  const proj = findProjectUsing(dir, { inputs: ['media/counter.mp4'], pred: (pp) => {
+    const cs = (pp.clips ?? []).filter((c) => c.asset !== undefined && (pp.assets ?? []).find((a) => a.id === c.asset)?.src?.endsWith('counter.mp4'));
+    const fast = cs.some((c) => Number(c.speed) === 2), held = cs.some((c) => Number(c.speed) === 0);
+    return (fast && held) || cs.some((c) => isKeyframes(c.remap)) || 'no 2x clip and held (speed 0) clip, nor a remap';
+  } });
+  g.check('the project has the edit: a 2x clip and a freeze (speed 0) or a time remap on the counter', !!proj.p, proj.p ? proj.f : proj.why);
   return g.result();
 }

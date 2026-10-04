@@ -23,9 +23,28 @@ export function checkType(ctx: CommandContext, kind: 'effects' | 'transitions', 
   const m = ctx.services.catalog?.[kind];
   if (!m || m.has(type)) return;
   const what = kind === 'effects' ? 'effect' : 'transition';
+  unavailablePlugin(ctx, what, type, m.keys());
   const d = suggest(type, m.keys());
   fail(kind === 'effects' ? 'E_UNKNOWN_EFFECT' : 'E_UNKNOWN_TRANSITION', `"${type}" is not a known ${what}.`,
     d.length ? `did you mean "${d[0]}"? (all: mgl docs ${kind})` : `use one of: ${[...m.keys()].join(', ')}`, { didYouMean: d });
+}
+
+/**
+ * An unknown type may come from a project plugin that failed to load (or is untrusted / not installed):
+ * report that plugin's problem and fix instead of the built-in list.
+ */
+export function unavailablePlugin(ctx: CommandContext, what: string, type: string, known: Iterable<string> = []) {
+  const listed = Object.keys(ctx.project.project?.plugins ?? {});
+  const named = (n: string) => type === n || type.startsWith(`${n}.`) || type.startsWith(`${n}-`) || type.startsWith(`${n}/`) || n.endsWith(`-${type}`) || n.endsWith(`/${type}`);
+  const problems = (ctx.services.pluginProblems ?? []).filter((pr) => pr.severity !== 'warning' && pr.path?.startsWith('project.plugins.'))
+    .map((pr) => ({ ...pr, name: pr.path!.slice('project.plugins.'.length) }));
+  const hit = problems.find((pr) => named(pr.name)) ?? (problems.length === 1 && !suggest(type, known).length ? problems[0] : undefined);
+  if (hit) fail(hit.code, `${what} "${type}" is not available: ${hit.message.replace(/\.$/, '')}.`, hit.fix);
+  if (!ctx.services.pluginProblems) {
+    const name = listed.find(named);
+    if (name) fail(what === 'effect' ? 'E_UNKNOWN_EFFECT' : 'E_UNKNOWN_TRANSITION', `${what} "${type}" is not loaded; project plugin "${name}" should provide it but is not loaded (untrusted, not installed, or failing).`,
+      `run "mgl plugin list" (or "mgl doctor") to see why plugin "${name}" does not load.`);
+  }
 }
 
 /** Validate one parameter value (a constant or a keyframe list) against an effect / transition schema. */

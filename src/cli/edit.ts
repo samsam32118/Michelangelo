@@ -6,7 +6,7 @@ import type { Problem } from '../core/load.js';
 import type { Command } from '../core/commands/registry.js';
 import type { TableName } from '../core/schema/index.js';
 import { Project, type EditResult } from '../sdk/project.js';
-import { open, qaModule } from '../sdk/index.js';
+import { open, qaModule, withPluginProblems } from '../sdk/index.js';
 import { MAX_LINES, bool, clip, str, type Args, type Out } from './io.js';
 import { jsonCommands, kvCommand } from './kv.js';
 
@@ -32,7 +32,7 @@ export async function edit(a: Args, o: Out) {
     o.set(h);
     return;
   }
-  let cmds: Command[];
+  let cmds: Command[] | undefined;
   if (batch) {
     if (op) fail('E_USAGE', 'give either --batch or a command, not both.', `mgl edit ${file} --batch edits.jsonl`);
     let text: string;
@@ -43,8 +43,12 @@ export async function edit(a: Args, o: Out) {
   } else if (/^\s*[[{]/.test(op)) {
     if (rest.length) fail('E_USAGE', 'a JSON command takes no further words.', `put every field inside the JSON: mgl edit ${file} '{"op": "clip.split", "id": "shot1", "at": "2s"}'`);
     cmds = jsonCommands(op, 'the JSON command');
-  } else cmds = [kvCommand(op, rest)];
+  }
+  // open first: the project's plugins register their commands (k=v parsing needs the op's schema)
   const p = await open(file);
+  if (!cmds) {
+    try { cmds = [kvCommand(op, rest)]; } catch (e) { throw withPluginProblems(e, p.pluginProblems); }
+  }
   const r = await p.edit(cmds, { dryRun: bool(a, 'dry-run') });
   report(r, o, file);
 }

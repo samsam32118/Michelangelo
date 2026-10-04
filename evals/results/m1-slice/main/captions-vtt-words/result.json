@@ -46,5 +46,8 @@
  "dir": "/tmp/mgl-eval-captions-vtt-words-UBZZiN",
  "timeoutMin": 15,
  "expectsWeak": false,
- "exitCode": 0
+ "exitCode": 0,
+ "outputs": 3,
+ "dirRemoved": true,
+ "baselineScore": 0
 }

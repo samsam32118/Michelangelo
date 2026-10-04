@@ -7,6 +7,7 @@ import type { z } from 'zod';
 import { MglError, suggest, type MglErrorInfo } from './errors.js';
 import { canonicalSchemas, CLIP_SOURCES, FORMAT_VERSION, TABLES, TIME_FIELDS, clipKind, type ProjectFile, type TableName, type Clip } from './schema/index.js';
 import { parseRate, parseTimeDetailed, type Rate } from './time.js';
+import { expectedText, foundText, lookupPath } from './issues.js';
 
 export interface Problem extends MglErrorInfo {
   severity: 'error' | 'warning';
@@ -147,9 +148,11 @@ export function normaliseAndValidate(raw: Record<string, unknown>, lineOf: (p: P
     }
     return undefined;
   };
+  /** time strings that could not be converted because the entity's comp/track/clip does not exist */
+  const unresolved = new Set<string>();
   const conv = (v: unknown, rate: Rate | undefined, path: Path): unknown => {
     if (typeof v !== 'string' || v === 'auto') return v;
-    if (!rate) return v; // the missing comp/track is reported by the reference checks
+    if (!rate) { unresolved.add(path.join('.')); return v; } // the missing comp/track is reported by the reference checks
     try {
       const t = parseTimeDetailed(v, rate, path.join('.'));
       normalised = true;
@@ -195,7 +198,18 @@ export function normaliseAndValidate(raw: Record<string, unknown>, lineOf: (p: P
   // --- 2. schema ---
   const parsed = canonicalSchemas.File.safeParse(raw);
   if (!parsed.success) {
-    for (const issue of parsed.error.issues) reportIssue(issue, raw, err);
+    const refsReported = new Set<string>();
+    for (const issue of parsed.error.issues) {
+      const key = issue.path.join('.');
+      if (unresolved.has(key) || [...unresolved].some((u) => key.startsWith(u + '.'))) {
+        // the time could not be converted because its comp/track/clip is missing: report that reference instead
+        const [table, i] = issue.path as [TableName, number];
+        const entity = `${table}.${i}`;
+        if (!refsReported.has(entity)) { refsReported.add(entity); reportUnresolvedRef(raw, table, i, err); }
+        continue;
+      }
+      reportIssue(issue, raw, err);
+    }
   }
   if (problems.some((p) => p.severity === 'error')) {
     throw new MglError({ ...firstError(problems), problems: problems.filter((p) => p.severity === 'error').slice(0, 50) });
@@ -256,15 +270,50 @@ function reportIssue(issue: z.core.$ZodIssue, raw: Record<string, unknown>, err:
     }
     return;
   }
-  if (issue.code === 'invalid_union') {
-    err(path, 'E_SCHEMA', `${where}: ${unionMessage(path)}`, unionFix(path));
-    return;
-  }
-  if (issue.code === 'invalid_type' && issue.input === undefined) {
-    err(path, 'E_MISSING', `${where} is required.`, `add "${path[path.length - 1]}" to the entity.`);
+  if (issue.code === 'invalid_type' || issue.code === 'invalid_union') {
+    const at = lookupPath(raw, path);
+    if (!at.present) {
+      err(path, 'E_MISSING', `${where} is required.`, `add "${String(path[path.length - 1])}" to the entity.`);
+      return;
+    }
+    const found = foundText(at.value);
+    if (issue.code === 'invalid_union') {
+      const um = unionMessage(path);
+      const want = expectedText(issue);
+      const msg = um !== 'has the wrong type.' ? um.replace(/\.$/, '') : want ? `must be ${want}` : 'has the wrong type';
+      err(path, 'E_SCHEMA', `${where}: ${msg}, found ${found}.`, unionFix(path));
+      return;
+    }
+    const key = String(path[path.length - 1]);
+    const want = TIME_KEYS.includes(key) && issue.expected === 'int' ? 'whole frames (an integer) or a time string like "2.5s"' : expectedText(issue);
+    err(path, 'E_SCHEMA', `${where}: must be ${want}, found ${found}.`, fixFor(path));
     return;
   }
   err(path, 'E_SCHEMA', `${where}: ${issue.message}.`, fixFor(path));
+}
+
+const TIME_KEYS = ['at', 'len', 'in', 'clock', 'length'];
+
+/** A time string stayed unconverted because the entity's comp/track/clip does not exist: report the reference. */
+function reportUnresolvedRef(raw: Record<string, unknown>, table: TableName, i: number, err: Reporter) {
+  const e = ((raw[table] as Record<string, unknown>[] | undefined) ?? [])[i] ?? {};
+  const comps = ((raw.comps as { id?: unknown }[] | undefined) ?? []).map((c) => String(c?.id));
+  const tracks = ((raw.tracks as { id?: unknown }[] | undefined) ?? []).map((t) => String(t?.id));
+  const id = typeof e.id === 'string' ? e.id : `#${i + 1}`;
+  if (table === 'clips') {
+    const d = suggest(String(e.track), tracks);
+    err([table, i, 'track'], 'E_REF', `clip "${id}" refers to track "${String(e.track)}", which does not exist (so its times can't be converted to frames).`,
+      d.length ? `did you mean "${d[0]}"?` : tracks.length ? `use one of ${tracks.slice(0, 8).join(', ')}, or add {"id": "${String(e.track)}", "comp": "${comps[0] ?? 'main'}"} to "tracks".` : `add {"id": "${String(e.track)}", "comp": "${comps[0] ?? 'main'}"} to "tracks".`);
+  } else if (table === 'cues') {
+    err([table, i, 'clip'], 'E_REF', `cue "${id}" belongs to clip "${String(e.clip)}", which does not exist or is on a missing track (so its times can't be converted to frames).`, 'use the id of a captions clip.');
+  } else if (table === 'markers') {
+    err([table, i, 'comp'], 'E_REF', `marker "${id}" refers to comp "${String(e.comp)}", which does not exist.`, `use one of ${comps.join(', ')}.`);
+  } else if (table === 'comps') {
+    try { parseRate(e.fps as number | string); err([table, i, 'fps'], 'E_SCHEMA', `comp "${id}" fps ${JSON.stringify(e.fps)} is not valid.`, 'use a number like 30 or a rate like "30000/1001".'); }
+    catch (x) { if (x instanceof MglError) err([table, i, 'fps'], x.code, `comp "${id}": ${x.message}`, x.fix); else throw x; }
+  } else {
+    err([table, i], 'E_REF', `${table.replace(/s$/, '')} "${id}": its comp does not exist, so its times can't be converted to frames.`, `use one of ${comps.join(', ')}.`);
+  }
 }
 
 function unionMessage(path: Path): string {
@@ -376,11 +425,14 @@ function semanticChecks(p: ProjectFile, err: Reporter, warn: Reporter, issue: Re
   });
   for (const [trackId, list] of byTrack) {
     list.sort((a, b) => a.c.at - b.c.at);
+    // compare each clip with the earlier clip that reaches furthest (a long clip can cover several later ones)
+    let reach = list[0]?.c;
     for (let j = 1; j < list.length; j++) {
-      const a = list[j - 1]!.c, b = list[j]!;
+      const a = reach!, b = list[j]!;
+      if (b.c.at + b.c.len > a.at + a.len) reach = b.c;
       if (b.c.at < a.at + a.len) {
         issue(['clips', b.i, 'at'], 'E_OVERLAP', `clips "${a.id}" (${a.at}–${a.at + a.len}) and "${b.c.id}" (${b.c.at}–${b.c.at + b.c.len}) overlap on track ${trackId}.`,
-          `move "${b.c.id}" to "at": ${a.at + a.len}, shorten "${a.id}" to "len": ${b.c.at - a.at}, or put one on another track. For a transition keep them adjacent and add "transition": {"in": {"type": "crossfade", "len": 10}} to "${b.c.id}".`);
+          `move "${b.c.id}" to "at": ${a.at + a.len}, ${b.c.at - a.at >= 1 ? `shorten "${a.id}" to "len": ${b.c.at - a.at}, ` : ''}or put one on another track. For a transition keep them adjacent and add "transition": {"in": {"type": "crossfade", "len": 10}} to "${b.c.id}".`);
       }
     }
   }

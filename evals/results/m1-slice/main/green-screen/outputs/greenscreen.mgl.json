@@ -1,0 +1,21 @@
+{"michelangelo": 1,
+"project": {"platform": "youtube"},
+"assets": [
+{"id": "city-mp4", "src": "city.mp4"},
+{"id": "presenter-mp4", "src": "presenter.mp4"}
+],
+"comps": [
+{"id": "main", "size": [1920, 1080], "fps": 30}
+],
+"tracks": [
+{"id": "V1", "comp": "main"},
+{"id": "V2", "comp": "main"},
+{"id": "T1", "comp": "main"},
+{"id": "A1", "comp": "main", "audio": true, "bus": "dialogue"},
+{"id": "A2", "comp": "main", "audio": true, "bus": "music"}
+],
+"clips": [
+{"id": "city", "track": "V1", "at": 0, "len": 120, "asset": "city-mp4", "fit": "cover"},
+{"id": "presenter", "track": "V2", "at": 0, "len": 120, "asset": "presenter-mp4", "fit": "cover", "fx": [{"type": "chroma-key", "color": "#00ff00"}]}
+]
+}

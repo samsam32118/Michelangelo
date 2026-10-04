@@ -23,6 +23,9 @@ export function safeRect(W: number, H: number): Rect {
   return { x0, y0, x1, y1, w: x1 - x0, h: y1 - y0, cx: (x0 + x1) / 2, cy: (y0 + y1) / 2 };
 }
 
+/** Smallest template text size as a fraction of the frame height (the tiny-text QA check wants ≥ 2.5%). */
+export const MIN_TEXT = 0.028;
+
 /** Layout helpers shared by every template. */
 function setup(a: Args, defaultSeconds: number) {
   const [W, H] = a.comp.size;
@@ -33,7 +36,9 @@ function setup(a: Args, defaultSeconds: number) {
   const r = (n: number) => Math.round(n);
   /** an animation length that fits the clip: at most a quarter of it */
   const fit = (sec: number, of = len) => Math.max(1, Math.min(f(sec), Math.floor(of / 4)));
-  return { W, H, f, len, S, u, r, fit, at: a.at };
+  /** a text size of `n` px at 1080, never under MIN_TEXT of the frame height (QA tiny-text flags < 2.5%) */
+  const ts = (n: number) => Math.max(r(n * u), Math.ceil(MIN_TEXT * H));
+  return { W, H, f, len, S, u, r, ts, fit, at: a.at };
 }
 
 /** Keyframes with strictly increasing frames (later duplicates are dropped). */
@@ -57,7 +62,7 @@ const intro = defineTemplate({
   params: z.object({ title: z.string().default('Your title here'), subtitle: z.string().default(''), bg: color.default('#101014'), accent: color.default('#ffd400') }),
   build(a) {
     const p = a.params as { title: string; subtitle: string; bg: string; accent: string };
-    const { len, S, u, r, fit, at } = setup(a, 4);
+    const { len, S, u, r, ts, fit, at } = setup(a, 4);
     const size = r(120 * u), boxH = r(size * 1.15 * 2);
     const titleY = r(S.cy - 40 * u);
     const anim = fit(0.5);
@@ -69,7 +74,7 @@ const intro = defineTemplate({
       { id: 'title', track: 'title', at, len, text: p.title, style: { base: 'title', size, box: [r(S.w * 0.9), boxH], maxLines: 2 }, x: r(S.cx), y: titleY, scale: keys([0, 1], [len - 1, 1.08]), animate: { in: 'pop', out: 'fade', by: 'word' } },
     ];
     if (p.subtitle) {
-      const sub = r(56 * u), subH = r(sub * 1.3 * 2);
+      const sub = ts(56), subH = r(sub * 1.3 * 2);
       clips.push({ id: 'subtitle', track: 'subtitle', ...later(at, len, fit(0.4)), text: p.subtitle, style: { base: 'subtitle', size: sub, box: [r(S.w * 0.85), subH], maxLines: 2 }, x: r(S.cx), y: r(titleY + boxH / 2 + 30 * u + subH / 2), animate: { in: 'slide-up', out: 'fade', by: 'all' } });
     }
     return { clips, summary: `intro "${p.title}"` };
@@ -82,18 +87,25 @@ const lowerThird = defineTemplate({
   params: z.object({ name: z.string().default('Jane Doe'), role: z.string().default(''), accent: color.default('#ffd400'), plate: color.default('#000000b3') }),
   build(a) {
     const p = a.params as { name: string; role: string; accent: string; plate: string };
-    const { len, S, u, r, fit, at } = setup(a, 5);
-    const pw = r(Math.min(S.w * 0.8, 900 * u)), ph = r((p.role ? 150 : 100) * u), bw = r(12 * u);
+    const { len, S, u, r, ts, fit, at } = setup(a, 5);
+    // text sizes keep a readable minimum on tall frames; the plate grows with them so nothing shrinks to fit
+    const ns = Math.max(ts(52), p.role ? Math.ceil(ts(36) * 1.3) : 0), rs = ts(36), lh = 1.2;
+    const pw = r(Math.min(S.w * 0.8, 900 * u));
+    // a long name wraps to two lines (estimated width ≈ 0.55 em per character) instead of shrinking below QA size
+    const nameLines = p.name.length * ns * 0.55 > pw - r(48 * u) ? 2 : 1;
+    const nh = Math.ceil(ns * lh * 1.05 * nameLines), rh = Math.ceil(rs * lh * 1.05), gap = r(4 * u), pad = r(18 * u);
+    const ph = Math.max(r((p.role ? 150 : 100) * u), 2 * pad + nh + (p.role ? gap + rh : 0)), bw = r(12 * u);
     const left = r(S.x0 + 20 * u), py = r(S.y1 - ph / 2 - 30 * u);
     const a1 = fit(0.3), a2 = fit(0.5), end = len - 1;
     const wipe = keys<[number, number]>([0, [0, 1], 'outCubic'], [a2, [1, 1]], [end - a2, [1, 1], 'inCubic'], [end, [0, 1]]);
     const textW = pw - r(48 * u), tx = left + bw + r(24 * u);
+    const nameY = p.role ? r(py - (gap + rh) / 2) : py, roleY = r(py + (gap + nh) / 2);
     const clips: Clip[] = [
       { id: 'bar', track: 'bar', at, len, shape: { type: 'rect', size: [bw, ph], fill: p.accent }, anchor: [0, 0.5], x: left, y: py, scale: keys<[number, number]>([0, [1, 0], 'outCubic'], [a1, [1, 1]], [end - a1, [1, 1], 'inCubic'], [end, [1, 0]]) },
       { id: 'plate', track: 'plate', at, len, shape: { type: 'rect', size: [pw, ph], fill: p.plate }, anchor: [0, 0.5], x: left + bw, y: py, scale: wipe },
-      { id: 'name', track: 'name', ...later(at, len, a1), text: p.name, style: { base: 'lower-third', size: r(52 * u), box: [textW, r(64 * u)], maxLines: 1 }, anchor: [0, 0.5], x: tx, y: p.role ? r(py - 30 * u) : py, animate: { in: 'slide-left', out: 'fade', by: 'all' } },
+      { id: 'name', track: 'name', ...later(at, len, a1), text: p.name, style: { base: 'lower-third', size: ns, lineHeight: lh, box: [textW, nh], maxLines: nameLines }, anchor: [0, 0.5], x: tx, y: nameY, animate: { in: 'slide-left', out: 'fade', by: 'all' } },
     ];
-    if (p.role) clips.push({ id: 'role', track: 'role', ...later(at, len, fit(0.45)), text: p.role, style: { base: 'body', size: r(36 * u), color: '#dddddd', align: 'left', box: [textW, r(48 * u)], maxLines: 1 }, anchor: [0, 0.5], x: tx, y: r(py + 34 * u), animate: { in: 'slide-left', out: 'fade', by: 'all' } });
+    if (p.role) clips.push({ id: 'role', track: 'role', ...later(at, len, fit(0.45)), text: p.role, style: { base: 'body', size: rs, lineHeight: lh, color: '#dddddd', align: 'left', box: [textW, rh], maxLines: 1 }, anchor: [0, 0.5], x: tx, y: roleY, animate: { in: 'slide-left', out: 'fade', by: 'all' } });
     return { clips, summary: `lower third "${p.name}"` };
   },
 });
@@ -135,9 +147,9 @@ const endCard = defineTemplate({
   params: z.object({ title: z.string().default('Thanks for watching'), subtitle: z.string().default('Subscribe for more'), bg: color.default('#101014'), accent: color.default('#ffd400') }),
   build(a) {
     const p = a.params as { title: string; subtitle: string; bg: string; accent: string };
-    const { W, H, len, S, u, r, fit, at } = setup(a, 5);
+    const { W, H, len, S, u, r, ts, fit, at } = setup(a, 5);
     const gap = r(30 * u);
-    const tSize = r(88 * u), tH = r(tSize * 1.1 * 2), sSize = r(52 * u), sH = r(sSize * 1.3 * 2);
+    const tSize = r(88 * u), tH = r(tSize * 1.1 * 2), sSize = ts(52), sH = r(sSize * 1.3 * 2);
     const stacked = H > W;
     const avail = S.h - tH - sH - 4 * gap;
     let tw = stacked ? S.w * 0.8 : (S.w - 2 * gap) / 2 * 0.9;
@@ -190,14 +202,15 @@ const quote = defineTemplate({
   params: z.object({ quote: z.string().default('Simplicity is the ultimate sophistication.'), author: z.string().default(''), accent: color.default('#ffd400') }),
   build(a) {
     const p = a.params as { quote: string; author: string; accent: string };
-    const { len, S, u, r, fit, at } = setup(a, 5);
-    const size = r(60 * u), qH = r(Math.min(S.h * 0.5, size * 1.35 * 5)), qY = r(S.cy);
+    const { len, S, u, r, ts, fit, at } = setup(a, 5);
+    const size = ts(60), qH = r(Math.min(S.h * 0.5, size * 1.35 * 5)), qY = r(S.cy);
     const mark = r(200 * u);
     const clips: Clip[] = [
       { id: 'mark', track: 'mark', at, len, text: '“', style: { base: 'title', size: mark, color: p.accent, strokeWidth: 0, box: [mark, r(mark * 1.2)], maxLines: 1 }, x: r(S.cx), y: r(qY - qH / 2 - 20 * u - mark * 0.6), animate: { in: 'scale-in', by: 'all' } },
       { id: 'quote', track: 'quote', ...later(at, len, fit(0.3)), text: p.quote, style: { base: 'body', size, italic: true, box: [r(S.w * 0.88), qH], maxLines: 5 }, x: r(S.cx), y: qY, animate: { in: 'fade', out: 'fade', by: 'word', stagger: 2 } },
     ];
-    if (p.author) clips.push({ id: 'author', track: 'author', ...later(at, len, fit(0.8)), text: `— ${p.author}`, style: { base: 'subtitle', size: r(40 * u), color: p.accent, box: [r(S.w * 0.8), r(56 * u)], maxLines: 1 }, x: r(S.cx), y: r(qY + qH / 2 + 20 * u + 28 * u), animate: { in: 'slide-up', by: 'all' } });
+    const aSize = ts(40), aH = Math.ceil(aSize * 1.4);
+    if (p.author) clips.push({ id: 'author', track: 'author', ...later(at, len, fit(0.8)), text: `— ${p.author}`, style: { base: 'subtitle', size: aSize, color: p.accent, box: [r(S.w * 0.8), aH], maxLines: 1 }, x: r(S.cx), y: r(qY + qH / 2 + 20 * u + aH / 2), animate: { in: 'slide-up', by: 'all' } });
     return { clips, summary: 'quote' };
   },
 });

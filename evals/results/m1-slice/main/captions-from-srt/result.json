@@ -54,5 +54,8 @@
  "dir": "/tmp/mgl-eval-captions-from-srt-sKCguW",
  "timeoutMin": 15,
  "expectsWeak": false,
- "exitCode": 0
+ "exitCode": 0,
+ "outputs": 3,
+ "dirRemoved": true,
+ "baselineScore": 0
 }

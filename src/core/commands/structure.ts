@@ -5,6 +5,7 @@ import { defineCommand, TimeArg } from './registry.js';
 import { Id, PLATFORMS, TABLES, type Asset, type Comp, type Track } from '../schema/index.js';
 import { parseRate } from '../time.js';
 import { secondsToNearestFrame } from '../time.js';
+import { keyLists } from '../keylists.js';
 
 export const PRESETS: Record<string, { size: [number, number]; platform?: (typeof PLATFORMS)[number] }> = {
   shorts: { size: [1080, 1920], platform: 'shorts' },
@@ -142,20 +143,29 @@ defineCommand({
     if (p.fps !== undefined) {
       const from = parseRate(c.fps), to = parseRate(p.fps);
       const k = (f: number) => Math.round((f * to.num * from.den) / (to.den * from.num));
+      /** a span [at, at+len) rescaled by its ends, so adjacent spans stay adjacent */
+      const span = (at: number, len: number): [number, number] => [k(at), Math.max(1, k(at + len) - k(at))];
       const trackIds = new Set((ctx.project.tracks ?? []).filter((t) => t.comp === c.id).map((t) => t.id));
       let n = 0;
       for (const cl of ctx.project.clips ?? []) {
+        if (cl.comp === c.id && cl.in) cl.in = k(cl.in); // a clip nesting this comp: its in is in this comp's frames
         if (!trackIds.has(cl.track)) continue;
-        cl.at = k(cl.at); cl.len = Math.max(1, k(cl.len)); if (cl.in) cl.in = k(cl.in); if (cl.clock) cl.clock = k(cl.clock); n++;
-        for (const key of ['x', 'y', 'scale', 'rotate', 'opacity', 'gain', 'remap'] as const) {
-          const v = cl[key] as unknown;
-          if (Array.isArray(v) && Array.isArray(v[0])) (v as [number, unknown][]).forEach((kf) => { kf[0] = k(kf[0]); });
+        [cl.at, cl.len] = span(cl.at, cl.len);
+        // `in` of a media clip counts frames at this comp's rate; a nested comp's `in` counts the child's frames (unchanged)
+        if (cl.in && cl.comp === undefined) cl.in = k(cl.in);
+        if (cl.clock) cl.clock = k(cl.clock);
+        n++;
+        for (const l of keyLists(cl)) {
+          l.keys.forEach((kf) => { kf[0] = k(kf[0]); });
+          // remap values are source frames at this comp's rate
+          if (l.label === 'remap' && cl.asset !== undefined) l.keys.forEach((kf) => { kf[1] = k(kf[1] as number); });
         }
         if (cl.fade) cl.fade = [k(cl.fade[0]), k(cl.fade[1])];
         for (const side of ['in', 'out'] as const) { const t = cl.transition?.[side]; if (t) t.len = Math.max(1, k(t.len)); }
-        for (const q of ctx.project.cues ?? []) if (q.clip === cl.id) { q.at = k(q.at); q.len = Math.max(1, k(q.len)); if (q.words) q.words = q.words.map(k); }
+        if (cl.animate) for (const f of ['stagger', 'len'] as const) { const v = cl.animate[f]; if (typeof v === 'number') cl.animate[f] = f === 'len' ? Math.max(1, k(v)) : k(v); }
+        for (const q of ctx.project.cues ?? []) if (q.clip === cl.id) { [q.at, q.len] = span(q.at, q.len); if (q.words) q.words = q.words.map(k); }
       }
-      for (const m of ctx.project.markers ?? []) if (m.comp === c.id) { m.at = k(m.at); if (m.len) m.len = k(m.len); }
+      for (const m of ctx.project.markers ?? []) if (m.comp === c.id) { if (m.len) [m.at, m.len] = span(m.at, m.len); else m.at = k(m.at); }
       if (typeof c.length === 'number') c.length = k(c.length);
       c.fps = p.fps;
       ctx.note(`rescaled ${n} clip(s) from ${from.num}/${from.den} to ${to.num}/${to.den} fps (rounded to whole frames).`);

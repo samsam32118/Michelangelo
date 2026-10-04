@@ -8,6 +8,7 @@ import { MglError, fail, suggest } from '../errors.js';
 import type { ProjectFile, TableName, Clip, Comp, Track, Cue } from '../schema/index.js';
 import { TABLES } from '../schema/index.js';
 import { parseRate, parseTimeDetailed, type Rate, type TimeInput } from '../time.js';
+import { expectedText, foundText, lookupPath } from '../issues.js';
 
 export const TimeArg = z.union([z.number().int(), z.string()]);
 
@@ -23,6 +24,8 @@ export interface CommandServices {
   readText?(path: string): Promise<string>;
   /** templates, effects, transitions, generators, styles known to the plugin registry */
   catalog?: Catalog;
+  /** problems loading the project's plugins (path "project.plugins.<name>"), so commands can explain a missing effect/transition */
+  pluginProblems?: { code: string; message: string; fix: string; path?: string; severity?: 'error' | 'warning' }[];
   /** text measurement (for layout-aware commands) */
   measureText?(text: string, style: Record<string, unknown>): { width: number; height: number };
 }
@@ -286,7 +289,12 @@ export async function runCommand(project: ProjectFile, cmd: Command, services: C
       fail('E_ARG', `${def.op}: "${k}" is not a field of this command.`, dym.length ? `did you mean "${dym[0]}"? fields: ${allowed.join(', ')}` : `fields: ${allowed.join(', ')} (mgl docs ${def.op})`, { didYouMean: dym });
     }
     const field = issue.path.join('.');
-    if ((issue.code === 'invalid_type' || issue.code === 'invalid_union') && issue.input === undefined) fail('E_ARG', `${def.op}: "${field}" is required.`, `example: ${exampleLine(def)}`);
+    if (issue.code === 'invalid_type' || issue.code === 'invalid_union') {
+      const at = lookupPath(payload, issue.path);
+      if (!at.present) fail('E_ARG', `${def.op}: "${field}" is required.`, `example: ${exampleLine(def)}`);
+      const want = isTimeField(def, issue.path) ? 'frames (an integer) or a time like "2s"' : expectedText(issue);
+      if (want) fail('E_ARG', `${def.op}: "${field}" must be ${want}, found ${foundText(at.value)}.`, `example: ${exampleLine(def)}`);
+    }
     fail('E_ARG', `${def.op}: ${field ? `"${field}" ` : ''}${issue.message}.`, `example: ${exampleLine(def)}`);
   }
   const draft = clone(project);
@@ -294,6 +302,14 @@ export async function runCommand(project: ProjectFile, cmd: Command, services: C
   await def.apply(ctx, parsed.data as never);
   const patch = diffProjects(project, ctx.project);
   return { project: ctx.project, patch, notes, summaries, out: ctx.out };
+}
+
+/** Whether a top-level command field is a TimeArg (optional or not). */
+function isTimeField(def: CommandDef, path: PropertyKey[]): boolean {
+  if (path.length !== 1) return false;
+  let f = (def.schema.shape as Record<string, z.ZodType>)[String(path[0])];
+  while (f && f instanceof z.ZodOptional) f = f.unwrap() as z.ZodType;
+  return f === TimeArg;
 }
 
 export function exampleLine(def: CommandDef): string {

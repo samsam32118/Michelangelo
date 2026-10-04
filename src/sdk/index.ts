@@ -81,6 +81,25 @@ export type MglProject = Project & {
   check(): Promise<CheckReport>;
 };
 
+/** Error codes for a name a plugin might have defined (effect type, op, template, ...). */
+const PLUGIN_NAME_CODES = new Set(['E_UNKNOWN_EFFECT', 'E_UNKNOWN_TRANSITION', 'E_UNKNOWN_TEMPLATE', 'E_UNKNOWN_ANIMATION', 'E_UNKNOWN_OP', 'E_UNKNOWN_GENERATOR', 'E_UNKNOWN_STYLE', 'E_UNKNOWN_CHECK']);
+
+/**
+ * When an unknown effect / transition / op / ... error happens while some of the project's plugins failed to
+ * load, say so: the name probably comes from that plugin, and the plugin's load error is the real fix.
+ * Returns the error itself (changed in place) so callers can `throw withPluginProblems(e, problems)`.
+ */
+export function withPluginProblems<E>(e: E, problems: readonly Problem[]): E {
+  if (!(e instanceof MglError) || !PLUGIN_NAME_CODES.has(e.code)) return e;
+  const failed = problems.filter((x) => x.severity === 'error' && x.code.startsWith('E_PLUGIN'));
+  if (!failed.length || e.message.includes('did not load')) return e;
+  const f = failed[0]!;
+  e.message = `${e.message} Plugin ${failed.length > 1 ? `problems (${failed.length})` : 'problem'}: ${f.message}${/[.!?]$/.test(f.message) ? '' : '.'} (it may define this name, but it did not load)`;
+  e.fix = `${f.fix} (then retry; or: ${e.fix})`;
+  e.problems = [...(e.problems ?? []), ...failed.slice(1).map(({ code, message, fix }) => ({ code, message, fix }))];
+  return e;
+}
+
 async function attach(p: Project): Promise<MglProject> {
   const { loadRegistry } = await import('../plugin/loader.js');
   const reg = await loadRegistry(p.data, p.dir);
@@ -88,6 +107,10 @@ async function attach(p: Project): Promise<MglProject> {
   const self = p as MglProject;
   self.registry = reg;
   self.pluginProblems = reg.problems;
+  const edit = p.edit.bind(p);
+  self.edit = async (cmds, opts) => {
+    try { return await edit(cmds, opts); } catch (e) { throw withPluginProblems(e, reg.problems); }
+  };
   self.dryRun = (cmds) => p.edit(cmds, { dryRun: true });
   self.look = (opts = {}) => lookProject(self, opts);
   self.render = (out, opts = {}) => renderProject(self, out, opts);

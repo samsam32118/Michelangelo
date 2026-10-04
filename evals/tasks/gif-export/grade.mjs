@@ -1,6 +1,6 @@
 import { join } from 'node:path';
 import { readFileSync, statSync, existsSync } from 'node:fs';
-import { grader, probe, ssim, round, assertNotEmpty } from '../../lib/index.mjs';
+import { grader, probe, ssim, round, assertNotEmpty, frameAt, renderStill, projectContentShare, findProjectUsing } from '../../lib/index.mjs';
 
 /** Walk the GIF blocks: frame count, total delay (s) and the NETSCAPE2.0 loop count (0 = forever, undefined = plays once). */
 export function gifInfo(buf) {
@@ -42,6 +42,25 @@ export async function grade(dir) {
     if (!p) return { pass: false, detail: 'missing' };
     const s = await ssim(f, join(dir, 'media/bg.mp4'), { ta: 0, tb: 3, width: 480, height: 270 });
     return { pass: s > 0.6, detail: `SSIM ${round(s, 3)} against the source at 3 s` };
+  });
+  // the GIF is the project's (with its moving "Demo" label), not just the background cut with ffmpeg
+  await g.checkAsync('the GIF shows the project (its moving label) at 3 s and 5 s, like a render of demo.mgl.json', async () => {
+    if (!p) return { pass: false, detail: 'missing' };
+    const proj = findProjectUsing(dir, { inputs: ['media/bg.mp4'], files: ['demo.mgl.json'], pred: (pp) => (pp.clips ?? []).some((c) => c.text === 'Demo') || 'the "Demo" label is gone' });
+    if (!proj.p) return { pass: false, detail: proj.why };
+    const S = { width: 480, height: 270 };
+    const parts = [];
+    let ok = true;
+    for (const t of [3, 5]) {
+      const r = await renderStill(dir, 'demo.mgl.json', t);
+      if (r.error) return { pass: false, detail: r.error };
+      const [o, rr, src] = await Promise.all([frameAt(f, t - 3, S), frameAt(r.file, 0, S), frameAt(join(dir, 'media/bg.mp4'), t, S)]);
+      if (!o || !rr || !src) return { pass: false, detail: 'no frame' };
+      const c = projectContentShare(o, rr, src);
+      if (!(c.pixels >= 50 && c.share >= 0.6)) ok = false;
+      parts.push(`${t} s: ${Math.round(c.share * 100)} % of ${c.pixels} label px follow the project`);
+    }
+    return { pass: ok, detail: parts.join('; ') };
   });
   return g.result();
 }

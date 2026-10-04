@@ -1,0 +1,20 @@
+{"michelangelo": 1,
+"project": {"platform": "youtube"},
+"assets": [
+{"id": "master-mov", "src": "master.mov"},
+{"id": "film24", "src": "film24.mp4"}
+],
+"comps": [
+{"id": "main", "size": [1920, 1080], "fps": 30}
+],
+"tracks": [
+{"id": "V1", "comp": "main"},
+{"id": "T1", "comp": "main"},
+{"id": "A1", "comp": "main", "audio": true, "bus": "dialogue"},
+{"id": "A2", "comp": "main", "audio": true, "bus": "music"}
+],
+"clips": [
+{"id": "master", "track": "V1", "at": 0, "len": 90, "asset": "master-mov", "fit": "cover"},
+{"id": "film", "track": "V1", "at": 90, "len": 90, "asset": "film24", "in": 8, "fit": "cover", "transition": {"in": {"type": "crossfade", "len": 15}}}
+]
+}

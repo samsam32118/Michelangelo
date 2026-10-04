@@ -127,6 +127,11 @@ const textOutsideSafe = defineCheck({
   },
 });
 
+const hasBox = (clip: unknown): boolean => {
+  const st = (clip as { style?: unknown } | undefined)?.style;
+  return !!st && typeof st === 'object' && 'box' in st && (st as { box?: unknown }).box !== undefined;
+};
+
 const tinyText = defineCheck({
   id: 'tiny-text', stage: 'project', describe: 'text smaller than 2.5% of the frame height at rest',
   run(ctx) {
@@ -143,7 +148,8 @@ const tinyText = defineCheck({
       const sc = clips.get(id)?.scale, s = typeof sc === 'number' ? sc : Array.isArray(sc) && typeof sc[0] === 'number' ? Math.min(sc[0], sc[1] as number) : 1;
       out.push({ rule: 'tiny-text', severity: 'warning', frame: f, clip: id, box: round(l.box),
         message: `${l.kind} ${quote(l.text)}(${id}) is ${Math.round(l.fontPx!)}px at ${sec(f, c.fps)}, under 2.5% of the ${c.H}px frame height (${Math.ceil(min)}px)`,
-        fix: `mgl edit <file> clip.set ${id} style.size=${Math.ceil((0.03 * c.H) / (s || 1))}` });
+        // a fixed text box shrinks text to fit, so a bigger size alone changes nothing: drop the box too
+        fix: `mgl edit <file> clip.set ${id} style.size=${Math.ceil((0.03 * c.H) / (s || 1))}${hasBox(clips.get(id)) ? ' style.box=null' : ''}` });
     }
     return out;
   },

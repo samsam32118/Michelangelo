@@ -16,9 +16,9 @@ import { builtinRegistry } from '../builtin/index.js';
 import { PLUGIN_API_VERSION, type PluginDef } from './api.js';
 import type { PluginRegistry } from './registry.js';
 import { satisfies, validRange } from './semver.js';
-import { isTrusted, listTrusted } from './trust.js';
+import { entryProblem, isTrusted, listTrusted } from './trust.js';
 import { checkPluginDef, kindsOf, type PluginKind } from './validate.js';
-import { registerSourceHook } from './resolve.js';
+import { registerLibraryHook } from './resolve.js';
 
 export interface LoadOptions {
   /** trust store file (default: $MGL_TRUST_STORE or ~/.config/michelangelo/trusted.json) */
@@ -34,7 +34,7 @@ export interface LoadedPlugin {
   version: string;
   dir: string;
   entry: string;
-  /** why it was allowed to load: trust store entry, npm dependency of the project, or allowUntrusted */
+  /** why it was allowed to load: trust store entry or allowUntrusted ('npm' is no longer produced: npm plugins need trust too) */
   trust: 'store' | 'npm' | 'allowed';
   kinds: PluginKind[];
 }
@@ -58,8 +58,13 @@ export interface PluginManifest {
 
 const readJson = (file: string): Record<string, unknown> => JSON.parse(readFileSync(file, 'utf8')) as Record<string, unknown>;
 
+/** npm package-name grammar (lowercase, optional @scope/): no "..", slashes or absolute paths. */
+export const PLUGIN_NAME_RE = /^(?:@[a-z0-9-~][a-z0-9-._~]*\/)?[a-z0-9-~][a-z0-9-._~]*$/;
+export const validPluginName = (name: string) => name.length <= 214 && PLUGIN_NAME_RE.test(name);
+
 /** Where a plugin named by a project lives: ./plugins/<name> next to the project, then node_modules upward. */
 export function locatePlugin(name: string, projectDir: string): { dir: string; local: boolean } | undefined {
+  if (!validPluginName(name)) return undefined;
   const local = join(projectDir, 'plugins', name);
   if (existsSync(join(local, 'package.json'))) return { dir: local, local: true };
   for (let d = resolve(projectDir); ; d = dirname(d)) {
@@ -139,7 +144,8 @@ const shown = (dir: string) => {
 
 function importFix(e: NodeJS.ErrnoException & { url?: string }, dir: string): string {
   if (e.code === 'ERR_UNSUPPORTED_NODE_MODULES_TYPE_STRIPPING') return 'Node does not run TypeScript inside node_modules: publish the plugin with compiled JavaScript ("main": "dist/index.js"), or copy it into ./plugins/ next to the project.';
-  if (e.code === 'ERR_MODULE_NOT_FOUND' && /michelangelo/.test(e.message)) return 'install Michelangelo where the plugin can find it: npm install michelangelo (in the project folder).';
+  if (e.code === 'ERR_MODULE_NOT_FOUND' && /'michelangelo[/']/.test(e.message)) return 'import only "michelangelo/plugin" and "michelangelo/testing" (the plugin API) from plugin code; run "mgl plugin test ' + shown(dir) + '" to see the full error.';
+  if (e.code === 'ERR_MODULE_NOT_FOUND') return `a module the plugin imports is missing: install its dependencies (cd ${shown(dir)} && npm install), then run "mgl plugin test ${shown(dir)}".`;
   if (e.code === 'ERR_UNSUPPORTED_TYPESCRIPT_SYNTAX' || /strip-only|type stripping/i.test(e.message)) return 'use erasable TypeScript only (no enums, namespaces or parameter properties), or compile the plugin to JavaScript.';
   return `run "mgl plugin test ${shown(dir)}" to see the full error, fix the plugin, then re-run "mgl plugin trust ${shown(dir)}" if it lives next to the project.`;
 }
@@ -167,6 +173,10 @@ export async function loadRegistry(project: ProjectFile, projectDir: string, opt
 
   for (const [name, range] of Object.entries(wantedPlugins(project, projectDir))) {
     if (registry.plugins.get(name)?.source === 'builtin') continue;
+    if (!validPluginName(name)) {
+      problem('E_PLUGIN_NAME', `project.plugins names "${name}", which is not a valid plugin (npm package) name.`, 'use the package name: lowercase letters, digits, "-", "." or "_", optionally @scope/name (no paths).', name);
+      continue;
+    }
     const at = locatePlugin(name, projectDir);
     if (!at) {
       problem('E_PLUGIN_NOT_FOUND', `plugin "${name}" is not installed: no plugins/${name}/ next to the project and no node_modules/${name}.`,
@@ -184,19 +194,26 @@ export async function loadRegistry(project: ProjectFile, projectDir: string, opt
           `change the range (mgl edit <file> project.set plugins='{"${name}": "^${m.version}"}') or install a matching version.`, name);
         continue;
       }
+      // every plugin needs a trust-store entry matching its files now: next to the project or in node_modules
+      // (a cloned repo can ship node_modules/ and a package.json naming it, so being a dependency is not trust)
       let trust: LoadedPlugin['trust'] | undefined;
       if (isTrusted(at.dir, name, opts)) trust = 'store';
-      else if (!at.local && (deps ??= projectDependencies(projectDir)).has(name)) trust = 'npm';
       else if (opts.allowUntrusted) trust = 'allowed';
       if (!trust) {
+        const dep = !at.local && (deps ??= projectDependencies(projectDir)).has(name);
         problem('E_PLUGIN_UNTRUSTED', `untrusted plugin "${name}" (${shown(at.dir)}): plugins run as code on this machine, so they load only once trusted${isTrustedName(name, opts) ? '; its files changed since it was trusted' : ''}.`,
-          at.local ? `mgl plugin trust ${shown(at.dir)}` : `add it to the project's package.json dependencies (npm install ${name}), or run: mgl plugin trust ${shown(at.dir)}`, name);
+          at.local || dep ? `mgl plugin trust ${shown(at.dir)}` : `add it to the project (npm install ${name}), read it, then run: mgl plugin trust ${shown(at.dir)}`, name);
         continue;
       }
       const entry = pluginEntry(at.dir, m.pkg);
+      const bad0 = entryProblem(at.dir, entry);
+      if (bad0) {
+        problem('E_PLUGIN_ENTRY', `plugin "${name}" was not loaded: ${bad0}.`, `point "main" / "exports" in ${shown(join(at.dir, 'package.json'))} at a file inside the plugin folder (not in node_modules/), then run: mgl plugin trust ${shown(at.dir)}`, name);
+        continue;
+      }
       let mod: Record<string, unknown>;
       try {
-        registerSourceHook();
+        registerLibraryHook();
         mod = (await import(pathToFileURL(entry).href)) as Record<string, unknown>;
       } catch (e) {
         problem('E_PLUGIN_LOAD', `plugin "${name}" failed to load from ${shown(entry)}: ${(e as Error).message.split('\n')[0]}`, importFix(e as NodeJS.ErrnoException, at.dir), name);

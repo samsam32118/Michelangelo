@@ -1,0 +1,30 @@
+{"michelangelo": 1,
+"project": {"name": "Weekend promo", "platform": "shorts"},
+"assets": [
+{"id": "logo-png", "src": "media/logo.png"}
+],
+"styles": [
+{"id": "caps", "base": "caption", "size": 64, "maxWidth": 896, "maxLines": 4}
+],
+"comps": [
+{"id": "main", "size": [1080, 1920], "fps": 30, "length": 450}
+],
+"tracks": [
+{"id": "BG", "comp": "main"},
+{"id": "CAP", "comp": "main"},
+{"id": "LOGO", "comp": "main"}
+],
+"clips": [
+{"id": "bg", "track": "BG", "at": 0, "len": 450, "color": "#203040"},
+{"id": "subs", "track": "CAP", "at": 0, "len": 450, "captions": true, "style": "caps", "x": 515, "y": 1368},
+{"id": "logo", "track": "LOGO", "at": 0, "len": 450, "asset": "logo-png", "fit": "none", "x": 930, "y": 250}
+],
+"cues": [
+{"id": "c1", "clip": "subs", "at": 0, "len": 60, "text": "New season, new deals"},
+{"id": "c2", "clip": "subs", "at": 60, "len": 60, "text": "Everything must go"},
+{"id": "c3", "clip": "subs", "at": 120, "len": 60, "text": "Up to half off"},
+{"id": "c4", "clip": "subs", "at": 180, "len": 60, "text": "This weekend only"},
+{"id": "c5", "clip": "subs", "at": 240, "len": 90, "text": "Visit any of our stores across the country this weekend and bring a friend along for even bigger savings"},
+{"id": "c6", "clip": "subs", "at": 330, "len": 90, "text": "See you there"}
+]
+}

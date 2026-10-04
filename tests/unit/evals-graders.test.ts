@@ -77,9 +77,9 @@ describe('graders fail on untouched sandboxes', () => {
   }, 60_000);
 });
 
-const NEEDS_CLI = new Set(['slip-roll', 'fix-caption-logo-overlap', 'j-and-l-cuts']);
+const NEEDS_CLI = new Set(['slip-roll', 'fix-caption-logo-overlap', 'j-and-l-cuts', 'gif-export']);
 /** Always run; the others run too when a CLI build exists or EVALS_FULL=1. */
-const CORE_REFS = new Set(['captions-from-srt', 'gif-export', 'loudness-normalize', 'duck-music-under-vo', 'fix-broken-file', 'csv-variants-sdk', 'edit-200-clips']);
+const CORE_REFS = new Set(['captions-from-srt', 'loudness-normalize', 'duck-music-under-vo', 'fix-broken-file', 'csv-variants-sdk', 'edit-200-clips']);
 const REFS = TASKS.filter((t) => existsSync(join(EVALS, 'tasks', t, 'reference.mjs')));
 describe('reference solutions (plain ffmpeg / JSON) pass', () => {
   it('there are at least 6 reference solutions that need no Michelangelo', () => {
@@ -152,4 +152,82 @@ describe('black and silent fake outputs fail', () => {
     expect(r.checks[0].pass).toBe(true);
     expect(r.checks[1].pass).toBe(false);
   }, 30_000);
+});
+
+/** Tasks about the library whose graders now require the edit in a project (review findings 44-46, 48). */
+const LIB_TASKS = ['speed-and-freeze', 'beat-cut', 'pip', 'import-hevc', 'import-prores', 'green-screen', 'loudness-normalize', 'duck-music-under-vo'];
+describe('graders check that the library was used', () => {
+  it.each(LIB_TASKS)('%s: the plain-ffmpeg output without the project edit fails the project check', async (t) => {
+    if (!process.env.EVALS_FULL && !cli && !['loudness-normalize', 'duck-music-under-vo'].includes(t)) return;
+    const dir = await setupTask(t, 'nolib');
+    await (await load(join(EVALS, 'tasks', t, 'reference.mjs'))).solve(dir);
+    // undo the reference's project edit: setup's projects back, new projects removed
+    for (const f of readdirSync(dir).filter((f) => f.endsWith('.mgl.json'))) {
+      if (existsSync(join(dirOf(t), f))) writeFileSync(join(dir, f), readFileSync(join(dirOf(t), f)));
+      else rmSync(join(dir, f));
+    }
+    const r = await grade(t, dir);
+    const proj = r.checks.find((c: any) => /project/.test(c.name) && /library|edit|project \(|uses|carries|ducks|keys|plays/.test(c.name));
+    expect(proj, JSON.stringify(r.checks.map((c: any) => c.name))).toBeTruthy();
+    expect(proj.pass, proj.detail).toBe(false);
+    expect(r.pass).toBe(false);
+  }, 120_000);
+
+  it('gif-export: a GIF of the background alone (no project label) fails', async () => {
+    if (!cli) return;
+    const dir = await setupTask('gif-export', 'nolib');
+    mkdirSync(join(dir, 'out'), { recursive: true });
+    ff(['-ss', '3', '-t', '3', '-i', join(dir, 'media/bg.mp4'), '-vf', 'fps=15,scale=480:-1,split[a][b];[a]palettegen[p];[b][p]paletteuse', '-loop', '0', join(dir, 'out/clip.gif')]);
+    const r = await grade('gif-export', dir);
+    expect(r.checks[0].pass).toBe(true);
+    expect(r.checks[2].pass, r.checks[2].detail).toBe(false);
+  }, 90_000);
+
+  it('color-match: mirrored shot A stills with an untouched project fail', async () => {
+    const dir = await setupTask('color-match', 'nolib');
+    mkdirSync(join(dir, 'out'), { recursive: true });
+    ff(['-ss', '1', '-i', join(dir, 'media/a.mp4'), '-frames:v', '1', join(dir, 'out/a.png')]);
+    ff(['-ss', '1', '-i', join(dir, 'media/a.mp4'), '-frames:v', '1', '-vf', 'hflip', join(dir, 'out/b.png')]);
+    const r = await grade('color-match', dir);
+    expect(r.pass).toBe(false);
+    expect(r.checks[1].pass, r.checks[1].detail).toBe(false); // no colour fx on B
+    if (cli) expect(r.checks[2].pass, r.checks[2].detail).toBe(false); // the project render still shows a warm B
+  }, 90_000);
+});
+
+describe('per-word-animation and csv-variants-sdk', () => {
+  it('per-word-animation: animate without "by" (the library default, by word) is accepted', async () => {
+    const dir = await setupTask('per-word-animation', 'byword');
+    writeFileSync(join(dir, 'w.mgl.json'), `{"michelangelo": 1,
+"comps": [{"id": "main", "size": [1080, 1920], "fps": 30, "length": 90}],
+"tracks": [{"id": "T1", "comp": "main"}],
+"clips": [{"id": "t", "track": "T1", "at": 0, "len": 90, "text": "Make every second count", "animate": {"in": "pop", "stagger": 15}}]
+}`);
+    const r = await grade('per-word-animation', dir);
+    expect(r.checks[0].pass, r.checks[0].detail).toBe(true);
+  }, 90_000);
+
+  it('csv-variants-sdk: a script edited after the PNGs still counts; variant projects with wrong prices fail', async () => {
+    const dir = await setupTask('csv-variants-sdk', 'mtime');
+    await (await load(join(EVALS, 'tasks/csv-variants-sdk/reference.mjs'))).solve(dir);
+    const { utimesSync } = await import('node:fs');
+    const later = new Date(Date.now() + 60_000);
+    utimesSync(join(dir, 'variants.mjs'), later, later);
+    let r = await grade('csv-variants-sdk', dir);
+    expect(r.pass, JSON.stringify(r.checks)).toBe(true);
+    // 10 variant projects, one with the wrong price
+    const setup = JSON.parse(readFileSync(join(dir, '.setup.json'), 'utf8'));
+    mkdirSync(join(dir, 'variants'));
+    for (const [id, name, price] of setup.info.products) {
+      writeFileSync(join(dir, 'variants', `${id}.mgl.json`), `{"michelangelo": 1,
+"comps": [{"id": "main", "size": [1080, 1080], "fps": 30, "length": 90}],
+"tracks": [{"id": "T1", "comp": "main"}, {"id": "T2", "comp": "main"}],
+"clips": [{"id": "name", "track": "T1", "at": 0, "len": 90, "text": ${JSON.stringify(name)}}, {"id": "price", "track": "T2", "at": 0, "len": 90, "text": "$${id === 'p03' ? '99.99' : price}"}]
+}`);
+    }
+    r = await grade('csv-variants-sdk', dir);
+    const c = r.checks.find((x: any) => /carry each product/.test(x.name));
+    expect(c?.pass, JSON.stringify(r.checks)).toBe(false);
+    expect(c.detail).toMatch(/p03/);
+  }, 120_000);
 });

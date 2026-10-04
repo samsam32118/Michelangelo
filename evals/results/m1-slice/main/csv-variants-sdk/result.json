@@ -54,5 +54,8 @@
  "dir": "/tmp/mgl-eval-csv-variants-sdk-7s7LNQ",
  "timeoutMin": 20,
  "expectsWeak": false,
- "exitCode": 0
+ "exitCode": 0,
+ "outputs": 33,
+ "dirRemoved": true,
+ "baselineScore": 0
 }

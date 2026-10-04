@@ -45,6 +45,7 @@ exception is `E_INTERNAL` (exit 1). Below: each code with one example message an
 | `E_MISSING` | 1 | … is required. | add "…" to the entity. |
 | `E_NATIVE` | 2 | … could not be started: …. | check the path and permissions of the program (mgl doctor). |
 | `E_NO_AUDIO` | 1 | … has no audio stream. | analyse a file with sound, or render the project audio first. |
+| `E_NO_BEATS` | 1 | found … beat(s) in clip "…" (…–…)…. | lower every= or min=, or lengthen the clip. |
 | `E_NO_CATALOG` | 1 | no template catalog is available here. | run through the SDK or CLI (they load the built-in plugins), or pass services.catalog. |
 | `E_NO_CUES` | 1 | comp "…" has no caption cues to export. | add captions first: mgl edit <project> captions.import file=<srt> (or captions.add). |
 | `E_NO_FILE` | 1 | … does not exist. | give the path of a .json (array of commands) or .jsonl (one command per line) file. |
@@ -60,15 +61,18 @@ exception is `E_INTERNAL` (exit 1). Below: each code with one example message an
 | `E_NOT_CAPTIONS` | 1 | clip "…" is not a captions clip. | use the id of a clip with "captions": true, or omit it to create one. |
 | `E_NOT_KEYFRAMED` | 1 | … has no keyframes. | add one with: mgl edit <file> key.set <id> prop=<prop> at=<frame> value=<v> |
 | `E_NOT_TEXT` | 1 | clip "…" is not a text clip. | edit its cues with cue.set or text.set <cue id>. |
-| `E_OVERLAP` | 1 | the cue would overlap cue "…" (…–…). | use at=…, or shorten "…" with cue.set. |
+| `E_OVERLAP` | 1 | the first cue starts at frame …, before captions clip "…" (frame …), and "…" on … is in the way of moving its start. | make room first: mgl edit <file> clip.trim … end=…, then run this again. |
 | `E_PARAMS` | 1 | effect "…": "enabled" is true or false. | e.g. enabled=false |
 | `E_PATH` | 1 | no effect "…" on this clip. | effects: … |
 | `E_PLUGIN_API` | 1 | plugin "…" needs plugin API …; this Michelangelo provides …. | update Michelangelo (npm install michelangelo@latest), or use an older version of the plugin. |
 | `E_PLUGIN_CONFLICT` | 1 | plugin "…": command "…" is already defined; the first definition is used. | rename the command (ops are "….<verb>"), or remove the other plugin from project.plugins. |
+| `E_PLUGIN_ENTRY` | 1 | plugin "…" was not loaded: …. | point "main" / "exports" in … at a file inside the plugin folder (not in node_modules/), then run: mgl plugin trust … |
 | `E_PLUGIN_INVALID` | 1 | plugin "…": … | run "mgl plugin test …". |
 | `E_PLUGIN_LOAD` | 2 | plugin folder … has no entry module (looked for "exports", "main", src/index.ts, index.js). | set "main": "src/index.ts" in its package.json and export default definePlugin({...}) from that file. |
 | `E_PLUGIN_MANIFEST` | 1 | … cannot be read (…). | make package.json valid JSON with "name", "version", "type": "module" and "michelangelo": {"api": "^1.0.0", "kinds": [...]}. |
+| `E_PLUGIN_NAME` | 1 | project.plugins names "…", which is not a valid plugin (npm package) name. | use the package name: lowercase letters, digits, "-", "." or "_", optionally @scope/name (no paths). |
 | `E_PLUGIN_NOT_FOUND` | 1 | plugin "…" is not installed: no plugins/…/ next to the project and no node_modules/…. | scaffold it with "mgl plugin new effect …", install it with "npm install …", or remove it from project.plugins. |
+| `E_PLUGIN_SYMLINK` | 1 | … is a broken symlink. | remove it or point it at a file inside the plugin folder, then trust the plugin again. |
 | `E_PLUGIN_UNTRUSTED` | 1 | untrusted plugin "…" (…): plugins run as code on this machine, so they load only once trusted…. | mgl plugin trust … |
 | `E_PLUGIN_VERSION` | 1 | project.plugins.… is "…", which is not a semver range. | use a range like "^…". |
 | `E_PRESET` | 1 | "…" is not a preset. | use one of: …. |

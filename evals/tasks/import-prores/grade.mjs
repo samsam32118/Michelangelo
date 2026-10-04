@@ -1,5 +1,5 @@
 import { join } from 'node:path';
-import { grader, probe, frameAt, ssim, round, assertNotEmpty } from '../../lib/index.mjs';
+import { grader, probe, frameAt, ssim, round, assertNotEmpty, findProjectUsing, compRate, mainComp } from '../../lib/index.mjs';
 
 export async function grade(dir) {
   const g = grader();
@@ -31,5 +31,11 @@ export async function grade(dir) {
     }
     return { pass: n > 1000 && between / n > 0.5, detail: `share ${round(between / Math.max(1, n), 3)} of ${n} contrasting pixels lie between both sources` };
   });
+  // made with the library: the edit is in a valid project that uses the task's inputs (not only in an ffmpeg output)
+  const proj = findProjectUsing(dir, { inputs: ['master.mov', 'film24.mp4'], size: [1920, 1080], pred: (pp) => {
+    if (Math.abs(compRate(mainComp(pp)) - 30) > 0.01) return 'main comp is not 30 fps';
+    return (pp.clips ?? []).some((c) => c.transition || (Array.isArray(c.fade) && c.fade.some((x) => x && x !== '0'))) || 'no transition or fade';
+  } });
+  g.check('a 1920x1080 30 fps project uses master.mov and film24.mp4 with a transition', !!proj.p, proj.p ? proj.f : proj.why);
   return g.result();
 }

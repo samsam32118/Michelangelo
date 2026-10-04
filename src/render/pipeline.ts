@@ -18,7 +18,7 @@ import { fileURLToPath } from 'node:url';
 import { fail, MglError } from '../core/errors.js';
 import { parseProjectText } from '../core/load.js';
 import type { Asset, Comp, ProjectFile } from '../core/schema/index.js';
-import { framesToSeconds, parseRate, type Rate } from '../core/time.js';
+import { framesToSeconds, parseRate, parseSpeed, type Rate } from '../core/time.js';
 import { builtinRegistry } from '../builtin/index.js';
 import type { PluginRegistry } from '../plugin/registry.js';
 import { getMediaBackend, planAudio } from '../media/index.js';
@@ -391,7 +391,24 @@ export async function estimate(project: ProjectFile, opts: PipelineOptions & { q
 // ------------------------------------------------------------------------------------------- frames
 
 /** Render [a, b) in order into `sink`, decoding the next frame while the current one is drawn. */
-async function renderRange(prep: Prep, o: { range: [number, number]; width: number; height: number; onFrame?(done: number): void }, write: (f: RGBAFrame) => Promise<void>): Promise<void> {
+/**
+ * Composite a straight-alpha frame over opaque black, in place: outputs without an alpha channel (mp4, gif,
+ * non-alpha mov/webm) would otherwise drop the alpha and show translucent pixels at full strength.
+ * The comp's bg (when set) is already drawn into the frame; black is the default bg.
+ */
+export function flattenAlpha(f: RGBAFrame): RGBAFrame {
+  const d = f.data;
+  for (let i = 3; i < d.length; i += 4) {
+    const a = d[i]!;
+    if (a === 255) continue;
+    if (a === 0) { d[i - 3] = 0; d[i - 2] = 0; d[i - 1] = 0; }
+    else { d[i - 3] = Math.round((d[i - 3]! * a) / 255); d[i - 2] = Math.round((d[i - 2]! * a) / 255); d[i - 1] = Math.round((d[i - 1]! * a) / 255); }
+    d[i] = 255;
+  }
+  return f;
+}
+
+async function renderRange(prep: Prep, o: { range: [number, number]; width: number; height: number; onFrame?(done: number): void; opaque?: boolean }, write: (f: RGBAFrame) => Promise<void>): Promise<void> {
   const session = await openSession(prep, o.width, o.height);
   const frames = new MediaFrames({ backend: prep.backend, baseDir: prep.baseDir, mode: 'sequential' });
   const root = scaling(o.width / prep.W, o.height / prep.H);
@@ -406,6 +423,7 @@ async function renderRange(prep: Prep, o: { range: [number, number]; width: numb
       const next = f + 1 < b ? evaluate(prep.project, prep.comp.id, f + 1, eo) : null;
       if (next) prefetch(next);
       const img = await session.drawFrame(list, frames);
+      if (o.opaque) flattenAlpha(img);
       await pending;
       pending = write(img);
       o.onFrame?.(f - a + 1);
@@ -506,7 +524,7 @@ interface VideoJob { range: [number, number]; quality: Quality; format: EncodeOp
 
 /** Mix the comp's audio for `range` to a WAV; null when nothing in the range makes sound. */
 async function mixAudio(prep: Prep, range: [number, number], wav: string, force = false): Promise<string | null> {
-  const plan = planAudio(prep.project, prep.comp.id, { baseDir: prep.baseDir, range, hasAudio: (id) => prep.info.get(id)?.hasAudio ?? true });
+  const plan = planAudio(prep.project, prep.comp.id, { baseDir: prep.baseDir, range, hasAudio: (id) => prep.info.get(id)?.hasAudio ?? true, duration: (id) => prep.info.get(id)?.duration });
   if (!plan.segments.length && !force) return null;
   await prep.backend.renderAudio(plan, wav, { baseDir: prep.baseDir });
   return wav;
@@ -533,7 +551,7 @@ async function renderVideo(prep: Prep, out: string, j: VideoJob): Promise<void> 
     const sink = await prep.backend.encode(enc);
     const progress = progressReporter(j.range[1] - j.range[0], j.onProgress);
     try {
-      await renderRange(prep, { range: j.range, width: j.width, height: j.height, onFrame: progress }, (f) => sink.write(f));
+      await renderRange(prep, { range: j.range, width: j.width, height: j.height, onFrame: progress, opaque: !j.alpha }, (f) => sink.write(f));
       await sink.finish();
     } catch (e) { await sink.abort().catch(() => {}); throw e; }
     const wav = await audio;
@@ -645,7 +663,7 @@ export async function renderSegment(project: ProjectFile, job: WorkerJob, onFram
   if (job.alpha) enc.alpha = true;
   const sink = await prep.backend.encode(enc);
   try {
-    await renderRange(prep, { range: job.range!, width: job.width!, height: job.height!, onFrame }, (f) => sink.write(f));
+    await renderRange(prep, { range: job.range!, width: job.width!, height: job.height!, onFrame, opaque: !job.alpha }, (f) => sink.write(f));
     await sink.finish();
   } catch (e) { await sink.abort().catch(() => {}); throw e; }
 }
@@ -697,20 +715,54 @@ function stamp(sec: number, sep: ',' | '.'): string {
   return `${pad(Math.floor(ms / 3_600_000))}:${pad(Math.floor(ms / 60_000) % 60)}:${pad(Math.floor(ms / 1000) % 60)}${sep}${pad(ms % 1000, 3)}`;
 }
 
-/** Caption cues of the comp at absolute times (cue.at is local to its captions clip), clipped to the clip and range. */
+/**
+ * Caption cues of the comp at absolute times (cue.at is local to its captions clip), clipped to the clip and range.
+ * Captions inside nested comps are included at the times they show in the render (DESIGN §16 #5 time map:
+ * the clip's in, speed and rate ratio, windowed to the comp clip, repeated with loop).
+ */
 export function subtitleCues(project: ProjectFile, compId: string, range?: [number, number]): { start: number; end: number; text: string; speaker?: string }[] {
   const comp = resolveComp(project, compId);
   const rate = parseRate(comp.fps);
-  const tracks = new Set((project.tracks ?? []).filter((t) => t.comp === comp.id && !t.hidden).map((t) => t.id));
-  const clips = new Map((project.clips ?? []).filter((c) => c.captions && tracks.has(c.track) && !c.hidden).map((c) => [c.id, c]));
+  const comps = new Map(project.comps.map((c) => [c.id, c]));
+  const cuesByClip = new Map<string, NonNullable<ProjectFile['cues']>>();
+  for (const q of project.cues ?? []) { const l = cuesByClip.get(q.clip) ?? []; l.push(q); cuesByClip.set(q.clip, l); }
   const [r0, r1] = range ?? [0, Number.POSITIVE_INFINITY];
   const out: { s: number; e: number; text: string; speaker?: string }[] = [];
-  for (const q of project.cues ?? []) {
-    const c = clips.get(q.clip);
-    if (!c) continue;
-    const s = Math.max(c.at + q.at, c.at, r0), e = Math.min(c.at + q.at + q.len, c.at + c.len, r1);
-    if (e > s) out.push({ s: s - (range ? r0 : 0), e: e - (range ? r0 : 0), text: q.text, ...(q.speaker ? { speaker: q.speaker } : {}) });
-  }
+  /** visit a comp whose frame f shows at top frame a + f × m, for f in [w0, w1) */
+  const visit = (id: string, a: number, m: number, w0: number, w1: number, depth: number) => {
+    if (depth > 16) return;
+    const cr = parseRate(comps.get(id)!.fps);
+    const tracks = new Set((project.tracks ?? []).filter((t) => t.comp === id && !t.hidden && !t.audio).map((t) => t.id));
+    for (const c of project.clips ?? []) {
+      if (!tracks.has(c.track) || c.hidden) continue;
+      if (c.captions) {
+        for (const q of cuesByClip.get(c.id) ?? []) {
+          const s = Math.max(c.at + q.at, c.at, w0), e = Math.min(c.at + q.at + q.len, c.at + c.len, w1);
+          if (!(e > s)) continue;
+          const ts = Math.max(a + s * m, r0), te = Math.min(a + e * m, r1);
+          if (te > ts) out.push({ s: ts - (range ? r0 : 0), e: te - (range ? r0 : 0), text: q.text, ...(q.speaker ? { speaker: q.speaker } : {}) });
+        }
+        continue;
+      }
+      if (c.comp === undefined || !comps.has(c.comp)) continue;
+      const child = comps.get(c.comp)!;
+      const sp = parseSpeed(c.speed ?? 1);
+      if (!(sp.num > 0)) continue;
+      const chr = parseRate(child.fps);
+      // parent frame = at + (cf − in) × R
+      const R = (cr.num * chr.den * sp.den) / (cr.den * chr.num * sp.num);
+      const inF = c.in ?? 0;
+      const pv0 = Math.max(c.at, w0), pv1 = Math.min(c.at + c.len, w1);
+      if (!(pv1 > pv0)) continue;
+      const cv0 = inF + (pv0 - c.at) / R, cv1 = inF + (pv1 - c.at) / R;
+      const ca = a + (c.at - inF * R) * m, cm = R * m;
+      const L = compLength(project, child.id);
+      if (L <= 0) continue;
+      if (!c.loop) { visit(child.id, ca, cm, Math.max(cv0, 0), Math.min(cv1, L), depth + 1); continue; }
+      for (let k = Math.floor(cv0 / L); k * L < cv1; k++) visit(child.id, ca + k * L * cm, cm, Math.max(cv0 - k * L, 0), Math.min(cv1 - k * L, L), depth + 1);
+    }
+  };
+  visit(comp.id, 0, 1, 0, Number.POSITIVE_INFINITY, 0);
   out.sort((x, y) => x.s - y.s);
   return out.map((x) => ({ start: framesToSeconds(x.s, rate), end: framesToSeconds(x.e, rate), text: x.text, ...(x.speaker ? { speaker: x.speaker } : {}) }));
 }

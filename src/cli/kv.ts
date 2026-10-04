@@ -2,6 +2,7 @@
 import type { z } from 'zod';
 import { fail } from '../core/errors.js';
 import { getCommand, type Command, type CommandDef } from '../core/commands/registry.js';
+import { shellKv } from './shell.js';
 
 /** Parse one value: JSON when it parses (numbers, booleans, null, arrays, objects), otherwise the string itself. */
 export function parseValue(raw: string): unknown {
@@ -19,11 +20,33 @@ function fieldSchema(def: CommandDef, key: string): z.ZodType | undefined {
   return (def.schema.shape as Record<string, z.ZodType>)[key];
 }
 
+/** Text that starts like a JSON array/object but does not parse, e.g. [c3,c4] after the shell removed the quotes. */
+function brokenJson(raw: string): string | undefined {
+  const t = raw.trim();
+  if (!/^[[{]/.test(t)) return undefined;
+  try { JSON.parse(t); return undefined; } catch (e) { return (e as Error).message; }
+}
+
+/** A shell-safe example of the field as JSON: the received text with bare words quoted, when that parses. */
+function jsonGuess(raw: string): string | undefined {
+  const fixed = raw.trim().replace(/(?<=[[{,:]\s*)([A-Za-z_][\w.-]*)(?=\s*[\]},:])/g, (w) => (['true', 'false', 'null'].includes(w) ? w : JSON.stringify(w)));
+  try { JSON.parse(fixed); return fixed; } catch { return undefined; }
+}
+
 /** Choose between the JSON-parsed and the raw string value using the field's schema (text=123 stays a string). */
 function typed(def: CommandDef | undefined, key: string, raw: string): unknown {
   const v = parseValue(raw);
+  const s0 = def ? fieldSchema(def, key) : undefined;
+  if (typeof v === 'string' && def) {
+    const why = brokenJson(raw);
+    if (why && !(s0 && s0.safeParse(raw).success)) {
+      const guess = jsonGuess(raw);
+      fail('E_ARG', `${def.op}: "${key}" is not valid JSON: ${raw} (${why}).`,
+        `write it as JSON with double-quoted strings and single-quote the whole word for the shell${guess ? `, e.g. ${shellKv(key, guess)}` : `, e.g. ${shellKv(key, '["a", "b"]')}`}.`);
+    }
+  }
   if (!def || typeof v === 'string') return v;
-  const s = fieldSchema(def, key);
+  const s = s0;
   if (!s) return v;
   if (s.safeParse(v).success) return v;
   if (s.safeParse(raw).success) return raw;

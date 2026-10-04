@@ -1,0 +1,23 @@
+{"michelangelo": 1,
+"project": {"name": "Quiet mix"},
+"assets": [
+{"id": "speech-wav", "src": "media/speech.wav"},
+{"id": "tones-wav", "src": "media/tones.wav"}
+],
+"comps": [
+{"id": "main", "size": [1280, 720], "fps": 30, "length": 360}
+],
+"tracks": [
+{"id": "V1", "comp": "main"},
+{"id": "A1", "comp": "main", "audio": true, "bus": "dialogue"},
+{"id": "A2", "comp": "main", "audio": true, "bus": "music"}
+],
+"clips": [
+{"id": "bg", "track": "V1", "at": 0, "len": 360, "color": "#000000"},
+{"id": "speech", "track": "A1", "at": 15, "len": 300, "asset": "speech-wav"},
+{"id": "tones", "track": "A2", "at": 0, "len": 360, "asset": "tones-wav"}
+],
+"buses": [
+{"id": "master", "loudness": {"lufs": -14, "peak": -1}}
+]
+}

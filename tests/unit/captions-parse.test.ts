@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { parseSrt, parseVtt, parseCaptions, toSrt, toVtt, splitScript, estimateWordTimes, parseTimestamp } from '../../src/core/captions.js';
+import { parseSrt, parseVtt, parseCaptions, toSrt, toVtt, splitScript, estimateWordTimes, parseTimestamp, splitCueWords } from '../../src/core/captions.js';
 
 describe('SRT', () => {
   it('parses BOM, CRLF, tags, multi-line cues and both separators', () => {
@@ -74,5 +74,16 @@ describe('script splitting and word estimates', () => {
     const f = estimateWordTimes('one two three four five', 4, true);
     expect(f).toEqual([...f].sort((a, b) => a - b));
     expect(f.every((x) => Number.isInteger(x) && x < 4)).toBe(true);
+  });
+});
+
+describe('splitCueWords', () => {
+  it('splits words by their start offsets', () => {
+    expect(splitCueWords('one two three', [0, 5, 10], 7)).toEqual({ first: { text: 'one two', words: [0, 5] }, second: { text: 'three', words: [3] } });
+    // a cut before the first word still keeps one word in the first part
+    expect(splitCueWords('one two', [0, 5], 0).first.text).toBe('one');
+  });
+  it('does not repeat the last word when the cut is after every word start', () => {
+    expect(splitCueWords('one two three', [0, 5, 10], 20)).toEqual({ first: { text: 'one two three', words: [0, 5, 10] }, second: null });
   });
 });

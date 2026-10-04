@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 /** The CLI: mgl / michelangelo. Nine verbs, ≤ 40 lines of output, --json everywhere, exit codes 0 / 1 / 2. */
 import { MglError, suggest } from '../core/errors.js';
+import { shellSafeFix } from './shell.js';
 import { Out, errorLines, internalError, parseArgs, type ArgSpec, type Args } from './io.js';
 
 type Verb = { spec: ArgSpec; usage: string; run: (a: Args, o: Out) => Promise<void> };
@@ -52,6 +53,9 @@ export async function main(argv: string[]): Promise<number> {
     return o.exit;
   } catch (e) {
     const err = e instanceof MglError ? e : internalError(e);
+    // example lines in fixes are pasted into a shell: quote their values
+    err.fix = await shellSafeFix(err.fix);
+    if (err.problems) err.problems = await Promise.all(err.problems.map(async (p) => ({ ...p, fix: await shellSafeFix(p.fix) })));
     if (json) process.stdout.write(JSON.stringify({ ok: false, ...o.data, error: err.toJSON() }) + '\n');
     else {
       o.end();

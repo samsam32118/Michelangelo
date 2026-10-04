@@ -1,5 +1,5 @@
 // Project files read as RAW JSON (never through Michelangelo): parsing, time conversion, queries, validation.
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync } from 'node:fs';
 
 /** Walk text, copying strings verbatim; `other(i)` handles the rest and returns [emitted, next index]. */
 function scan(text, other) {
@@ -245,3 +245,56 @@ function inline(v) {
   if (v && typeof v === 'object') return `{${Object.entries(v).filter(([, x]) => x !== undefined).map(([k, x]) => `${JSON.stringify(k)}: ${inline(x)}`).join(', ')}}`;
   return JSON.stringify(v);
 }
+
+// ---------------------------------------------------------------------------------------------
+// "The library was used": a valid project in the run dir that references the task's inputs.
+// ---------------------------------------------------------------------------------------------
+/** Asset sources of a project, as paths relative to the run dir (project file at `file`, relative to dir). */
+export function assetPaths(p, file = '') {
+  const base = file.includes('/') ? file.slice(0, file.lastIndexOf('/')) : '';
+  const norm = (s) => { const out = []; for (const seg of s.split('/')) { if (seg === '..') out.pop(); else if (seg && seg !== '.') out.push(seg); } return out.join('/'); };
+  return (p?.assets ?? []).filter((a) => typeof a?.src === 'string').map((a) => (a.src.startsWith('/') ? a.src : norm(base ? `${base}/${a.src}` : a.src)));
+}
+
+/**
+ * Projects under dir (*.mgl.json, any depth, not node_modules/.mgl) that pass the format validation, reference
+ * every input (paths relative to dir; an absolute src inside dir also counts), have the main comp `size` when
+ * given, and satisfy `pred(p, file)` (true; false or a string naming what is missing otherwise). Returns {f, p} of the first, or
+ * {why} naming what the closest one lacked.
+ */
+export function findProjectUsing(dir, { inputs = [], size, pred, files } = {}) {
+  const list = files ?? (() => { try { return walkProjects(dir); } catch { return []; } })();
+  let why = 'no *.mgl.json project';
+  for (const f of list) {
+    const p = readProject(`${dir}/${f}`);
+    if (!p) { why = `${f}: not JSON`; continue; }
+    const errs = validateRaw(p);
+    if (errs.length) { why = `${f}: invalid (${errs[0]})`; continue; }
+    const srcs = assetPaths(p, f).map((s) => (s.startsWith(dir + '/') ? s.slice(dir.length + 1) : s));
+    const missing = inputs.filter((i) => !srcs.includes(i));
+    if (missing.length) { why = `${f}: does not use ${missing.join(', ')}`; continue; }
+    const m = mainComp(p);
+    if (size && (m?.size?.[0] !== size[0] || m?.size?.[1] !== size[1])) { why = `${f}: main comp ${m?.size?.join('x')} (want ${size.join('x')})`; continue; }
+    const ok = pred ? pred(p, f) : true;
+    if (ok !== true) { why = `${f}: ${typeof ok === 'string' ? ok : 'lacks the edit'}`; continue; }
+    return { f, p };
+  }
+  return { why };
+}
+
+function walkProjects(dir) {
+  const res = [];
+  const walk = (rel, depth) => {
+    if (depth > 5) return;
+    for (const e of readdirSync(rel ? `${dir}/${rel}` : dir, { withFileTypes: true })) {
+      const r = rel ? `${rel}/${e.name}` : e.name;
+      if (e.isDirectory()) { if (!['node_modules', '.mgl', '.git', '.claude', '.golden', '.cache'].includes(e.name)) walk(r, depth + 1); }
+      else if (e.isFile() && e.name.endsWith('.mgl.json')) res.push(r);
+    }
+  };
+  walk('', 0);
+  return res.sort();
+}
+
+/** A clip's fx entries of the given types (fx is an ordered array of {type, ...}). */
+export const fxOf = (c, types) => (Array.isArray(c?.fx) ? c.fx.filter((x) => x && types.includes(x.type)) : []);

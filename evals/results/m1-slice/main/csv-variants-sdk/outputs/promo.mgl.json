@@ -1,0 +1,16 @@
+{"michelangelo": 1,
+"project": {"name": "Product promo"},
+"comps": [
+{"id": "main", "size": [1080, 1080], "fps": 30, "length": 90}
+],
+"tracks": [
+{"id": "BG", "comp": "main"},
+{"id": "T1", "comp": "main"},
+{"id": "T2", "comp": "main"}
+],
+"clips": [
+{"id": "bg", "track": "BG", "at": 0, "len": 90, "color": "#333333"},
+{"id": "name", "track": "T1", "at": 0, "len": 90, "text": "Product name", "style": {"base": "title", "size": 110}, "y": 420},
+{"id": "price", "track": "T2", "at": 0, "len": 90, "text": "$0.00", "style": {"base": "subtitle", "size": 90}, "y": 660}
+]
+}

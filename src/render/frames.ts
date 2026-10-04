@@ -22,6 +22,8 @@ export interface MediaFramesOptions {
   mode?: 'sequential' | 'random';
   /** most readers kept open per (file, filters) */
   maxReaders?: number;
+  /** most readers kept open in all (the least recently used one is closed to open another) */
+  maxTotalReaders?: number;
 }
 
 interface ReaderSlot { reader: Promise<VideoReader>; size: Size; pos: number; used: number; queue: Promise<unknown>; recent: Map<number, { size: Size; frame: Promise<RGBAFrame> }> }
@@ -43,18 +45,40 @@ export class MediaFrames implements FrameProvider {
   readonly baseDir: string;
   readonly mode: 'sequential' | 'random';
   private maxReaders: number;
+  private maxTotal: number;
   private readers = new Map<string, ReaderSlot[]>();
   private images = new Map<string, Cached & { full?: boolean }>();
   private grabs = new Map<string, (Cached & { full?: boolean })[]>();
   private tick = 0;
   /** counters (tests, estimates) */
-  stats = { readerOpens: 0, imageDecodes: 0, grabs: 0 };
+  stats = { readerOpens: 0, readerCloses: 0, imageDecodes: 0, grabs: 0 };
 
   constructor(o: MediaFramesOptions) {
     this.backend = o.backend;
     this.baseDir = o.baseDir;
     this.mode = o.mode ?? 'sequential';
     this.maxReaders = o.maxReaders ?? 4;
+    this.maxTotal = Math.max(1, o.maxTotalReaders ?? 16);
+  }
+
+  /** readers open now (tests) */
+  get openReaders(): number { let n = 0; for (const l of this.readers.values()) n += l.length; return n; }
+
+  private closeSlot(slots: ReaderSlot[], slot: ReaderSlot): void {
+    const i = slots.indexOf(slot);
+    if (i >= 0) slots.splice(i, 1);
+    this.stats.readerCloses++;
+    void slot.queue.then(() => slot.reader).then((r) => r.close(), () => {});
+  }
+
+  /** Close the least recently used readers (of any file) until one more fits under the total cap. */
+  private makeRoom(): void {
+    while (this.openReaders >= this.maxTotal) {
+      let lru: { slots: ReaderSlot[]; slot: ReaderSlot } | null = null;
+      for (const slots of this.readers.values()) for (const slot of slots) if (!lru || slot.used < lru.slot.used) lru = { slots, slot };
+      if (!lru) return;
+      this.closeSlot(lru.slots, lru.slot);
+    }
   }
 
   path(src: MediaSource): string { return isAbsolute(src.src) ? src.src : resolve(this.baseDir, src.src); }
@@ -117,9 +141,7 @@ export class MediaFrames implements FrameProvider {
       else slot = slots.sort((a, b) => a.used - b.used)[0]!; // least recently used seeks
     }
     if (!fits(slot.size, want)) {
-      const old = slot;
-      slots.splice(slots.indexOf(old), 1);
-      void old.queue.then(() => old.reader).then((r) => r.close(), () => {});
+      this.closeSlot(slots, slot);
       slot = this.open(src, { w: want.w * GROW, h: want.h * GROW }, slots);
     }
     const s = slot;
@@ -134,6 +156,7 @@ export class MediaFrames implements FrameProvider {
 
   private open(src: MediaSource, size: Size, slots: ReaderSlot[]): ReaderSlot {
     const sz = { w: evenUp(size.w), h: evenUp(size.h) };
+    this.makeRoom();
     this.stats.readerOpens++;
     const reader = this.backend.openVideo(this.path(src), { rate: src.rate, maxSize: sz, ...(src.filters?.length ? { filters: src.filters } : {}) });
     reader.catch(() => {});
@@ -171,6 +194,20 @@ export async function pool<T, R>(items: T[], n: number, fn: (t: T, i: number) =>
 }
 
 /**
+ * The decode size for a media source drawn with its (cropped) region at `w`×`h`: a crop shows only part of the
+ * frame, so the whole frame is decoded larger by the crop factor (never past the source size), keeping the
+ * visible region sharp.
+ */
+export function decodeSize(src: MediaSource, w: number, h: number): Size {
+  const c = src.crop, sz = src.size;
+  if (!c || !sz) return { w, h };
+  const [l, t, r, b] = c;
+  const cw = Math.max(1, sz.w - l - r), ch = Math.max(1, sz.h - t - b);
+  const fx = sz.w / cw, fy = sz.h / ch;
+  return { w: Math.min(Math.max(w, sz.w), w * fx), h: Math.min(Math.max(h, sz.h), h * fy) };
+}
+
+/**
  * The media frames a display list will ask for, with the size the renderer will request
  * (layer box × the scale of layer px → output px), so decodes can start before drawing.
  */
@@ -183,8 +220,10 @@ export function mediaRequests(nodes: DisplayNode[], root: Matrix): { src: MediaS
       if (n.matte) walk([n.matte.node], m);
       if (n.type !== 'layer') continue;
       if (n.source.type === 'media') {
-        const k = Math.min(8, Math.max(0.02, Math.max(Math.hypot(t[0], t[1]), Math.hypot(t[2], t[3]))));
-        out.push({ src: n.source, size: { w: Math.max(1, Math.round(n.box.w * k)), h: Math.max(1, Math.round(n.box.h * k)) } });
+        // layers with effects render at layer px (k = 1), like the renderer
+        const k = n.fx.length ? 1 : Math.min(8, Math.max(0.02, Math.max(Math.hypot(t[0], t[1]), Math.hypot(t[2], t[3]))));
+        const d = decodeSize(n.source, n.box.w * k, n.box.h * k);
+        out.push({ src: n.source, size: { w: Math.max(1, Math.round(d.w)), h: Math.max(1, Math.round(d.h)) } });
       } else if (n.source.type === 'comp' && n.source.list) walk(n.source.list.nodes, t);
     }
   };

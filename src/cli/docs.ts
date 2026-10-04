@@ -4,7 +4,8 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { z } from 'zod';
 import { fail, suggest } from '../core/errors.js';
-import { exampleLine, listCommands, type CommandDef } from '../core/commands/index.js';
+import { listCommands, type CommandDef } from '../core/commands/index.js';
+import { shellExampleLine } from './shell.js';
 import { builtinRegistry } from '../builtin/index.js';
 import type { PluginRegistry } from '../plugin/registry.js';
 import { MAX_LINES, type Args, type Out } from './io.js';
@@ -80,7 +81,7 @@ export function commandDoc(def: CommandDef): string[] {
   const lines = [`${def.op} (${def.group}): ${def.doc}`, 'fields:'];
   for (const f of fields) lines.push(`  ${f.name}${f.required ? '' : '?'}: ${f.type}${def.primary === f.name ? '  (bare word)' : ''}${f.describe ? ` · ${f.describe}` : ''}`);
   if (loose) lines.push('  ...any other property or dotted path (e.g. y=380, style.color=#ffcc00)');
-  lines.push(`example: ${exampleLine(def)}`);
+  lines.push(`example: ${shellExampleLine(def)}`);
   lines.push(`json:    ${JSON.stringify({ op: def.op, ...def.example })}`);
   return lines;
 }
@@ -150,6 +151,8 @@ export async function docs(a: Args, o: Out) {
   }
   const file = join(REFERENCE_DIR, `${topic}.md`);
   if (/^[a-z-]+$/.test(topic) && existsSync(file)) {
+    // a guide asked for by name is printed whole (SKILL.md points agents at them): the 40-line cap is for command output
+    o.unbounded = true;
     o.line(...readFileSync(file, 'utf8').trim().split('\n'));
     o.set({ topic, file });
     return;

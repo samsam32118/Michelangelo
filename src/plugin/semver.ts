@@ -14,7 +14,24 @@ export function compareVersions(a: Version, b: Version): number {
   if (a[3] === b[3]) return 0;
   if (!a[3]) return 1; // a release is above its prereleases
   if (!b[3]) return -1;
-  return a[3] < b[3] ? -1 : 1;
+  return comparePrerelease(a[3], b[3]);
+}
+
+/** semver §11: dot-separated identifiers compared one by one; numeric ones numerically and below alphanumeric ones. */
+function comparePrerelease(a: string, b: string): number {
+  const x = a.split('.'), y = b.split('.');
+  for (let i = 0; i < Math.max(x.length, y.length); i++) {
+    const p = x[i], q = y[i];
+    if (p === undefined) return -1; // fewer identifiers sort first
+    if (q === undefined) return 1;
+    if (p === q) continue;
+    const pn = /^\d+$/.test(p), qn = /^\d+$/.test(q);
+    if (pn && qn) return Number(p) - Number(q) || (p < q ? -1 : 1);
+    if (pn) return -1;
+    if (qn) return 1;
+    return p < q ? -1 : 1;
+  }
+  return 0;
 }
 
 type Op = '>=' | '>' | '<=' | '<' | '=';

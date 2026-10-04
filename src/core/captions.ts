@@ -191,3 +191,19 @@ export function splitScript(text: string, maxWords = 6): string[] {
   }
   return out;
 }
+
+/**
+ * Split a cue's words at `cut` (an offset from the cue start, in the units of `words`): the words that
+ * start before it stay in the first part (always at least one), the rest move to the second part with
+ * their offsets made relative to `cut`. `second` is null when no word starts at or after the cut, so the
+ * caller keeps the whole text in the first part instead of repeating a word.
+ */
+export function splitCueWords(text: string, words: number[], cut: number): { first: { text: string; words: number[] }; second: { text: string; words: number[] } | null } {
+  const all = wordsOf(text);
+  const k = Math.max(1, words.filter((w) => w < cut).length);
+  if (k >= all.length || k >= words.length) return { first: { text: all.join(' '), words: words.slice(0, all.length) }, second: null };
+  return {
+    first: { text: all.slice(0, k).join(' '), words: words.slice(0, k) },
+    second: { text: all.slice(k).join(' '), words: words.slice(k, all.length).map((w) => Math.max(0, w - cut)) },
+  };
+}

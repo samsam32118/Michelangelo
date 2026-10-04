@@ -13,7 +13,7 @@ import type {
   AdjustmentNode, CaptionWord, DisplayList, DisplayNode, FilterSpec, LayerBase, LayerNode, LayerSource, Matrix, MediaSource,
   ResolvedEffect, ResolvedMask, ResolvedTextStyle, TextAnimationState, TextLayout, TextLayouter, TransitionNode, UnitState,
 } from './types.js';
-import { interpolate, ease } from './keyframes.js';
+import { interpolate, ease, isKeyframeList } from './keyframes.js';
 import { bounds, invert, multiply, rotation, scaling, translate } from './matrix.js';
 
 export { interpolate, ease, easingFn, cubicBezier, EASING_FUNCTIONS } from './keyframes.js';
@@ -365,7 +365,10 @@ function mediaBox(cx: Ctx, c: Clip): { w: number; h: number } {
 
 function textStyle(cx: Ctx, c: Clip): ResolvedTextStyle {
   const st = c.style ?? (c.captions && cx.opts.registry.styles.has('caption') ? 'caption' : undefined);
-  return resolveStyle(st, cx.ix.p, cx.opts.registry.styles);
+  // text wraps inside the frame by default: on vertical video a centred line stays clear of the platform UI on
+  // the right (Shorts/TikTok/Reels safe area ≈ 6–83 % of the width); styles and clips can set their own maxWidth
+  const maxWidth = Math.round(cx.W * (cx.H > cx.W ? 0.64 : 0.86));
+  return resolveStyle(st, cx.ix.p, cx.opts.registry.styles, { maxWidth });
 }
 
 function layout(cx: Ctx, text: string, st: ResolvedTextStyle): TextLayout {
@@ -398,7 +401,9 @@ function resolveFx(cx: Ctx, c: Clip, t: number, media: boolean): { fx: ResolvedE
     const { type, id, enabled: _e, ...raw } = e;
     const vals = Object.fromEntries(Object.entries(raw).map(([k, v]) => [k, interpolate(v as never, t)]));
     const params = parseParams(def.params, vals, `clip "${c.id}" effect "${type}"`);
-    if (media && def.source) filters.push(...def.source(params as never));
+    // keyframed params change the decoder's filter every frame: run those at the layer stage when the effect has one
+    const animated = Object.values(raw).some((v) => isKeyframeList(v));
+    if (media && def.source && !(animated && def.draw)) filters.push(...def.source(params as never));
     else if (def.draw) fx.push(id ? { type, params, id } : { type, params });
   }
   return { fx, filters };
@@ -521,6 +526,23 @@ function unitCount(l: TextLayout, by: 'char' | 'word' | 'line' | 'all'): number 
   return l.words.reduce((n, w) => n + [...w.text].length, 0);
 }
 
+/**
+ * The clock frame where a clip's animation ends: its own end, or, when split pieces follow it (the next clip on
+ * the track starts at its end and carries the clock on: clock = this clock + len, as clip.split writes), the end
+ * of the last piece, so the out animation plays once, at the end of the original clip, not at each cut.
+ */
+function animEnd(cx: Ctx, c: Clip): number {
+  let cur = c, end = (c.clock ?? 0) + c.len;
+  const seen = new Set<string>([c.id]);
+  for (;;) {
+    const next = (cx.ix.clipsByTrack.get(cur.track) ?? []).find((x) => x.at === cur.at + cur.len && !x.hidden && !seen.has(x.id));
+    if (!next || (next.clock ?? 0) !== end || next.text !== c.text) return end;
+    seen.add(next.id);
+    cur = next;
+    end = (next.clock ?? 0) + next.len;
+  }
+}
+
 function textAnimation(cx: Ctx, c: Clip, lf: number, l: TextLayout): TextAnimationState | undefined {
   const a = c.animate;
   if (!a || (!a.in && !a.out)) return undefined;
@@ -537,7 +559,7 @@ function textAnimation(cx: Ctx, c: Clip, lf: number, l: TextLayout): TextAnimati
     return d;
   };
   const inDef = a.in ? get(a.in) : undefined, outDef = a.out ? get(a.out) : undefined;
-  const end = (c.clock ?? 0) + c.len;
+  const end = animEnd(cx, c);
   const outStart = end - len - (n - 1) * stagger;
   const units: UnitState[] = [];
   for (let i = 0; i < n; i++) {

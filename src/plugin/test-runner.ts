@@ -10,7 +10,7 @@ import { dirname, isAbsolute, join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { MglError } from '../core/errors.js';
 import { readManifest } from './loader.js';
-import { childEnv, childNodeArgs, fromSource, libraryModules } from './resolve.js';
+import { childEnv, childNodeArgs, fromSource, libraryTypes } from './resolve.js';
 import { PLUGIN_KINDS } from './validate.js';
 
 export interface PluginTestStep { step: 'manifest' | 'definition' | 'typecheck' | 'tests' | 'preview'; ok: boolean; skipped?: boolean; detail: string }
@@ -52,8 +52,9 @@ async function typecheck(dir: string, timeoutMs: number): Promise<PluginTestStep
   if (!tsPkg) return { step: 'typecheck', ok: true, skipped: true, detail: 'skipped type-check: typescript not installed (npm install -D typescript to enable it)' };
   const bin = (JSON.parse(readFileSync(tsPkg, 'utf8')) as { bin?: { tsc?: string } }).bin?.tsc ?? 'bin/tsc';
   const nodeTypes = resolveFrom('@types/node/package.json', dir);
-  const selfResolves = (() => { try { createRequire(join(dir, 'package.json')).resolve('michelangelo/plugin'); return true; } catch { return false; } })();
-  const paths = fromSource || !selfResolves ? Object.fromEntries(Object.entries(libraryModules()).map(([k, u]) => [k, [fileURLToPath(u)]])) : undefined;
+  // the same copy of the library the plugin runs against (the resolve hook): .d.ts in the built package, .ts from source
+  const types = libraryTypes();
+  const paths = Object.keys(types).length ? Object.fromEntries(Object.entries(types).map(([k, f]) => [k, [f]])) : undefined;
   const tmp = mkdtempSync(join(tmpdir(), 'mgl-tsc-'));
   try {
     const cfg = {
@@ -101,7 +102,8 @@ export async function runPluginTests(pluginDir: string, opts: { typecheck?: bool
   let passed = 0, failed = 0, preview: string | undefined;
   const finish = (): PluginTestResult => {
     const ok = steps.every((s) => s.ok) && failed === 0;
-    const output = [...steps.map((s) => `${s.skipped ? '-' : s.ok ? '✓' : '✗'} ${s.step}: ${s.detail}`), ok ? `ok: ${passed} test(s) passed` : `FAILED: ${failed} test(s) failed, ${passed} passed`].join('\n');
+    const bad = steps.filter((s) => !s.ok).map((s) => s.step === 'typecheck' ? `typecheck (${(s.detail.match(/\): error /g) ?? []).length || 1} error(s))` : s.step === 'tests' ? `tests (${failed} failed)` : s.step);
+    const output = [...steps.map((s) => `${s.skipped ? '-' : s.ok ? '✓' : '✗'} ${s.step}: ${s.detail}`), ok ? `ok: ${passed} test(s) passed` : `FAILED: ${bad.join(', ') || `${failed} test(s) failed`}; ${passed} test(s) passed`].join('\n');
     return { ok, output, passed, failed, steps, ...(preview ? { preview } : {}) };
   };
 

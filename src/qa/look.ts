@@ -3,7 +3,7 @@
  * frame and audio checks, writes a zoomed crop per finding, and summarises the mix as text.
  */
 import { mkdirSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
-import { basename, dirname, join, resolve } from 'node:path';
+import { basename, dirname, isAbsolute, join, resolve } from 'node:path';
 import { createCanvas, ImageData, type Canvas } from '@napi-rs/canvas';
 import type { Finding } from '../plugin/api.js';
 import type { PluginRegistry } from '../plugin/registry.js';
@@ -18,7 +18,7 @@ const LABEL_H = 20, PAD = 6, MAX_FRAMES = 24, CROP_MIN = 512;
 
 type StillsFn = (project: ProjectFile, opts: { baseDir: string; comp?: string; frames: number[]; scale?: number; registry?: PluginRegistry }) =>
   Promise<{ frame: number; image: RGBAFrame; layers: { clipId: string; kind: string; box: [number, number, number, number]; text?: string; fontPx?: number }[] }[]>;
-type PlanFn = (project: ProjectFile, compId: string, opts: { baseDir: string }) => AudioPlan;
+type PlanFn = (project: ProjectFile, compId: string, opts: { baseDir: string; duration?: (assetId: string, src: string) => number | undefined }) => AudioPlan;
 
 export interface LookOptions {
   baseDir: string;
@@ -231,9 +231,21 @@ export async function look(project: ProjectFile, opts: LookOptions): Promise<Loo
 
 async function runAudio(project: ProjectFile, compId: string, opts: LookOptions, dir: string, notes: string[]): Promise<AudioAnalysisReport | undefined> {
   const media = opts.deps?.planAudio && opts.deps.backend ? undefined : await import('../media/index.js');
-  const plan = (opts.deps?.planAudio ?? media!.planAudio)(project, compId, { baseDir: opts.baseDir });
-  if (!plan.segments.length) { notes.push('no audio in this comp'); return undefined; }
   const backend = opts.deps?.backend ?? media!.getMediaBackend({ baseDir: opts.baseDir });
+  // looped clips repeat their sound with the source's period, so probe those assets' durations (as render does)
+  const durations = new Map<string, number>();
+  const probeFn = (backend as Partial<Pick<MediaBackend, 'probe'>>).probe;
+  if (probeFn) {
+    const looped = new Set((project.clips ?? []).filter((c) => c.loop && c.asset !== undefined).map((c) => c.asset!));
+    await Promise.all((project.assets ?? []).filter((a) => looped.has(a.id)).map(async (a) => {
+      try {
+        const d = (await probeFn(isAbsolute(a.src) ? a.src : resolve(opts.baseDir, a.src))).duration;
+        if (typeof d === 'number' && d > 0) durations.set(a.id, d);
+      } catch { /* missing media is reported elsewhere */ }
+    }));
+  }
+  const plan = (opts.deps?.planAudio ?? media!.planAudio)(project, compId, { baseDir: opts.baseDir, duration: (id) => durations.get(id) });
+  if (!plan.segments.length) { notes.push('no audio in this comp'); return undefined; }
   const wav = join(dir, 'mix.wav');
   try {
     await backend.renderAudio(plan, wav, { baseDir: opts.baseDir });

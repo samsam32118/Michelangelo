@@ -7,7 +7,8 @@ import { existsSync, readFileSync, readdirSync, statSync, writeFileSync, mkdirSy
 import { dirname, join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { MglError } from '../src/core/errors.js';
-import { exampleLine, listCommands, type CommandDef } from '../src/core/commands/index.js';
+import { listCommands, type CommandDef } from '../src/core/commands/index.js';
+import { shellExampleLine } from '../src/cli/shell.js';
 import { builtinRegistry } from '../src/builtin/index.js';
 import { fieldsOf, type FieldDoc } from '../src/cli/docs.js';
 import type { z } from 'zod';
@@ -33,7 +34,7 @@ export function commandsPage(): string {
       const fields = fieldsOf(c.schema);
       out.push(`### ${c.op}`, '', c.doc, '');
       out.push(`fields: ${fields.map((f) => `${fieldText(f)}${c.primary === f.name ? ' (bare word)' : ''}`).join('; ')}`, '');
-      out.push('```text', exampleLine(c).replace('<file>', 'video.mgl.json'), JSON.stringify({ op: c.op, ...c.example }), '```', '');
+      out.push('```text', shellExampleLine(c, 'video.mgl.json'), JSON.stringify({ op: c.op, ...c.example }), '```', '');
     }
   }
   return out.join('\n');

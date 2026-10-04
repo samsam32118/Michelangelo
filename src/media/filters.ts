@@ -17,7 +17,19 @@ export const ALLOWED_VIDEO_FILTERS = new Set([
 ]);
 
 /** Options that name files; only lut3d `file` (a LUT, by extension) is permitted. */
-const FILE_OPTIONS = new Set(['file', 'filename', 'textfile', 'fontfile', 'psfile', 'commands', 'map_file', 'stats_file']);
+const FILE_OPTIONS = new Set(['file', 'filename', 'textfile', 'fontfile', 'psfile', 'commands', 'map_file', 'stats_file', 'plot', 'stats', 'logfile', 'passlogfile', 'model', 'result']);
+
+/**
+ * Filters whose options are listed one by one: any other option name is refused (so an option that writes or
+ * reads a file, present or added in a later ffmpeg, cannot slip through). Filters not listed here take any
+ * option except FILE_OPTIONS.
+ */
+const FILTER_OPTIONS: Record<string, ReadonlySet<string>> = {
+  curves: new Set(['preset', 'master', 'm', 'red', 'r', 'green', 'g', 'blue', 'b', 'all', 'interp']),
+  lut3d: new Set(['file', 'clut', 'interp']),
+  deshake: new Set(['x', 'y', 'w', 'h', 'rx', 'ry', 'edge', 'blocksize', 'contrast', 'search', 'opencl']),
+  colorspace: new Set(['all', 'space', 'trc', 'primaries', 'range', 'format', 'fast', 'dither', 'wpadapt', 'iall', 'ispace', 'itrc', 'iprimaries', 'irange']),
+};
 const LUT_EXT = new Set(['.cube', '.3dl', '.dat', '.m3d', '.csp']);
 
 /** Escape a value for an option inside a filter description and then for the filtergraph parser. */
@@ -41,6 +53,8 @@ export function filterToString(f: FilterSpec, opts: FilterBuildOptions = {}): st
     if (!/^[A-Za-z0-9_]+$/.test(k)) fail('E_FILTER', `filter ${name}: option name "${k}" is not valid.`, 'option names use letters, digits and "_".');
     let v = typeof v0 === 'boolean' ? (v0 ? '1' : '0') : String(v0);
     if (typeof v0 === 'number' && !Number.isFinite(v0)) fail('E_FILTER', `filter ${name}: option ${k} is ${v0}.`, 'give a finite number.');
+    const only = FILTER_OPTIONS[name];
+    if (only && !only.has(k)) fail('E_FILTER', `filter ${name}: option "${k}" is not allowed in a source-stage effect.`, `use one of: ${[...only].join(', ')}.`);
     if (FILE_OPTIONS.has(k)) {
       const isLut = name === 'lut3d' && k === 'file';
       if (!isLut || !LUT_EXT.has(extname(v).toLowerCase())) fail('E_FILTER', `filter ${name}: option "${k}" reads a file, which source-stage effects may not do.`, 'only lut3d file=<.cube|.3dl|.dat|.m3d|.csp> may name a file (use the lut effect).');

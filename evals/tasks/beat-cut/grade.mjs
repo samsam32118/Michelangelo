@@ -1,5 +1,5 @@
 import { join } from 'node:path';
-import { grader, readSetup, probe, allFrames, meanColor, hex, round, assertNotEmpty } from '../../lib/index.mjs';
+import { grader, readSetup, probe, allFrames, meanColor, hex, round, assertNotEmpty, findProjectUsing, span } from '../../lib/index.mjs';
 
 export async function grade(dir) {
   const g = grader();
@@ -28,5 +28,14 @@ export async function grade(dir) {
   });
   g.check('8 distinct colours appear in order', firsts.every((f) => f >= 0) && firsts.every((f, i) => i === 0 || f > firsts[i - 1]), `first frames ${firsts.join(',')}`);
   void round;
+  // made with the library: the edit is in a valid project that uses the task's inputs (not only in an ffmpeg output)
+  const photos = Array.from({ length: 8 }, (_, i) => `photos/photo${i + 1}.png`);
+  const proj = findProjectUsing(dir, { inputs: [...photos, 'beat.wav'], size: [1080, 1080], pred: (pp, f) => {
+    const srcOf = new Map((pp.assets ?? []).map((a) => [a.id, String(a.src ?? '').replace(/^\.\//, '')]));
+    const starts = photos.map((ph) => (pp.clips ?? []).filter((c) => srcOf.get(c.asset)?.endsWith(ph)).map((c) => span(pp, c).start).sort((a, b) => a - b)[0]);
+    const off = starts.map((s, i) => (s === undefined ? Infinity : Math.abs(s - info.beats[i])));
+    return off.every((d) => d <= 2 / 30 + 1e-6) || `photo clips start at ${starts.map((s) => (s === undefined ? '-' : round(s, 2))).join(',')} s (${f})`;
+  } });
+  g.check('the project (1080x1080, the 8 photos and beat.wav) starts each photo clip on its beat', !!proj.p, proj.p ? proj.f : proj.why);
   return g.result();
 }

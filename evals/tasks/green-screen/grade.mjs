@@ -1,5 +1,5 @@
 import { join } from 'node:path';
-import { grader, readSetup, outputs, probe, frameAt, round, assertNotEmpty } from '../../lib/index.mjs';
+import { grader, readSetup, outputs, probe, frameAt, round, assertNotEmpty, findProjectUsing } from '../../lib/index.mjs';
 
 export async function grade(dir) {
   const g = grader();
@@ -24,5 +24,12 @@ export async function grade(dir) {
   const best = evals.sort((a, b) => a.green - b.green || b.disc - a.disc)[0];
   g.check('still: no pixel with dominant green (g > r+60 and g > b+60)', !!best && best.green === 0, best ? `${best.f}: ${best.green} green pixels (sampled)` : 'no 16:9 PNG still');
   g.check('the disc region is magenta; the former green region matches city.mp4', !!best && best.disc > 0.95 && best.bg < 25, best ? `disc magenta ${round(best.disc, 3)}, background error vs city ${round(best.bg, 1)}` : 'no still');
+  // made with the library: the edit is in a valid project that uses the task's inputs (not only in an ffmpeg output)
+  const proj = findProjectUsing(dir, { inputs: ['presenter.mp4', 'city.mp4'], pred: (pp) => {
+    const srcOf = new Map((pp.assets ?? []).map((a) => [a.id, String(a.src ?? '')]));
+    const pr = (pp.clips ?? []).filter((c) => srcOf.get(c.asset)?.endsWith('presenter.mp4'));
+    return pr.some((c) => Array.isArray(c.fx) && c.fx.some((x) => /key/i.test(String(x?.type ?? '')))) || 'the presenter clip has no keying fx';
+  } });
+  g.check('a project uses presenter.mp4 and city.mp4 and keys the presenter (a chroma-key fx)', !!proj.p, proj.p ? proj.f : proj.why);
   return g.result();
 }

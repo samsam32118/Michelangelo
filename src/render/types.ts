@@ -63,10 +63,10 @@ export interface AdjustmentNode extends LayerBase {
 export type LayerSource =
   | MediaSource
   | { type: 'text'; text: string; style: ResolvedTextStyle; animate?: TextAnimationState }
-  | { type: 'shape'; shape: ShapeSpec; trim?: number }
+  | { type: 'shape'; shape: ShapeSpec; trim?: number; /** start of the drawn outline 0..1 */ trimStart?: number; /** shifts the drawn window along the outline (fraction, wraps) */ trimOffset?: number }
   | { type: 'solid'; color: string }
   | { type: 'comp'; list: DisplayList | null }
-  | { type: 'gen'; gen: GeneratorInstance; params: Record<string, unknown>; frame: number; time: number }
+  | { type: 'gen'; gen: GeneratorInstance; params: Record<string, unknown>; frame: number; time: number; /** audio-reactive generators: the asset followed and its source frame now */ audio?: { assetId: string; frame: number } }
   | { type: 'captions'; text: string; style: ResolvedTextStyle; words: CaptionWord[]; cueId: string };
 
 export interface MediaSource {
@@ -147,10 +147,13 @@ export interface AudioSegment {
   filters?: FilterSpec[];
 }
 
+/** Per-frame sound levels of an asset (see plugin AudioLevels): RMS and spectrum rows, indexed by source frame. */
+export interface AudioLevelsTable { rms: Float32Array; spectrum: Float32Array; bands: number }
+
 /** Rendering pipeline interface: a GPU renderer can be added as a plugin implementing this. */
 export interface Renderer {
   id: string;
-  open(opts: { width: number; height: number; fontsDir?: string; registry?: RendererRegistry; fontAssets?: { id: string; path: string }[] }): Promise<RenderSession>;
+  open(opts: { width: number; height: number; fontsDir?: string; registry?: RendererRegistry; fontAssets?: { id: string; path: string }[]; /** per-frame sound levels of an asset at a comp rate (audio-reactive generators) */ audioLevels?: (assetId: string, rate: Rate) => AudioLevelsTable | undefined }): Promise<RenderSession>;
 }
 
 /** The part of the plugin registry a renderer draws with (effects, transitions, generators). */

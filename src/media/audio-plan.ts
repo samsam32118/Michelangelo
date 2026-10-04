@@ -4,11 +4,12 @@
  * video assets carry sound). Sample maths per DESIGN §16 #7: sample(f) = floor(f × 48000 × den / num).
  */
 import { resolve } from 'node:path';
-import { fail } from '../core/errors.js';
+import { fail, suggest } from '../core/errors.js';
 import type { Clip, Comp, Easing, ProjectFile, Track } from '../core/schema/index.js';
-import { easingFn } from '../render/keyframes.js';
+import { easingFn, interpolate } from '../render/keyframes.js';
 import { parseRate, parseSpeed, type Rate } from '../core/time.js';
-import type { AudioPlan, AudioSegment } from '../render/types.js';
+import type { AudioPlan, AudioSegment, FilterSpec } from '../render/types.js';
+import type { PluginRegistry } from '../plugin/registry.js';
 
 export const SAMPLE_RATE = 48000;
 const AUDIO_EXT = /\.(wav|mp3|m4a|aac|opus|ogg|oga|flac|aiff?|caf|wma)$/i;
@@ -52,6 +53,45 @@ export interface PlanAudioOptions {
   hasAudio?: (assetId: string, src: string) => boolean;
   /** an asset's duration in seconds, when known: looped clips (`loop: true`) repeat their audio with this period */
   duration?: (assetId: string, src: string) => number | undefined;
+  /** the plugin registry: clip and bus `fx` entries whose effect has an audio stage become segment / bus filters */
+  registry?: Pick<PluginRegistry, 'effects'>;
+}
+
+type FxEntry = { type: string; id?: string; enabled?: boolean; [k: string]: unknown };
+
+/**
+ * Audio-stage filters of an fx list (clip or bus). Effects with an audio stage contribute their filters (params at
+ * the first frame; keyframed audio params are not animated). On a sound-only owner (an audio clip or a bus), an
+ * effect without an audio stage would do nothing, so it is an error (E_FX_STAGE) with a fix.
+ */
+export function audioFxFilters(fx: readonly FxEntry[] | undefined, registry: Pick<PluginRegistry, 'effects'>, owner: { what: string; soundOnly: boolean; removeFix: string }): FilterSpec[] {
+  const out: FilterSpec[] = [];
+  (fx ?? []).forEach((e, i) => {
+    if (e.enabled === false) return;
+    const def = registry.effects.get(e.type);
+    if (!def) {
+      const dym = suggest(e.type, registry.effects.keys());
+      fail('E_UNKNOWN_EFFECT', `${owner.what}: effect "${e.type}" does not exist.`, dym.length ? `did you mean "${dym[0]}"?` : `use one of ${[...registry.effects.keys()].join(', ') || '(none registered)'}.`);
+    }
+    if (!def.audio) {
+      if (owner.soundOnly) {
+        const audioFx = [...registry.effects.values()].filter((d) => d.audio).map((d) => d.type);
+        fail('E_FX_STAGE', `${owner.what}: effect "${e.type}" has no audio stage (it works on pictures only), so it would do nothing to this sound.`,
+          `${owner.removeFix.replace('<i>', String(i))}${audioFx.length ? `; for sound use an audio effect: ${audioFx.slice(0, 8).join(', ')}` : ''}.`);
+      }
+      return;
+    }
+    const { type: _t, id: _id, enabled: _en, ...raw } = e;
+    const vals = Object.fromEntries(Object.entries(raw).map(([k, v]) => [k, interpolate(v as never, 0)]));
+    const r = def.params.safeParse(vals);
+    if (!r.success) {
+      const iss = r.error.issues[0]!;
+      const key = iss.path.map(String).join('.');
+      fail('E_PARAMS', `${owner.what} effect "${e.type}": ${key ? `"${key}" ` : ''}${iss.message}.`, `fix the parameter${key ? ` "${key}"` : ''} (see "mgl docs effects").`);
+    }
+    out.push(...def.audio(r.data as never));
+  });
+  return out;
 }
 
 /** Map from a comp's frames to top-comp frames: top = a + f × m, visible for f in [w0, w1). */
@@ -213,8 +253,22 @@ export function planAudio(project: ProjectFile, compId: string, opts: PlanAudioO
     return q(Math.max(1, Math.floor((d * rate.num) / rate.den)));
   };
 
+  const fxCache = new Map<string, FilterSpec[]>();
+  const clipFilters = (c: Clip, track: Track, src: string): FilterSpec[] => {
+    if (!opts.registry || !c.fx?.length) return [];
+    let f = fxCache.get(c.id);
+    if (!f) {
+      const asset = assets.get(c.asset!);
+      const soundOnly = !!track.audio || (asset?.kind ? asset.kind === 'audio' : AUDIO_EXT.test(src));
+      f = audioFxFilters(c.fx as FxEntry[], opts.registry, { what: `clip "${c.id}"`, soundOnly, removeFix: `remove it: mgl edit <file> fx.remove ${c.id} fx=<i>` });
+      fxCache.set(c.id, f);
+    }
+    return f;
+  };
+
   const leaf = (ctx: Ctx, c: Clip, track: Track, src: string, rate: Rate) => {
     const bus = track.bus ?? 'master';
+    const filters = clipFilters(c, track, src);
     /** output sample of a clip-local frame */
     const S = (local: Q) => sampleOf(add(ctx.a, mul(add(q(c.at), local), ctx.m)), topRate) - base;
     const [fin, fout] = c.fade ?? [0, 0];
@@ -244,6 +298,7 @@ export function planAudio(project: ProjectFile, compId: string, opts: PlanAudioO
         gain: gk.length === 1 ? [[0, gk[0]![1]]] : clipGain(gk, start, end),
         fadeIn: fin > 0 ? Math.max(0, Math.min(end, fadeInEnd) - start) : 0,
         fadeOut: fout > 0 ? Math.max(0, end - Math.max(fadeOutStart, start)) : 0,
+        ...(filters.length ? { filters } : {}),
       });
     }
   };
@@ -296,6 +351,11 @@ export function planAudio(project: ProjectFile, compId: string, opts: PlanAudioO
     const e: AudioPlan['buses'][number] = { id, gainDb: b?.gain ?? 0, muted: !!b?.muted, to: id === 'master' ? '' : b?.to ?? 'master' };
     if (b?.duck) e.duck = { by: b.duck.by, db: b.duck.db, attack: b.duck.attack ?? 20, release: b.duck.release ?? 300 };
     if (b?.loudness) e.loudness = { lufs: b.loudness.lufs, peak: b.loudness.peak ?? -1 };
+    const bfx = (b as { fx?: FxEntry[] } | undefined)?.fx;
+    if (bfx?.length && opts.registry) {
+      const f = audioFxFilters(bfx, opts.registry, { what: `bus "${id}"`, soundOnly: true, removeFix: `remove entry <i> from the "fx" list of bus "${id}" in the project file` });
+      if (f.length) e.filters = f;
+    }
     return e;
   });
   return { sampleRate: SAMPLE_RATE, length: sampleOf(r1, topRate) - base, segments, buses };

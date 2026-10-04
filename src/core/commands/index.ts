@@ -11,3 +11,4 @@ import './mask.js';
 import './audio.js';
 import './reframe.js';
 import './sequence.js';
+import './layout.js';

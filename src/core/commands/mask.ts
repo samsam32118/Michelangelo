@@ -2,12 +2,14 @@
 import { z } from 'zod';
 import { fail } from '../errors.js';
 import { defineCommand } from './registry.js';
-import { Id, canonicalSchemas, type Clip, type Mask } from '../schema/index.js';
+import { Id, canonicalSchemas, inputSchemas, type Clip, type Mask } from '../schema/index.js';
+import { isKeyframes } from '../load.js';
 
 const M = canonicalSchemas.Mask.shape;
 const nullable = <T extends z.ZodType>(t: T) => t.nullable().optional();
 const MaskFields = {
-  box: nullable(M.box.unwrap()), d: nullable(M.d.unwrap()), space: nullable(M.space.unwrap()), feather: nullable(M.feather.unwrap()),
+  // a constant [x, y, w, h] or keyframes [[frame or time, [x, y, w, h], easing?], ...] (clip-local)
+  box: nullable(inputSchemas.Mask.shape.box.unwrap()), d: nullable(M.d.unwrap()), space: nullable(M.space.unwrap()), feather: nullable(M.feather.unwrap()),
   radius: nullable(M.radius.unwrap()), invert: nullable(M.invert.unwrap()), mode: nullable(M.mode.unwrap()), opacity: nullable(M.opacity.unwrap()),
 };
 
@@ -20,7 +22,14 @@ function maskIndex(c: Clip, i: number): number {
 function checkMask(m: Mask, c: Clip) {
   if (m.shape === 'path' && !m.d) fail('E_MASK', `a path mask on "${c.id}" needs d (SVG path data).`, 'e.g. d="M0 0 L500 0 L250 400 Z"');
   if (m.shape !== 'path' && !m.box) fail('E_MASK', `a ${m.shape} mask on "${c.id}" needs box=[x, y, w, h].`, 'e.g. box=[100,200,600,400] (comp px), or space=clip box=[0,0,1,0.5] (fractions of the clip).');
-  if (m.box && (m.box[2] <= 0 || m.box[3] <= 0)) fail('E_MASK', `mask box ${JSON.stringify(m.box)} has no area.`, 'give a positive width and height: [x, y, w, h].');
+  const boxes: unknown[] = m.box === undefined ? [] : isKeyframes(m.box) ? (m.box as unknown[][]).map((k) => k[1]) : [m.box];
+  for (const b of boxes as [number, number, number, number][]) {
+    if (b[2] <= 0 || b[3] <= 0) fail('E_MASK', `mask box ${JSON.stringify(b)} has no area.`, 'give a positive width and height: [x, y, w, h] (for keyframes: every key\'s box).');
+  }
+  if (isKeyframes(m.box)) {
+    const times = (m.box as unknown[][]).map((k) => k[0]);
+    if (times.every((t) => typeof t === 'number') && times.some((t, i) => i > 0 && (t as number) <= (times[i - 1] as number))) fail('E_MASK', `mask box keyframe times must increase, found ${JSON.stringify(times)}.`, 'sort the keys by frame: [[0, [x,y,w,h]], [30, [x,y,w,h], "inOutCubic"]].');
+  }
 }
 
 function assign(m: Record<string, unknown>, fields: Record<string, unknown>) {
@@ -28,7 +37,7 @@ function assign(m: Record<string, unknown>, fields: Record<string, unknown>) {
 }
 
 defineCommand({
-  op: 'mask.add', group: 'masks', doc: 'Add a mask (rect, ellipse or SVG path) that cuts a clip; box is [x, y, w, h] in comp px, or clip fractions with space=clip.',
+  op: 'mask.add', group: 'masks', doc: 'Add a mask (rect, ellipse or SVG path) that cuts a clip; box is [x, y, w, h] in comp px, or clip fractions with space=clip; an animated box is keyframes [[frame, [x, y, w, h], easing?], ...] (clip-local frames).',
   schema: z.strictObject({ id: Id, shape: M.shape, ...MaskFields }),
   primary: 'id', example: { id: 'shot1', shape: 'ellipse', box: [140, 560, 800, 800], feather: 40 },
   apply(ctx, p) {

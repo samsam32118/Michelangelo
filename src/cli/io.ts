@@ -31,7 +31,7 @@ export function parseArgs(argv: string[], spec: ArgSpec = {}): Args {
     let value: string | undefined;
     const eq = name.indexOf('=');
     if (eq >= 0) { value = name.slice(eq + 1); name = name.slice(0, eq); }
-    if (!a.startsWith('--')) name = (alias as Record<string, string>)[name] ?? name;
+    name = (alias as Record<string, string>)[name] ?? name; // short flags (-n) and alternate spellings (--platforms)
     if (bools.has(name)) {
       if (value !== undefined) fail('E_ARG', `--${name} takes no value.`, `write --${name} alone.`);
       flags[name] = true;

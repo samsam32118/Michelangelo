@@ -9,7 +9,7 @@ import { interpolate } from '../../render/keyframes.js';
 export type Key = [number, unknown] | [number, unknown, EasingT];
 type Shape = Record<string, z.ZodType>;
 
-export const KEY_PROPS = ['x', 'y', 'scale', 'rotate', 'opacity', 'gain', 'remap', 'shape.trim'] as const;
+export const KEY_PROPS = ['x', 'y', 'scale', 'rotate', 'opacity', 'gain', 'remap', 'shape.trim', 'shape.trimStart', 'shape.trimOffset'] as const;
 export const KeyValue = z.union([z.number(), z.tuple([z.number(), z.number()]), z.string(), z.boolean()]);
 
 /** The parameter shape of an effect / transition type from the catalog (undefined when unknown). */
@@ -63,10 +63,10 @@ export function checkParam(shape: Shape | undefined, what: string, key: string, 
 }
 
 /** Index of an effect on a clip, by index or by type (the first of that type). */
-export function fxIndex(c: Clip, sel: string | number): number {
+export function fxIndex(c: { id: string; fx?: { type: string }[]; label?: string }, sel: string | number): number {
   const fx = c.fx ?? [];
   const i = typeof sel === 'number' || /^\d+$/.test(sel) ? Number(sel) : fx.findIndex((f) => f.type === sel);
-  if (i < 0 || i >= fx.length) fail('E_NO_FX', `clip "${c.id}" has no effect ${JSON.stringify(sel)}.`, `effects: ${fx.map((f, j) => `${j}:${f.type}`).join(', ') || '(none; add one with fx.add)'}`);
+  if (i < 0 || i >= fx.length) fail('E_NO_FX', `${c.label ?? `clip "${c.id}"`} has no effect ${JSON.stringify(sel)}.`, `effects: ${fx.map((f, j) => `${j}:${f.type}`).join(', ') || '(none; add one with fx.add)'}`);
   return i;
 }
 
@@ -91,12 +91,13 @@ export function propRef(ctx: CommandContext, c: Clip, prop: string): PropRef {
       check: (v) => checkParam(shape, `effect "${fx.type}"`, param, v),
     };
   }
-  if (prop === 'shape.trim') {
-    if (!c.shape) fail('E_PROP', `clip "${c.id}" is not a shape clip; shape.trim needs one.`, 'use a clip with "shape", or animate opacity/scale instead.');
+  if (prop === 'shape.trim' || prop === 'shape.trimStart' || prop === 'shape.trimOffset') {
+    if (!c.shape) fail('E_PROP', `clip "${c.id}" is not a shape clip; ${prop} needs one.`, 'use a clip with "shape", or animate opacity/scale instead.');
     const sh = c.shape as Record<string, unknown>;
+    const f = prop.slice('shape.'.length);
     return {
-      label, get: () => sh.trim, set: (v) => { if (v === undefined) delete sh.trim; else sh.trim = v; }, def: () => 1,
-      check: (v) => { num(label)(v); if ((v as number) < 0 || (v as number) > 1) fail('E_VALUE', `${label} ${String(v)} is outside 0..1.`, 'use a fraction of the outline between 0 and 1.'); },
+      label, get: () => sh[f], set: (v) => { if (v === undefined) delete sh[f]; else sh[f] = v; }, def: () => (f === 'trim' ? 1 : 0),
+      check: (v) => { num(label)(v); if (f !== 'trimOffset' && ((v as number) < 0 || (v as number) > 1)) fail('E_VALUE', `${label} ${String(v)} is outside 0..1.`, 'use a fraction of the outline between 0 and 1.'); },
     };
   }
   if (!(KEY_PROPS as readonly string[]).includes(prop)) {
@@ -195,7 +196,7 @@ defineCommand({
   apply(ctx, p) {
     const c = ctx.clip(p.id);
     const by = ctx.time(p.by, ctx.compOfClip(c), 'by');
-    const props = p.prop ? [p.prop] : [...KEY_PROPS.filter((k) => k !== 'shape.trim' || c.shape), ...(c.fx ?? []).flatMap((fx, i) => Object.keys(fx).filter((k) => isKeyframes(fx[k])).map((k) => `fx.${i}.${k}`))];
+    const props = p.prop ? [p.prop] : [...KEY_PROPS.filter((k) => !k.startsWith('shape.') || c.shape), ...(c.fx ?? []).flatMap((fx, i) => Object.keys(fx).filter((k) => isKeyframes(fx[k])).map((k) => `fx.${i}.${k}`))];
     const shifted: string[] = [];
     for (const prop of props) {
       const ref = propRef(ctx, c, prop);
@@ -204,6 +205,11 @@ defineCommand({
       ref.set((v as Key[]).map((k) => [k[0] + by, ...k.slice(1)] as Key));
       shifted.push(prop);
     }
+    // every property: animated mask boxes move with the rest
+    if (!p.prop) (c.masks ?? []).forEach((m, i) => {
+      const mr = m as Record<string, unknown>;
+      if (isKeyframes(mr.box)) { mr.box = (mr.box as Key[]).map((k) => [k[0] + by, ...k.slice(1)] as Key); shifted.push(`masks.${i}.box`); }
+    });
     if (!shifted.length) fail('E_NOT_KEYFRAMED', `clip "${c.id}" has no keyframes.`, 'add some with key.set first.');
     ctx.summary(`clip "${c.id}": shifted keys of ${shifted.join(', ')} by ${by} frames.`);
   },

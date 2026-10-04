@@ -139,8 +139,13 @@ export class Project {
       const i = text.findIndex((l) => l.startsWith(needle) || l.startsWith(needle2));
       return i >= 0 ? i : undefined;
     };
-    return patch.map((c) => {
-      const kind: ChangedLine['kind'] = c.before === undefined ? 'add' : c.after === undefined ? 'remove' : 'change';
+    // a moved entity is a removal plus an insertion in the patch: report it once, as a change at its new line
+    const key = (c: { table: string; id: string }) => `${c.table}\u0000${c.id}`;
+    const removed = new Set(patch.filter((c) => c.after === undefined).map(key));
+    const added = new Set(patch.filter((c) => c.before === undefined).map(key));
+    const moved = new Set([...removed].filter((k) => added.has(k)));
+    return patch.filter((c) => !(moved.has(key(c)) && c.after === undefined)).map((c) => {
+      const kind: ChangedLine['kind'] = moved.has(key(c)) ? 'change' : c.before === undefined ? 'add' : c.after === undefined ? 'remove' : 'change';
       const i = kind === 'remove' ? undefined : findLine(c.table, c.id);
       const o: ChangedLine = { kind, table: c.table, id: c.id };
       if (i !== undefined) { o.line = i + 1; o.text = text[i]; }

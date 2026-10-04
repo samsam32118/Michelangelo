@@ -129,3 +129,49 @@ export function blurInto(dst: Surface, src: Surface, radius: number, o: DrawOpts
   c.drawImage(blurred.canvas, pad, pad, sw, sh, o.dx ?? 0, o.dy ?? 0, w, h);
   c.restore();
 }
+
+const B1 = 1.70158, B2 = B1 * 1.525, B3 = B1 + 1, EL = (2 * Math.PI) / 3, EL2 = (2 * Math.PI) / 4.5;
+function bounceOut(t: number): number {
+  const k = 7.5625, d = 2.75;
+  if (t < 1 / d) return k * t * t;
+  if (t < 2 / d) { t -= 1.5 / d; return k * t * t + 0.75; }
+  if (t < 2.5 / d) { t -= 2.25 / d; return k * t * t + 0.9375; }
+  t -= 2.625 / d;
+  return k * t * t + 0.984375;
+}
+
+/** Easing curves by the keyframe easing names (linear, outCubic, outBack, inOutQuad, ...), for generator params. */
+export const EASE: Record<string, (t: number) => number> = {
+  linear: (t) => t,
+  hold: () => 0,
+  inSine: (t) => 1 - Math.cos((t * Math.PI) / 2),
+  outSine: (t) => Math.sin((t * Math.PI) / 2),
+  inOutSine: (t) => (1 - Math.cos(Math.PI * t)) / 2,
+  inQuad: (t) => t * t,
+  outQuad: (t) => 1 - (1 - t) ** 2,
+  inOutQuad: (t) => (t < 0.5 ? 2 * t * t : 1 - (2 - 2 * t) ** 2 / 2),
+  inCubic: (t) => t ** 3,
+  outCubic: (t) => 1 - (1 - t) ** 3,
+  inOutCubic: (t) => (t < 0.5 ? 4 * t ** 3 : 1 - (2 - 2 * t) ** 3 / 2),
+  inQuart: (t) => t ** 4,
+  outQuart: (t) => 1 - (1 - t) ** 4,
+  inOutQuart: (t) => (t < 0.5 ? 8 * t ** 4 : 1 - (2 - 2 * t) ** 4 / 2),
+  inExpo: (t) => (t <= 0 ? 0 : 2 ** (10 * t - 10)),
+  outExpo: (t) => (t >= 1 ? 1 : 1 - 2 ** (-10 * t)),
+  inOutExpo: (t) => (t <= 0 ? 0 : t >= 1 ? 1 : t < 0.5 ? 2 ** (20 * t - 10) / 2 : (2 - 2 ** (10 - 20 * t)) / 2),
+  inBack: (t) => B3 * t ** 3 - B1 * t * t,
+  outBack: (t) => 1 + B3 * (t - 1) ** 3 + B1 * (t - 1) ** 2,
+  inOutBack: (t) => (t < 0.5 ? ((2 * t) ** 2 * ((B2 + 1) * 2 * t - B2)) / 2 : ((2 * t - 2) ** 2 * ((B2 + 1) * (2 * t - 2) + B2) + 2) / 2),
+  inElastic: (t) => (t <= 0 ? 0 : t >= 1 ? 1 : -(2 ** (10 * t - 10)) * Math.sin((10 * t - 10.75) * EL)),
+  outElastic: (t) => (t <= 0 ? 0 : t >= 1 ? 1 : 2 ** (-10 * t) * Math.sin((10 * t - 0.75) * EL) + 1),
+  inOutElastic: (t) => (t <= 0 ? 0 : t >= 1 ? 1 : t < 0.5
+    ? -(2 ** (20 * t - 10) * Math.sin((20 * t - 11.125) * EL2)) / 2
+    : (2 ** (-20 * t + 10) * Math.sin((20 * t - 11.125) * EL2)) / 2 + 1),
+  inBounce: (t) => 1 - bounceOut(1 - t),
+  outBounce: bounceOut,
+  inOutBounce: (t) => (t < 0.5 ? (1 - bounceOut(1 - 2 * t)) / 2 : (1 + bounceOut(2 * t - 1)) / 2),
+};
+export const EASE_NAMES = Object.keys(EASE) as [string, ...string[]];
+
+/** dB → linear amplitude */
+export const dbToLin = (db: number) => 10 ** (db / 20);

@@ -1,9 +1,9 @@
-/** Every keyframe list of a clip (animatable props, effect params, shape.trim, generator params), for code that retimes or collapses them. */
+/** Every keyframe list of a clip (animatable props, effect params, shape trims, mask boxes, generator params), for code that retimes or collapses them. */
 import type { Clip } from './schema/index.js';
-import { ANIMATABLE_CLIP_KEYS, isKeyframes } from './load.js';
+import { ANIMATABLE_CLIP_KEYS, SHAPE_ANIMATABLE, isKeyframes } from './load.js';
 
 export interface KeyListRef {
-  /** label like "x", "fx.0.radius", "shape.trim", "gen.speed" */
+  /** label like "x", "fx.0.radius", "shape.trim", "masks.0.box", "gen.speed" */
   label: string;
   keys: [number, unknown, unknown?][];
   /** replace the value (a constant or a new key list) */
@@ -20,7 +20,14 @@ export function keyLists(c: Clip): KeyListRef[] {
   (c.fx ?? []).forEach((fx, i) => {
     for (const [k, v] of Object.entries(fx)) if (k !== 'type' && isKeyframes(v)) out.push({ label: `fx.${i}.${k}`, keys: v as KeyListRef['keys'], set: (n) => { fx[k] = n; } });
   });
-  if (c.shape && isKeyframes(c.shape.trim)) { const sh = c.shape; out.push({ label: 'shape.trim', keys: sh.trim as KeyListRef['keys'], set: (n) => { sh.trim = n as never; } }); }
+  if (c.shape) {
+    const sh = c.shape as Record<string, unknown>;
+    for (const f of SHAPE_ANIMATABLE) if (isKeyframes(sh[f])) out.push({ label: `shape.${f}`, keys: sh[f] as KeyListRef['keys'], set: (n) => { sh[f] = n; } });
+  }
+  (c.masks ?? []).forEach((m, i) => {
+    const mr = m as Record<string, unknown>;
+    if (isKeyframes(mr.box)) out.push({ label: `masks.${i}.box`, keys: mr.box as KeyListRef['keys'], set: (n) => { mr.box = n; } });
+  });
   if (c.gen) {
     const g = c.gen as Record<string, unknown>;
     for (const [k, v] of Object.entries(g)) if (k !== 'type' && isKeyframes(v)) out.push({ label: `gen.${k}`, keys: v as KeyListRef['keys'], set: (n) => { g[k] = n; } });

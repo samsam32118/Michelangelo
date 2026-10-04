@@ -6,7 +6,7 @@ Every change to a project is a command `{"op": ..., fields}`, run with `mgl edit
 (`mgl edit <file> '{"op": ...}'`, `--batch f.jsonl`) or from the SDK (`p.edit({op, ...})`). Times accept frames (75),
 "2.5s", "1:02.5" and "00:01:02:15". `k=v` values are JSON when they parse, else strings. `mgl docs <op>` prints one entry.
 
-67 commands: [asset](#asset) · [audio](#audio) · [captions](#captions) · [clip](#clip) · [comp](#comp) · [effects](#effects) · [project](#project) · [keyframes](#keyframes) · [marker](#marker) · [masks](#masks) · [text](#text) · [templates](#templates) · [track](#track)
+70 commands: [asset](#asset) · [audio](#audio) · [captions](#captions) · [clip](#clip) · [comp](#comp) · [effects](#effects) · [project](#project) · [keyframes](#keyframes) · [layout](#layout) · [marker](#marker) · [masks](#masks) · [text](#text) · [templates](#templates) · [track](#track)
 
 ## asset
 
@@ -227,7 +227,7 @@ mgl edit video.mgl.json cue.split c3 word=3
 
 ### clip.add
 
-Add a clip: media (asset or src), text, shape, solid colour, nested comp, captions, adjustment or generator. Missing track/at/len are chosen for you.
+Add a clip: media (asset or src), text, shape, solid colour, nested comp, captions, adjustment or generator. Missing track/at/len are chosen for you: after=<clip> starts it where that clip ends, on that clip's track; with no track a visual clip goes on the topmost free track above any full-frame opaque clip at that time (never hidden under one).
 
 fields: `id?` string; `track?` string; `at?` time; `len?` time; `asset?` string; `text?` string; `shape?` object; `color?` string; `comp?` string; `captions?` true; `adjustment?` true; `gen?` object; `in?` time; `speed?` number\|string; `gain?` number\|keys; `fade?` [time, time]; `muted?` boolean; `loop?` boolean; `fit?` "contain"\|"cover"\|"fill"\|"none"; `crop?` [number, number, number, number]; `style?` string\|object; `animate?` object; `x?` number\|keys; `y?` number\|keys; `anchor?` [number, number]; `scale?` number\|[number, number]\|keys; `rotate?` number\|keys; `opacity?` number\|keys; `blend?` "normal"\|"multiply"\|"screen"\|"overlay"\|"darken"\|"lighten"\|"add"\|"color-dodge"\|"color-burn"\|"hard-light"\|"soft-light"\|"difference"\|"exclusion"\|"hue"\|"saturation"\|"color"\|"luminosity"; `parent?` string; `matte?` object; `remap?` number\|keys; `link?` string; `fx?` object[]; `masks?` object[]; `transition?` object; `clock?` time; `hidden?` boolean; `locked?` boolean; `tags?` string[]; `note?` string; `src?` string; `after?` string
 
@@ -245,6 +245,17 @@ fields: `id` string (bare word); `track?` string
 ```text
 mgl edit video.mgl.json clip.detach-audio shotA
 {"op":"clip.detach-audio","id":"shotA"}
+```
+
+### clip.duplicate
+
+Copy a clip with everything on it (keyframes, effects, masks, transitions, cues of a captions clip): at= its start (default: right after the original, or the same time when track= is given), track= (default: the same track, else a free one), newId=; linked=true also copies its linked clips (same offset, as a new link group).
+
+fields: `id` string (bare word); `at?` time; `track?` string; `newId?` string; `linked?` boolean
+
+```text
+mgl edit video.mgl.json clip.duplicate title at=8s
+{"op":"clip.duplicate","id":"title","at":"8s"}
 ```
 
 ### clip.freeze
@@ -291,6 +302,17 @@ mgl edit video.mgl.json clip.nest ids='["badge-bg","badge-text"]' id=badge
 {"op":"clip.nest","ids":["badge-bg","badge-text"],"id":"badge"}
 ```
 
+### clip.punch-in
+
+Zoom a clip into a region (box=[x, y, w, h] in comp px as the clip shows now): writes scale/x/y keyframes that ramp in over len= (default 0.5s; 0 = a hard cut) from at= (comp time; local=true for clip-local frames; default the clip start), hold= (default: to the end), then out= ramps back. ease= (default inOutCubic). The zoom shows the whole box centred and is clamped so no edge of the layer shows when it fills the frame (cover-fit media, nested comps).
+
+fields: `id` string (bare word); `box` [number, number, number, number]; `at?` time; `local?` boolean; `len?` time; `hold?` time; `out?` time; `ease?` easing
+
+```text
+mgl edit video.mgl.json clip.punch-in screen box='[1200,600,480,270]' at=3s len=0.6s hold=4s out=0.6s
+{"op":"clip.punch-in","id":"screen","box":[1200,600,480,270],"at":"3s","len":"0.6s","hold":"4s","out":"0.6s"}
+```
+
 ### clip.remove
 
 Remove clips (and their cues); ripple=true closes the gap on their tracks.
@@ -326,9 +348,9 @@ mgl edit video.mgl.json clip.roll a by=12
 
 ### clip.sequence
 
-Place one clip per file (srcs) or asset (assets) back to back on a track from at= (default 0), each len= long (default 2s); on=markers cuts on the markers whose id starts with prefix= (default "beat"), on=beats cuts on the beats of clip=<id>: each item starts on a beat and lasts until the next (the last lasts the median beat interval). Optional fit= and transition={type, len} between items; refuses overlaps.
+Place one clip per file (srcs) or asset (assets) back to back on a track from at= (default 0), each len= long (default 2s; full=true plays each file's whole source length, from the probe); on=markers cuts on the markers whose id starts with prefix= (default "beat"), on=beats cuts on the beats of clip=<id>: each item starts on a beat and lasts until the next (the last lasts the median beat interval). Optional fit= and transition={type, len} between items; refuses overlaps.
 
-fields: `srcs?` string[]; `assets?` string[]; `track?` string; `at?` time; `len?` time; `on?` "markers"\|"beats"; `prefix?` string; `clip?` string; `fit?` "contain"\|"cover"\|"fill"\|"none"; `transition?` object
+fields: `srcs?` string[]; `assets?` string[]; `track?` string; `at?` time; `len?` time; `on?` "markers"\|"beats"; `prefix?` string; `clip?` string; `fit?` "contain"\|"cover"\|"fill"\|"none"; `transition?` object; `full?` boolean
 
 ```text
 mgl edit video.mgl.json clip.sequence srcs='["media/a.mp4","media/b.mp4","media/c.mp4"]' on=markers prefix=beat fit=cover
@@ -451,9 +473,9 @@ mgl edit video.mgl.json comp.set main length=30s
 
 ### fx.add
 
-Add an effect to a clip (at= its position in the stack, default last) with its parameters inline.
+Add an effect to a clip (id=), or an audio effect to a bus mix (bus=), at= its position in the stack (default last), with its parameters inline. Audio-only effects need a clip with sound; picture-only effects need a visual clip.
 
-fields: `id` string (bare word); `type` string; `at?` int
+fields: `id?` string (bare word); `bus?` string; `type` string; `at?` int
 
 ```text
 mgl edit video.mgl.json fx.add shot1 type=blur radius=8
@@ -462,9 +484,9 @@ mgl edit video.mgl.json fx.add shot1 type=blur radius=8
 
 ### fx.move
 
-Move an effect to another position in the clip's effect stack (0 = applied first).
+Move an effect to another position in a clip's (id=) or bus's (bus=) effect stack (0 = applied first).
 
-fields: `id` string (bare word); `fx` index\|type; `to` int
+fields: `id?` string (bare word); `bus?` string; `fx` index\|type; `to` int
 
 ```text
 mgl edit video.mgl.json fx.move shot1 fx=blur to=0
@@ -473,9 +495,9 @@ mgl edit video.mgl.json fx.move shot1 fx=blur to=0
 
 ### fx.remove
 
-Remove an effect from a clip, by index or type.
+Remove an effect from a clip (id=) or a bus (bus=), by index or type.
 
-fields: `id` string (bare word); `fx` index\|type
+fields: `id?` string (bare word); `bus?` string; `fx` index\|type
 
 ```text
 mgl edit video.mgl.json fx.remove shot1 fx=blur
@@ -484,9 +506,9 @@ mgl edit video.mgl.json fx.remove shot1 fx=blur
 
 ### fx.set
 
-Change parameters of a clip's effect, chosen by index or type (fx=0 or fx=blur); null removes a parameter (back to its default).
+Change parameters of a clip's (id=) or bus's (bus=) effect, chosen by index or type (fx=0 or fx=blur); null removes a parameter (back to its default).
 
-fields: `id` string (bare word); `fx` index\|type
+fields: `id?` string (bare word); `bus?` string; `fx` index\|type
 
 ```text
 mgl edit video.mgl.json fx.set shot1 fx=blur radius=12
@@ -508,7 +530,7 @@ mgl edit video.mgl.json transition.set shot2 type=crossfade len=0.5s
 
 ### id.rename
 
-Rename any entity and update every reference to it.
+Rename any entity and update every reference to it (only references to that kind of entity: renaming a clip never touches a bus of the same name).
 
 fields: `id` string (bare word); `to` string
 
@@ -574,6 +596,19 @@ mgl edit video.mgl.json key.shift title by=0.5s
 {"op":"key.shift","id":"title","by":"0.5s"}
 ```
 
+## layout
+
+### layout.grid
+
+Place clips into the cells of a grid (split screens, 2x2 walls), in reading order: cols=/rows= (default: a near-square grid), gap= px between cells, box=[x, y, w, h] the grid area in comp px (default: the whole frame), fit=cover (default; fills each cell and crops the overflow with a clip-space rect mask) or contain (whole picture, letterboxed in the cell). Sets x, y and scale (media sizes come from the probe); re-running replaces the crop mask.
+
+fields: `ids` string[]; `cols?` int; `rows?` int; `gap?` number; `box?` [number, number, number, number]; `fit?` "cover"\|"contain"
+
+```text
+mgl edit video.mgl.json layout.grid ids='["camA","camB"]' cols=1 gap=8
+{"op":"layout.grid","ids":["camA","camB"],"cols":1,"gap":8}
+```
+
 ## marker
 
 ### marker.add
@@ -613,9 +648,9 @@ mgl edit video.mgl.json marker.remove drop
 
 ### mask.add
 
-Add a mask (rect, ellipse or SVG path) that cuts a clip; box is [x, y, w, h] in comp px, or clip fractions with space=clip.
+Add a mask (rect, ellipse or SVG path) that cuts a clip; box is [x, y, w, h] in comp px, or clip fractions with space=clip; an animated box is keyframes [[frame, [x, y, w, h], easing?], ...] (clip-local frames).
 
-fields: `id` string (bare word); `shape` "rect"\|"ellipse"\|"path"; `box?` [number, number, number, number]\|null; `d?` string\|null; `space?` "comp"\|"clip"\|null; `feather?` number\|null; `radius?` number\|null; `invert?` boolean\|null; `mode?` "add"\|"subtract"\|"intersect"\|null; `opacity?` number\|null
+fields: `id` string (bare word); `shape` "rect"\|"ellipse"\|"path"; `box?` [number, number, number, number]\|keys\|null; `d?` string\|null; `space?` "comp"\|"clip"\|null; `feather?` number\|null; `radius?` number\|null; `invert?` boolean\|null; `mode?` "add"\|"subtract"\|"intersect"\|null; `opacity?` number\|null
 
 ```text
 mgl edit video.mgl.json mask.add shot1 shape=ellipse box='[140,560,800,800]' feather=40
@@ -637,7 +672,7 @@ mgl edit video.mgl.json mask.remove shot1 mask=0
 
 Change a clip's mask (by index); null removes a field.
 
-fields: `id` string (bare word); `mask` int; `shape?` "rect"\|"ellipse"\|"path"; `box?` [number, number, number, number]\|null; `d?` string\|null; `space?` "comp"\|"clip"\|null; `feather?` number\|null; `radius?` number\|null; `invert?` boolean\|null; `mode?` "add"\|"subtract"\|"intersect"\|null; `opacity?` number\|null
+fields: `id` string (bare word); `mask` int; `shape?` "rect"\|"ellipse"\|"path"; `box?` [number, number, number, number]\|keys\|null; `d?` string\|null; `space?` "comp"\|"clip"\|null; `feather?` number\|null; `radius?` number\|null; `invert?` boolean\|null; `mode?` "add"\|"subtract"\|"intersect"\|null; `opacity?` number\|null
 
 ```text
 mgl edit video.mgl.json mask.set shot1 mask=0 feather=80 invert=true
@@ -731,11 +766,11 @@ mgl edit video.mgl.json template.apply lower-third at=2s params='{"name":"Ada Lo
 
 Add a track to a comp; visual tracks stack in order (later = on top), audio tracks mix into a bus.
 
-fields: `id?` string; `comp?` string; `audio?` boolean; `bus?` string; `below?` string; `above?` string
+fields: `id?` string (bare word); `comp?` string; `audio?` boolean; `bus?` string; `below?` string; `above?` string
 
 ```text
-mgl edit video.mgl.json track.add id=T1 audio=false
-{"op":"track.add","id":"T1","audio":false}
+mgl edit video.mgl.json track.add V2
+{"op":"track.add","id":"V2"}
 ```
 
 ### track.move

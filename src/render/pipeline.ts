@@ -19,19 +19,24 @@ import { fail, MglError } from '../core/errors.js';
 import { parseProjectText } from '../core/load.js';
 import type { Asset, Comp, ProjectFile } from '../core/schema/index.js';
 import { framesToSeconds, parseRate, parseSpeed, type Rate } from '../core/time.js';
+import { interpolate } from './keyframes.js';
+import { chapterList, formatChaptersVtt, formatChaptersYouTube } from './chapters.js';
 import { builtinRegistry } from '../builtin/index.js';
 import type { PluginRegistry } from '../plugin/registry.js';
 import { getMediaBackend, planAudio } from '../media/index.js';
 import { run } from '../media/proc.js';
-import type { EncodeOptions, MediaBackend, MediaInfo } from '../media/types.js';
-import { compLength, evaluate, layerBoxes, type EvaluateOptions, type LayerBox } from './evaluate.js';
+import type { DeliveryOptions, EncodeOptions, MediaBackend, MediaInfo, RenderAudioOptions } from '../media/types.js';
+import type { AudioLevelsData } from '../media/levels.js';
+import { checkDelivery } from '../media/encode.js';
+import { filtersToString } from '../media/filters.js';
+import { compLength, evaluate, fitBox, layerBoxes, type EvaluateOptions, type LayerBox } from './evaluate.js';
 import { MediaFrames, mediaRequests, pool } from './frames.js';
 import { scaling } from './matrix.js';
 import { skiaRenderer } from './skia/index.js';
-import type { DisplayList, DisplayNode, MediaSource, Renderer, RenderSession, RGBAFrame } from './types.js';
+import type { AudioPlan, DisplayList, DisplayNode, MediaSource, Renderer, RenderSession, RGBAFrame } from './types.js';
 
 export type Quality = 'draft' | 'final' | 'hq';
-export type OutputKind = 'video' | 'still' | 'audio' | 'subtitles' | 'exporter';
+export type OutputKind = 'video' | 'still' | 'audio' | 'subtitles' | 'chapters' | 'exporter';
 
 export interface PipelineOptions {
   /** directory relative asset paths resolve against (the project file's directory) */
@@ -78,6 +83,34 @@ export interface RenderOptions extends PipelineOptions {
   onProgress?(p: { frame: number; total: number; fps: number; etaSec: number }): void;
   /** worker processes: 1 = never split, n > 1 = split into n ranges; default: split when the estimate is over 3× real time */
   segments?: number;
+  /**
+   * audio outputs: render one bus's contribution to master (others muted; ducking kept), or 'all' = one stereo pair per
+   * bus feeding master in a multichannel WAV. With a master loudness target the stems get the full mix's gain (they
+   * are not normalised on their own), so they sum to the mix.
+   */
+  bus?: string;
+  /** video: constant rate factor (mp4 x264 0–51, webm VP9 0–63) */
+  crf?: number;
+  /** video bitrate, e.g. "8M" (mp4/webm) */
+  bitrate?: string;
+  /** audio bitrate for aac/opus/mp3, e.g. "320k" */
+  audioBitrate?: string;
+  /** PCM bit depth for .wav, .flac and mov audio */
+  pcmDepth?: 16 | 24;
+  /** ProRes profile for .mov: proxy, lt, 422, hq (default), 4444 (default with alpha), 4444xq */
+  prores?: DeliveryOptions['prores'];
+  /** start timecode written to .mov/.mp4, "HH:MM:SS:FF" (e.g. "10:00:00:00") */
+  timecode?: string;
+  /** colour range flag of the video: tv (limited, default) or pc (full) */
+  colorRange?: 'tv' | 'pc';
+}
+
+const DELIVERY_KEYS = ['crf', 'bitrate', 'audioBitrate', 'pcmDepth', 'prores', 'timecode', 'colorRange'] as const;
+/** The delivery settings of render options (undefined when none are set). */
+export function deliveryOf(o: Partial<Record<(typeof DELIVERY_KEYS)[number], unknown>>): DeliveryOptions | undefined {
+  const d: Record<string, unknown> = {};
+  for (const k of DELIVERY_KEYS) if (o[k] !== undefined) d[k] = o[k];
+  return Object.keys(d).length ? (d as DeliveryOptions) : undefined;
 }
 
 export interface ProbeReport { duration: number; streams: { type: string; codec: string; width?: number; height?: number; frames?: number; sampleRate?: number }[]; format: string }
@@ -114,12 +147,13 @@ const NON_MEDIA = new Set(['font', 'lut', 'subtitles', 'data']);
 
 export function outputKind(out: string, registry?: PluginRegistry): OutputKind {
   const ext = extname(out).toLowerCase();
+  if (/\.chapters\.(txt|vtt)$/i.test(out)) return 'chapters';
   if (VIDEO_EXT[ext]) return 'video';
   if (ext === '.png') return 'still';
   if (AUDIO_EXT.has(ext)) return 'audio';
   if (ext === '.srt' || ext === '.vtt') return 'subtitles';
   if (registry && [...registry.exporters.values()].some((e) => e.extensions.map((x) => x.toLowerCase().replace(/^\.?/, '.')).includes(ext))) return 'exporter';
-  return fail('E_FORMAT', `cannot render to "${ext || out}".`, 'use .mp4, .webm, .mov, .gif, .png, .wav, .mp3, .m4a, .srt or .vtt (or install a plugin exporter for that extension).');
+  return fail('E_FORMAT', `cannot render to "${ext || out}".`, 'use .mp4, .webm, .mov, .gif, .png, .wav, .mp3, .m4a, .srt, .vtt, .chapters.txt or .chapters.vtt (or install a plugin exporter for that extension).');
 }
 
 /** The comp to render: the given id, else project.main, else "main", else the first comp. */
@@ -152,6 +186,8 @@ interface Prep {
   info: Map<string, MediaInfo>;
   fontAssets: { id: string; path: string }[];
   notes: string[];
+  /** sound levels of the assets audio-reactive generators follow, by `${assetId}@${rate}` */
+  levels: Map<string, AudioLevelsData>;
 }
 
 const assetPath = (a: Asset, baseDir: string) => (isAbsolute(a.src) ? a.src : resolve(baseDir, a.src));
@@ -172,7 +208,42 @@ async function prepare(project: ProjectFile, o: PipelineOptions, probeMedia = tr
     await pool(media.filter((a) => used.has(a.id)), 8, async (a) => { info.set(a.id, await backend.probe(assetPath(a, o.baseDir))); });
   }
   const length = compLength(project, comp.id);
-  return { project, comp, rate: parseRate(comp.fps), W: comp.size[0], H: comp.size[1], length, baseDir: o.baseDir, registry, backend, renderer: o.renderer ?? skiaRenderer, info, fontAssets, notes: [] };
+  const prep: Prep = { project, comp, rate: parseRate(comp.fps), W: comp.size[0], H: comp.size[1], length, baseDir: o.baseDir, registry, backend, renderer: o.renderer ?? skiaRenderer, info, fontAssets, notes: [], levels: new Map() };
+  if (probeMedia) await loadLevels(prep);
+  return prep;
+}
+
+export const levelsKey = (assetId: string, rate: Rate) => `${assetId}@${rate.num}/${rate.den}`;
+
+/**
+ * Audio-reactive generators (GeneratorDef.audioSource → an asset id): measure that asset's per-frame RMS and spectrum
+ * at the rate of the comp the clip is in, once per render (the backend caches it).
+ */
+async function loadLevels(prep: Prep): Promise<void> {
+  const { project, registry } = prep;
+  const trackComp = new Map((project.tracks ?? []).map((t) => [t.id, t.comp]));
+  const comps = new Map(project.comps.map((c) => [c.id, c]));
+  const assets = new Map((project.assets ?? []).map((a) => [a.id, a]));
+  const want = new Map<string, { asset: Asset; rate: Rate; clip: string }>();
+  for (const c of project.clips ?? []) {
+    if (!c.gen || c.hidden) continue;
+    const def = registry.generators.get(c.gen.type);
+    if (!def?.audioSource) continue;
+    const { type: _t, ...raw } = c.gen;
+    const vals = Object.fromEntries(Object.entries(raw).map(([k, v]) => [k, interpolate(v as never, 0)]));
+    const parsed = def.params.safeParse(vals);
+    if (!parsed.success) continue; // evaluate reports the parameter error with its fix
+    const id = def.audioSource(parsed.data as never);
+    if (!id) continue;
+    const asset = assets.get(id);
+    if (!asset) fail('E_REF', `clip "${c.id}": generator "${c.gen.type}" follows the sound of asset "${id}", which does not exist.`, `add it (mgl edit <file> asset.add src=<file> id=${id}) or point the generator at an existing audio asset.`);
+    const comp = comps.get(trackComp.get(c.track) ?? '') ?? prep.comp;
+    const rate = parseRate(comp.fps);
+    want.set(levelsKey(id, rate), { asset, rate, clip: c.id });
+  }
+  if (!want.size) return;
+  if (!prep.backend.analyzeLevels) fail('E_NATIVE', 'this media backend cannot measure sound levels (needed by an audio-reactive generator).', 'use the default native-ffmpeg backend.');
+  await pool([...want], 4, async ([key, w]) => { prep.levels.set(key, await prep.backend.analyzeLevels!(assetPath(w.asset, prep.baseDir), w.rate)); });
 }
 
 function evalOptions(prep: Prep, session: RenderSession): EvaluateOptions {
@@ -192,7 +263,7 @@ function evalOptions(prep: Prep, session: RenderSession): EvaluateOptions {
 }
 
 const openSession = (prep: Prep, width: number, height: number) =>
-  prep.renderer.open({ width, height, registry: prep.registry, fontAssets: prep.fontAssets });
+  prep.renderer.open({ width, height, registry: prep.registry, fontAssets: prep.fontAssets, ...(prep.levels.size ? { audioLevels: (assetId: string, rate: Rate) => prep.levels.get(levelsKey(assetId, rate)) } : {}) });
 
 const even = (v: number) => Math.max(2, Math.round(v / 2) * 2);
 
@@ -244,11 +315,15 @@ const roundBox = (b: LayerBox): StillLayer => ({ ...b, box: b.box.map((v) => Mat
 
 // ------------------------------------------------------------------------------------------- estimate
 
-/** Encoder throughput (frames/s) at 1080x1920, measured on the 4-vCPU reference machine. */
+/**
+ * Encoder throughput (frames/s) at 1080x1920, measured on the 4-vCPU reference machine, RGBA piped in (the scale to
+ * YUV included). ProRes (prores_ks HQ 4:2:2 10-bit) was re-measured 2026-10-04 at ≈3.5× slower than x264 veryfast on
+ * the same frames (it was 45, which made ProRes estimates ≈1.7× low); 4444 with alpha is slower again (ALPHA_FACTOR).
+ */
 const ENCODE_FPS_1080x1920: Record<string, number> = {
   'mp4:draft': 220, 'mp4:final': 65, 'mp4:hq': 22,
-  'webm:draft': 45, 'webm:final': 18, 'webm:hq': 9,
-  'mov:draft': 45, 'mov:final': 45, 'mov:hq': 45,
+  'webm:draft': 40, 'webm:final': 15, 'webm:hq': 8,
+  'mov:draft': 19, 'mov:final': 19, 'mov:hq': 19,
   'gif:draft': 150, 'gif:final': 150, 'gif:hq': 150,
   'png:draft': 25, 'png:final': 25, 'png:hq': 25,
 };
@@ -256,8 +331,15 @@ const REF_PIXELS = 1080 * 1920;
 /** sequential decode + RGBA conversion per 1080p frame (ms), by codec; scaled by source pixels (short renders only) */
 const DECODE_MS_1080P: Record<string, number> = { h264: 12, hevc: 16, vp9: 16, av1: 20, prores: 14 };
 
-export function encodeFps(format: EncodeOptions['format'], quality: Quality, width: number, height: number): number {
-  const base = ENCODE_FPS_1080x1920[`${format}:${quality}`] ?? 60;
+/** throughput factor of alpha encodes (ProRes 4444 + 16-bit alpha, VP9 yuva420p) */
+const ALPHA_FACTOR: Partial<Record<EncodeOptions['format'], number>> = { mov: 0.8, webm: 0.85 };
+/** ProRes throughput by profile relative to HQ (lighter profiles encode faster) */
+const PRORES_FACTOR: Record<string, number> = { proxy: 1.6, lt: 1.3, '422': 1.1, hq: 1, '4444': 0.8, '4444xq': 0.7 };
+
+export function encodeFps(format: EncodeOptions['format'], quality: Quality, width: number, height: number, o: { alpha?: boolean; prores?: string } = {}): number {
+  let base = ENCODE_FPS_1080x1920[`${format}:${quality}`] ?? 60;
+  if (format === 'mov' && o.prores) base *= PRORES_FACTOR[o.prores] ?? 1;
+  else if (o.alpha) base *= ALPHA_FACTOR[format] ?? 1;
   return base * (REF_PIXELS / Math.max(1, width * height));
 }
 
@@ -279,13 +361,13 @@ export function formatEstimate(e: Pick<Estimate, 'seconds' | 'quality' | 'width'
   return `est. ${s} s (${e.quality} ${e.width}x${e.height}, ${e.duration.toFixed(1)} s, ≈${e.realtimeFactor.toFixed(1)}x real time)`;
 }
 
-async function estimateWith(prep: Prep, o: { range: [number, number]; quality: Quality; format: EncodeOptions['format']; width: number; height: number; segments?: number }): Promise<Estimate> {
+async function estimateWith(prep: Prep, o: { range: [number, number]; quality: Quality; format: EncodeOptions['format']; width: number; height: number; segments?: number; alpha?: boolean; prores?: string }): Promise<Estimate> {
   const [a, b] = o.range;
   const frames = b - a;
   const duration = framesToSeconds(frames, prep.rate);
   const session = await openSession(prep, o.width, o.height);
   const provider = new MediaFrames({ backend: prep.backend, baseDir: prep.baseDir, mode: 'random' });
-  let perFrameMs = 0, decodeMs = 0;
+  let perFrameMs = 0, decodeMs = 0, machine = 1;
   try {
     const eo = evalOptions(prep, session);
     // busiest frame by layer count, over up to 40 evenly spaced frames
@@ -302,18 +384,21 @@ async function estimateWith(prep: Prep, o: { range: [number, number]; quality: Q
     await session.drawFrame(lists[0]!, provider); // warm-up (font and shader caches)
     const times: number[] = [];
     for (const l of lists) {
+      // frames on the passthrough path are not composited: only the decoded frame is handed on
+      if (passthroughSource(prep, l, o.width, o.height)) { times.push(PASSTHROUGH_MS); continue; }
       const t0 = performance.now();
       await session.drawFrame(l, provider);
       times.push(performance.now() - t0);
     }
     perFrameMs = times.reduce((s, t) => s + t, 0) / times.length;
-    decodeMs = await measureDecode(prep, mediaRequests(lists[lists.length - 1]!.nodes, root), frames);
+    ({ ms: decodeMs, speed: machine } = await measureDecode(prep, mediaRequests(lists[lists.length - 1]!.nodes, root), frames));
   } finally {
     await provider.close();
     await session.close();
   }
-  const fps = encodeFps(o.format, o.quality, o.width, o.height);
-  const encodeMs = 1000 / fps;
+  const fps = encodeFps(o.format, o.quality, o.width, o.height, { ...(o.alpha ? { alpha: true } : {}), ...(o.prores ? { prores: o.prores } : {}) });
+  // the encoder table is for the reference machine; a measured decode slower or faster than its reference scales it too
+  const encodeMs = (1000 / fps) * machine;
   // compositing (this process), decoding and encoding (ffmpeg processes) overlap; on shared cores they contend
   const parts = [perFrameMs, decodeMs, encodeMs];
   const top = Math.max(...parts);
@@ -331,6 +416,10 @@ async function estimateWith(prep: Prep, o: { range: [number, number]; quality: Q
 }
 
 const CONTENTION = 0.6;
+/** frames evaluated and requested from the decoders ahead of the one being drawn */
+const LOOKAHEAD = 2;
+/** main-thread cost of a passthrough frame (evaluate + handing the buffer on), ms */
+const PASSTHROUGH_MS = 1;
 const WORKER_START_SEC = 1.5;
 /** wall-time targets (× real time) per quality: over target, long renders split into worker processes */
 const TARGET_RT: Record<Quality, number> = { draft: 1, final: 3, hq: 3 };
@@ -340,14 +429,15 @@ const TARGET_RT: Record<Quality, number> = { draft: 1, final: 3, hq: 3 };
  * size it is drawn and read for a few frames, all at once (they run side by side during the render too).
  * Short renders use a codec/pixel-count constant instead.
  */
-async function measureDecode(prep: Prep, reqs: { src: MediaSource; size: { w: number; h: number } }[], frames: number): Promise<number> {
+async function measureDecode(prep: Prep, reqs: { src: MediaSource; size: { w: number; h: number } }[], frames: number): Promise<{ ms: number; speed: number }> {
   const videos = [...new Map(reqs.filter((r) => r.src.kind === 'video').map((r) => [r.src.assetId + JSON.stringify(r.src.filters), r])).values()];
-  if (!videos.length) return 0;
+  if (!videos.length) return { ms: 0, speed: 1 };
   const guess = (r: (typeof videos)[number]) => {
     const i = prep.info.get(r.src.assetId);
     return (DECODE_MS_1080P[i?.videoCodec ?? 'h264'] ?? 8) * (((i?.width ?? 1920) * (i?.height ?? 1080)) / (1920 * 1080));
   };
-  if (frames < 120) return videos.reduce((s, r) => s + guess(r), 0);
+  const guessed = videos.reduce((s, r) => s + guess(r), 0);
+  if (frames < 120) return { ms: guessed, speed: 1 };
   const fr = new MediaFrames({ backend: prep.backend, baseDir: prep.baseDir });
   try {
     const per = await Promise.all(videos.map(async (r) => {
@@ -359,12 +449,18 @@ async function measureDecode(prep: Prep, reqs: { src: MediaSource; size: { w: nu
     }));
     // separate processes: the slowest source paces the render, the others add contention
     const top = Math.max(...per);
-    return top + CONTENTION * (per.reduce((s, x) => s + x, 0) - top);
+    const ms = top + CONTENTION * (per.reduce((s, x) => s + x, 0) - top);
+    // this machine (and its load) against the reference: the slowest source's measured vs reference decode time
+    const worst = videos[per.indexOf(top)]!;
+    const speed = Math.min(MACHINE_MAX, Math.max(MACHINE_MIN, top / Math.max(1, guess(worst))));
+    return { ms, speed };
   } catch {
-    return videos.reduce((s, r) => s + guess(r), 0);
+    return { ms: guessed, speed: 1 };
   } finally { await fr.close(); }
 }
 const DECODE_SAMPLE = 8;
+/** bounds of the machine factor applied to the encoder table (a decode sample is noisy) */
+const MACHINE_MIN = 0.75, MACHINE_MAX = 2.5;
 
 /**
  * Worker processes for a render: 1 unless asked, or unless the single-process estimate is over the quality's target
@@ -380,12 +476,12 @@ function chooseSegments(requested: number | undefined, timeWith: (n: number) => 
 }
 
 /** Predict a render's wall time by drawing 3 sample frames (start, middle, busiest) plus the preset's encode rate. */
-export async function estimate(project: ProjectFile, opts: PipelineOptions & { quality?: Quality; range?: [number, number]; format?: EncodeOptions['format']; out?: string; segments?: number }): Promise<Estimate> {
+export async function estimate(project: ProjectFile, opts: PipelineOptions & { quality?: Quality; range?: [number, number]; format?: EncodeOptions['format']; out?: string; segments?: number; alpha?: boolean; prores?: DeliveryOptions['prores'] }): Promise<Estimate> {
   const prep = await prepare(project, opts);
   const quality = opts.quality ?? 'final';
   const format = opts.format ?? (opts.out ? VIDEO_EXT[extname(opts.out).toLowerCase()] : undefined) ?? 'mp4';
   const { width, height } = outputSize(prep.W, prep.H, quality);
-  return estimateWith(prep, { range: checkRange(prep, opts.range), quality, format, width, height, segments: opts.segments });
+  return estimateWith(prep, { range: checkRange(prep, opts.range), quality, format, width, height, segments: opts.segments, ...(opts.alpha ? { alpha: true } : {}), ...(opts.prores ? { prores: opts.prores } : {}) });
 }
 
 // ------------------------------------------------------------------------------------------- frames
@@ -408,32 +504,74 @@ export function flattenAlpha(f: RGBAFrame): RGBAFrame {
   return f;
 }
 
-async function renderRange(prep: Prep, o: { range: [number, number]; width: number; height: number; onFrame?(done: number): void; opaque?: boolean }, write: (f: RGBAFrame) => Promise<void>): Promise<void> {
+async function renderRange(prep: Prep, o: { range: [number, number]; width: number; height: number; onFrame?(done: number): void; opaque?: boolean; /** frames that took the passthrough path */ stats?(passthrough: number): void }, write: (f: RGBAFrame) => Promise<void>): Promise<void> {
   const session = await openSession(prep, o.width, o.height);
   const frames = new MediaFrames({ backend: prep.backend, baseDir: prep.baseDir, mode: 'sequential' });
   const root = scaling(o.width / prep.W, o.height / prep.H);
   const eo = evalOptions(prep, session);
   const [a, b] = o.range;
   const prefetch = (l: DisplayList) => { for (const r of mediaRequests(l.nodes, root)) frames.get(r.src, r.size).catch(() => {}); };
+  let passthrough = 0;
   try {
-    let list = evaluate(prep.project, prep.comp.id, a, eo);
-    prefetch(list);
+    // decodes run LOOKAHEAD frames ahead of drawing, so the decoders work while frames are drawn and encoded
+    const ahead: DisplayList[] = [];
+    let nextEval = a;
+    const fill = () => { while (nextEval < b && ahead.length <= LOOKAHEAD) { const l = evaluate(prep.project, prep.comp.id, nextEval++, eo); prefetch(l); ahead.push(l); } };
     let pending: Promise<void> = Promise.resolve();
     for (let f = a; f < b; f++) {
-      const next = f + 1 < b ? evaluate(prep.project, prep.comp.id, f + 1, eo) : null;
-      if (next) prefetch(next);
-      const img = await session.drawFrame(list, frames);
-      if (o.opaque) flattenAlpha(img);
+      fill();
+      const list = ahead.shift()!;
+      const direct = passthroughSource(prep, list, o.width, o.height);
+      let img: RGBAFrame | null = null;
+      if (direct) {
+        // one opaque full-frame media layer: the decoded frame is the output frame (no compositing, no readback)
+        const f = await frames.get(direct.src, direct.size);
+        if (f.width === o.width && f.height === o.height && f.data.byteLength === o.width * o.height * 4) { img = f; passthrough++; }
+      }
+      if (!img) {
+        img = await session.drawFrame(list, frames);
+        if (o.opaque) flattenAlpha(img);
+      }
       await pending;
       pending = write(img);
       o.onFrame?.(f - a + 1);
-      if (next) list = next;
     }
     await pending;
+    o.stats?.(passthrough);
   } finally {
     await frames.close();
     await session.close();
   }
+}
+
+/** pixel formats that can carry alpha (their decoded frames may be translucent) */
+const ALPHA_PIX = /^(yuva|rgba|argb|abgr|bgra|gbrap|ya|pal8|rgb32|bgr32)/;
+
+/**
+ * The fast path of a frame: when its display list is exactly one opaque media layer drawn 1:1 over the whole output
+ * (identity placement, no effects, masks, matte, crop, blend or opacity, a source without alpha and of the output's
+ * aspect), returns the decode request whose frame is the output frame; otherwise null.
+ */
+export function passthroughSource(prep: Pick<Prep, 'W' | 'H' | 'info'>, list: DisplayList, width: number, height: number): { src: MediaSource; size: { w: number; h: number } } | null {
+  if (list.nodes.length !== 1) return null;
+  const n = list.nodes[0]!;
+  if (n.type !== 'layer' || n.source.type !== 'media' || n.opacity !== 1 || n.blend !== 'normal' || n.fx.length || n.masks.length || n.matte) return null;
+  const src = n.source;
+  if (src.crop || !src.size) return null;
+  const info = prep.info.get(src.assetId);
+  if (!info?.pixFmt || ALPHA_PIX.test(info.pixFmt)) return null;
+  const m = n.matrix, sx = width / prep.W, sy = height / prep.H;
+  const tol = 0.5;
+  if (Math.abs(m[1]) > 1e-9 || Math.abs(m[2]) > 1e-9 || m[0] <= 0 || m[3] <= 0) return null;
+  if (Math.abs(m[4] * sx) > tol || Math.abs(m[5] * sy) > tol) return null;
+  if (Math.abs(m[0] * n.box.w * sx - width) > tol || Math.abs(m[3] * n.box.h * sy - height) > tol) return null;
+  // the drawn image must fill the box exactly (fill, or a source of the box's aspect)
+  if (src.fit !== 'fill') {
+    const d = fitBox(src.size.w, src.size.h, n.box.w, n.box.h, src.fit);
+    if (Math.abs(d.w - n.box.w) * m[0] * sx > tol || Math.abs(d.h - n.box.h) * m[3] * sy > tol) return null;
+  }
+  const req = mediaRequests(list.nodes, scaling(sx, sy))[0];
+  return req ? { src, size: req.size } : null;
 }
 
 function progressReporter(total: number, cb?: RenderOptions['onProgress']) {
@@ -458,9 +596,18 @@ export async function render(project: ProjectFile, out: string, opts: RenderOpti
   mkdirSync(dirname(out), { recursive: true });
   const registry = opts.registry ?? await loadProjectRegistry(project, opts.baseDir);
   const kind = outputKind(out, registry);
-  const prep = await prepare(project, { ...opts, registry }, kind !== 'subtitles');
+  const ext = extname(out).toLowerCase();
+  const delivery = deliveryOf(opts);
+  if (opts.bus !== undefined && kind !== 'audio') fail('E_ARG', `bus applies to audio outputs (stems), not ${kind === 'video' ? 'video' : ext}.`, `render the stem to a .wav: mgl render <file> stem.wav --bus ${opts.bus}.`);
+  if (opts.bus === 'all' && ext !== '.wav') fail('E_ARG', `stems of every bus ("all") are written as one multichannel WAV, not ${ext}.`, 'render to a .wav, or name one bus.');
+  if (delivery && (kind === 'audio' || kind === 'still' || kind === 'subtitles' || kind === 'chapters')) {
+    const audioOnly = kind === 'audio' && Object.keys(delivery).every((k) => k === 'audioBitrate' || k === 'pcmDepth');
+    if (!audioOnly) fail('E_ARG', `${Object.keys(delivery).join(', ')} ${Object.keys(delivery).length > 1 ? 'are' : 'is'} not used by ${ext} outputs.`, kind === 'audio' ? 'audio outputs take audioBitrate (mp3, m4a, opus) and pcmDepth (wav, flac).' : 'drop the delivery settings for this output.');
+    checkDelivery(delivery, 'mp4', { num: 30, den: 1 });
+  }
+  const prep = await prepare(project, { ...opts, registry }, kind !== 'subtitles' && kind !== 'chapters');
   const quality = opts.quality ?? 'final';
-  const range = kind === 'subtitles' ? (opts.range ?? [0, Math.max(1, prep.length)]) : checkRange(prep, opts.range);
+  const range = kind === 'subtitles' || kind === 'chapters' ? (opts.range ?? [0, Math.max(1, prep.length)]) : checkRange(prep, opts.range);
   const base = { notes: prep.notes, segments: 1 };
   let res: Omit<RenderResult, 'wallSec' | 'realtimeFactor' | 'bytes' | 'probe' | 'codec' | 'audioCodec' | 'width' | 'height'> & { width?: number; height?: number };
   switch (kind) {
@@ -470,8 +617,17 @@ export async function render(project: ProjectFile, out: string, opts: RenderOpti
       prep.notes.push(`${n} cues`);
       break;
     }
+    case 'chapters': {
+      const ch = chapterList(prep.project, prep.comp.id, range);
+      prep.notes.push(...ch.notes);
+      await writeFile(out, ext === '.vtt' ? formatChaptersVtt(ch.chapters, framesToSeconds(range[1] - range[0], prep.rate)) : formatChaptersYouTube(ch.chapters));
+      prep.notes.push(`${ch.chapters.length} chapters`);
+      res = { out, seconds: framesToSeconds(range[1] - range[0], prep.rate), frames: 0, ...base };
+      break;
+    }
     case 'audio': {
-      await renderAudioFile(prep, range, out);
+      const audioOpts: RenderAudioOptions = { ...(opts.bus !== undefined ? { bus: opts.bus } : {}), ...(opts.pcmDepth ? { pcmDepth: opts.pcmDepth } : {}) };
+      await renderAudioFile(prep, range, out, audioOpts, opts.audioBitrate);
       res = { out, seconds: framesToSeconds(range[1] - range[0], prep.rate), frames: 0, ...base };
       break;
     }
@@ -484,14 +640,21 @@ export async function render(project: ProjectFile, out: string, opts: RenderOpti
       break;
     }
     case 'video': {
-      const format = VIDEO_EXT[extname(out).toLowerCase()]!;
+      const format = VIDEO_EXT[ext]!;
       if (opts.alpha && format !== 'webm' && format !== 'mov') fail('E_ALPHA', `${format} cannot carry an alpha channel.`, 'render to .mov (ProRes 4444) or .webm (VP9) for alpha.');
+      checkDelivery(delivery, format, prep.rate, !!opts.alpha);
+      if (opts.alpha && prep.comp.bg && isOpaqueColor(prep.comp.bg)) {
+        prep.notes.push(`warning: comp "${prep.comp.id}" has an opaque bg (${prep.comp.bg}), so the alpha channel is fully opaque; for a transparent background remove it: mgl edit <file> comp.set ${prep.comp.id} bg=null`);
+      }
+      const plan = planFor(prep, range); // audio-stage effect errors stop the render before any frame is drawn
       const { width, height } = outputSize(prep.W, prep.H, quality);
-      const est = await estimateWith(prep, { range, quality, format, width, height, segments: opts.segments });
+      const est = await estimateWith(prep, { range, quality, format, width, height, segments: opts.segments, alpha: !!opts.alpha, ...(delivery?.prores ? { prores: delivery.prores } : {}) });
       opts.onEstimate?.(est);
       const segs = Math.min(est.segments, Math.max(1, Math.floor((range[1] - range[0]) / 2)));
-      if (segs > 1) await renderSegmented(prep, out, { range, quality, format, width, height, alpha: !!opts.alpha, segments: segs, onProgress: opts.onProgress });
-      else await renderVideo(prep, out, { range, quality, format, width, height, alpha: !!opts.alpha, onProgress: opts.onProgress });
+      const job: VideoJob = { range, quality, format, width, height, alpha: !!opts.alpha, onProgress: opts.onProgress, plan, ...(delivery ? { delivery } : {}) };
+      if (segs > 1) await renderSegmented(prep, out, { ...job, segments: segs });
+      else await renderVideo(prep, out, job);
+      if (delivery?.timecode) prep.notes.push(`start timecode ${delivery.timecode}`);
       res = { out, seconds: framesToSeconds(range[1] - range[0], prep.rate), frames: range[1] - range[0], width, height, ...base, segments: segs, estimate: est };
       break;
     }
@@ -503,14 +666,14 @@ export async function render(project: ProjectFile, out: string, opts: RenderOpti
   }
   const wallSec = (performance.now() - t0) / 1000;
   const bytes = (await stat(out)).size;
-  const probe = kind === 'subtitles' || kind === 'exporter' ? undefined : await verify(prep.backend, out, kind, res);
+  const probe = kind === 'subtitles' || kind === 'chapters' || kind === 'exporter' ? undefined : await verify(prep.backend, out, kind, res);
   const v = probe?.streams.find((s) => s.type === 'video');
   const au = probe?.streams.find((s) => s.type === 'audio');
   const result: RenderResult = {
     ...res,
     width: v?.width ?? res.width ?? 0,
     height: v?.height ?? res.height ?? 0,
-    codec: v?.codec ?? au?.codec ?? (extname(out).toLowerCase() === '.srt' ? 'subrip' : extname(out).toLowerCase() === '.vtt' ? 'webvtt' : extname(out).slice(1)),
+    codec: v?.codec ?? au?.codec ?? (ext === '.srt' ? 'subrip' : ext === '.vtt' ? (kind === 'chapters' ? 'webvtt-chapters' : 'webvtt') : kind === 'chapters' ? 'chapters' : ext.slice(1)),
     bytes,
     wallSec,
     realtimeFactor: res.seconds > 0 ? wallSec / res.seconds : 0,
@@ -520,34 +683,77 @@ export async function render(project: ProjectFile, out: string, opts: RenderOpti
   return result;
 }
 
-interface VideoJob { range: [number, number]; quality: Quality; format: EncodeOptions['format']; width: number; height: number; alpha: boolean; onProgress?: RenderOptions['onProgress'] }
+/** Is a CSS colour fully opaque? (#rgb/#rrggbb, named colours; #rgba/#rrggbbaa, rgba()/hsla() and "transparent" can be translucent) */
+export function isOpaqueColor(c: string): boolean {
+  const s = c.trim().toLowerCase();
+  if (s === 'transparent') return false;
+  const hex = /^#([0-9a-f]{3,8})$/.exec(s);
+  if (hex) {
+    const h = hex[1]!;
+    if (h.length === 4) return h[3] === 'f';
+    if (h.length === 8) return h.slice(6) === 'ff';
+    return true;
+  }
+  const fn = /^(rgba?|hsla?)\((.*)\)$/.exec(s);
+  if (fn) {
+    const parts = fn[2]!.split(/[\s,/]+/).filter(Boolean);
+    if (parts.length < 4) return true;
+    const a = parts[3]!;
+    const v = a.endsWith('%') ? Number(a.slice(0, -1)) / 100 : Number(a);
+    return !(v < 1);
+  }
+  return true;
+}
+
+interface VideoJob { range: [number, number]; quality: Quality; format: EncodeOptions['format']; width: number; height: number; alpha: boolean; onProgress?: RenderOptions['onProgress']; delivery?: DeliveryOptions; plan?: AudioPlan }
+
+/** The comp's audio plan for `range`, with audio-stage effects resolved through the registry; their filters are checked against the allowlist now. */
+function planFor(prep: Prep, range: [number, number]): AudioPlan {
+  const plan = planAudio(prep.project, prep.comp.id, { baseDir: prep.baseDir, range, hasAudio: (id) => prep.info.get(id)?.hasAudio ?? true, duration: (id) => prep.info.get(id)?.duration, registry: prep.registry });
+  for (const s of plan.segments) if (s.filters?.length) filtersToString(s.filters, { stage: 'audio', baseDir: prep.baseDir });
+  for (const b of plan.buses) if (b.filters?.length) filtersToString(b.filters, { stage: 'audio', baseDir: prep.baseDir });
+  return plan;
+}
 
 /** Mix the comp's audio for `range` to a WAV; null when nothing in the range makes sound. */
-async function mixAudio(prep: Prep, range: [number, number], wav: string, force = false): Promise<string | null> {
-  const plan = planAudio(prep.project, prep.comp.id, { baseDir: prep.baseDir, range, hasAudio: (id) => prep.info.get(id)?.hasAudio ?? true, duration: (id) => prep.info.get(id)?.duration });
+async function mixAudio(prep: Prep, range: [number, number], wav: string, force = false, o: RenderAudioOptions = {}, plan?: AudioPlan): Promise<string | null> {
+  plan ??= planFor(prep, range);
   if (!plan.segments.length && !force) return null;
-  await prep.backend.renderAudio(plan, wav, { baseDir: prep.baseDir });
+  const r = await prep.backend.renderAudio(plan, wav, { baseDir: prep.baseDir, ...o });
+  if (r && r.notes.length) prep.notes.push(...r.notes);
   return wav;
 }
 
-async function renderAudioFile(prep: Prep, range: [number, number], out: string): Promise<void> {
-  if (extname(out).toLowerCase() === '.wav') { await mixAudio(prep, range, out, true); return; }
+async function renderAudioFile(prep: Prep, range: [number, number], out: string, o: RenderAudioOptions = {}, audioBitrate?: string): Promise<void> {
+  const ext = extname(out).toLowerCase();
+  if (ext === '.wav') { await mixAudio(prep, range, out, true, o); return; }
+  if (audioBitrate && (ext === '.flac' || ext === '.wav')) fail('E_ARG', `audioBitrate does not apply to lossless ${ext}.`, 'use pcmDepth for .wav/.flac, or render to .mp3/.m4a/.opus.');
+  if (o.pcmDepth && ext !== '.flac') fail('E_ARG', `pcmDepth applies to .wav and .flac, not ${ext}.`, 'use audioBitrate for lossy formats.');
   const dir = await mkdtemp(join(tmpdir(), 'mgl-render-'));
   try {
-    const wav = (await mixAudio(prep, range, join(dir, 'mix.wav'), true))!;
-    await prep.backend.transcodeAudio(wav, out);
+    const wav = (await mixAudio(prep, range, join(dir, 'mix.wav'), true, { ...o, ...(o.pcmDepth ? { pcmDepth: o.pcmDepth } : {}) }))!;
+    await prep.backend.transcodeAudio(wav, out, { ...(audioBitrate ? { bitrate: audioBitrate } : {}), ...(o.pcmDepth ? { pcmDepth: o.pcmDepth } : {}) });
   } finally { await rm(dir, { recursive: true, force: true }); }
+}
+
+/** Encoder settings of a video job; the timecode is written when the final file is assembled (muxed), not per segment. */
+function encodeDelivery(d: DeliveryOptions | undefined): DeliveryOptions | undefined {
+  if (!d) return undefined;
+  const { timecode: _tc, audioBitrate: _ab, pcmDepth: _pd, ...rest } = d;
+  return Object.keys(rest).length ? rest : undefined;
 }
 
 async function renderVideo(prep: Prep, out: string, j: VideoJob): Promise<void> {
   const dir = await mkdtemp(join(tmpdir(), 'mgl-render-'));
   try {
     // the audio mix runs while frames render; it is muxed at the end without re-encoding the video
-    const audio = j.format === 'gif' ? Promise.resolve(null) : mixAudio(prep, j.range, join(dir, 'mix.wav'));
+    const audio = j.format === 'gif' ? Promise.resolve(null) : mixAudio(prep, j.range, join(dir, 'mix.wav'), false, {}, j.plan);
     audio.catch(() => {});
     const tmp = join(dir, `video${extname(out)}`);
     const enc: EncodeOptions = { out: tmp, width: j.width, height: j.height, rate: prep.rate, format: j.format, quality: j.quality };
     if (j.alpha) enc.alpha = true;
+    const ed = encodeDelivery(j.delivery);
+    if (ed) enc.delivery = ed;
     const sink = await prep.backend.encode(enc);
     const progress = progressReporter(j.range[1] - j.range[0], j.onProgress);
     try {
@@ -555,9 +761,14 @@ async function renderVideo(prep: Prep, out: string, j: VideoJob): Promise<void> 
       await sink.finish();
     } catch (e) { await sink.abort().catch(() => {}); throw e; }
     const wav = await audio;
-    if (wav) await muxAudio(prep.backend, tmp, wav, out, j.format, j.quality);
-    else await moveFile(tmp, out);
+    await finishVideo(prep.backend, tmp, wav, out, j);
   } finally { await rm(dir, { recursive: true, force: true }); }
+}
+
+/** Assemble the output: mux the audio (if any) and write the start timecode, without re-encoding the video. */
+async function finishVideo(backend: MediaBackend, video: string, wav: string | null, out: string, j: Pick<VideoJob, 'format' | 'quality' | 'delivery'>): Promise<void> {
+  if (wav || j.delivery?.timecode) await muxAudio(backend, video, wav, out, j.format, j.quality, j.delivery);
+  else await moveFile(video, out);
 }
 
 async function moveFile(from: string, to: string) {
@@ -594,6 +805,10 @@ export interface WorkerJob {
   format?: EncodeOptions['format'];
   /** detached mode: the status file */
   status?: string;
+  /** segment mode: encoder delivery settings; detached mode: all delivery settings */
+  delivery?: DeliveryOptions;
+  /** detached mode: audio stems */
+  bus?: string;
 }
 
 const HERE = fileURLToPath(import.meta.url);
@@ -642,17 +857,17 @@ async function renderSegmented(prep: Prep, out: string, j: VideoJob & { segments
     const done = ranges.map(() => 0);
     const progress = progressReporter(j.range[1] - j.range[0], j.onProgress);
     const parts = ranges.map((_, i) => join(dir, `seg-${i}${ext}`));
+    const ed = encodeDelivery(j.delivery);
     const workers = ranges.map(async (r, i) => {
-      const job: WorkerJob = { mode: 'segment', project: projectFile, baseDir: prep.baseDir, out: parts[i]!, comp: prep.comp.id, quality: j.quality, range: r, alpha: j.alpha, width: j.width, height: j.height, format: j.format };
+      const job: WorkerJob = { mode: 'segment', project: projectFile, baseDir: prep.baseDir, out: parts[i]!, comp: prep.comp.id, quality: j.quality, range: r, alpha: j.alpha, width: j.width, height: j.height, format: j.format, ...(ed ? { delivery: ed } : {}) };
       const jf = join(dir, `job-${i}.json`);
       await writeFile(jf, JSON.stringify(job));
       await runWorker(jf, (n) => { done[i] = n; progress(done.reduce((s, x) => s + x, 0)); });
     });
-    const [audio] = await Promise.all([mixAudio(prep, j.range, join(dir, 'mix.wav')), Promise.all(workers)]);
+    const [audio] = await Promise.all([mixAudio(prep, j.range, join(dir, 'mix.wav'), false, {}, j.plan), Promise.all(workers)]);
     const joined = join(dir, `joined${ext}`);
     await prep.backend.concat(parts, joined);
-    if (audio) await muxAudio(prep.backend, joined, audio, out, j.format, j.quality);
-    else await moveFile(joined, out);
+    await finishVideo(prep.backend, joined, audio, out, j);
   } finally { await rm(dir, { recursive: true, force: true }); }
 }
 
@@ -661,6 +876,7 @@ export async function renderSegment(project: ProjectFile, job: WorkerJob, onFram
   const prep = await prepare(project, { baseDir: job.baseDir, comp: job.comp });
   const enc: EncodeOptions = { out: job.out, width: job.width!, height: job.height!, rate: prep.rate, format: job.format!, quality: job.quality ?? 'final' };
   if (job.alpha) enc.alpha = true;
+  if (job.delivery) enc.delivery = job.delivery;
   const sink = await prep.backend.encode(enc);
   try {
     await renderRange(prep, { range: job.range!, width: job.width!, height: job.height!, onFrame, opaque: !job.alpha }, (f) => sink.write(f));
@@ -668,11 +884,13 @@ export async function renderSegment(project: ProjectFile, job: WorkerJob, onFram
   } catch (e) { await sink.abort().catch(() => {}); throw e; }
 }
 
-async function muxAudio(backend: MediaBackend, video: string, wav: string, out: string, format: EncodeOptions['format'], quality: Quality): Promise<void> {
+/** Mux `wav` (or no audio) into `video` without re-encoding it; writes the start timecode when one is set. */
+async function muxAudio(backend: MediaBackend, video: string, wav: string | null, out: string, format: EncodeOptions['format'], quality: Quality, d: DeliveryOptions = {}): Promise<void> {
   const ff = await backend.info();
-  const codec = format === 'webm' ? ['-c:a', 'libopus', '-b:a', '128k'] : format === 'mov' ? ['-c:a', 'pcm_s16le'] : ['-c:a', 'aac', '-b:a', quality === 'draft' ? '96k' : '192k', '-ar', '48000'];
+  const codec = !wav ? [] : format === 'webm' ? ['-c:a', 'libopus', '-b:a', d.audioBitrate ?? '128k'] : format === 'mov' ? ['-c:a', d.pcmDepth === 24 ? 'pcm_s24le' : 'pcm_s16le'] : ['-c:a', 'aac', '-b:a', d.audioBitrate ?? (quality === 'draft' ? '96k' : '192k'), '-ar', '48000'];
   const extra = format === 'mp4' || format === 'mov' ? ['-movflags', '+faststart'] : [];
-  await run(ff.ffmpeg, ['-hide_banner', '-nostdin', '-v', 'error', '-y', '-i', video, '-i', wav, '-map', '0:v:0', '-map', '1:a:0', '-c:v', 'copy', ...codec, ...extra, out], { what: `muxing audio into ${out}` });
+  const tc = d.timecode && (format === 'mp4' || format === 'mov') ? ['-timecode', d.timecode] : [];
+  await run(ff.ffmpeg, ['-hide_banner', '-nostdin', '-v', 'error', '-y', '-i', video, ...(wav ? ['-i', wav] : []), '-map', '0:v:0', ...(wav ? ['-map', '1:a:0'] : []), '-c:v', 'copy', ...codec, ...tc, ...extra, out], { what: `${wav ? 'muxing audio into' : 'writing'} ${out}` });
 }
 
 // ------------------------------------------------------------------------------------------- verify
@@ -775,7 +993,7 @@ export function formatSubtitles(cues: { start: number; end: number; text: string
 
 async function writeSubtitles(prep: Prep, out: string, range: [number, number]): Promise<number> {
   const cues = subtitleCues(prep.project, prep.comp.id, range);
-  if (!cues.length) fail('E_NO_CUES', `comp "${prep.comp.id}" has no caption cues to export.`, 'add captions first: mgl edit <project> captions.import file=<srt> (or captions.add).');
+  if (!cues.length) fail('E_NO_CUES', `comp "${prep.comp.id}" has no caption cues to export.`, 'add captions first: mgl edit <project> captions.import file=<srt> (or captions.from-text text="...", or cue.add).');
   await writeFile(out, formatSubtitles(cues, extname(out).toLowerCase() === '.vtt' ? 'vtt' : 'srt'));
   return cues.length;
 }
@@ -848,6 +1066,9 @@ export async function renderDetached(projectFile: string, out: string, opts: Omi
   if (opts.range) job.range = opts.range;
   if (opts.alpha) job.alpha = true;
   if (opts.segments) job.segments = opts.segments;
+  const d = deliveryOf(opts);
+  if (d) job.delivery = d;
+  if (opts.bus !== undefined) job.bus = opts.bus;
   mkdirSync(dirname(sf), { recursive: true });
   const jobFile = join(dirname(sf), 'render-job.json');
   writeFileSync(jobFile, JSON.stringify(job));
@@ -898,6 +1119,8 @@ export async function runDetached(job: WorkerJob): Promise<void> {
     if (job.range) o.range = job.range;
     if (job.alpha) o.alpha = true;
     if (job.segments) o.segments = job.segments;
+    if (job.delivery) Object.assign(o, job.delivery);
+    if (job.bus !== undefined) o.bus = job.bus;
     const result = await render(project, job.out, o);
     writeStatus(sf, { ...s, status: 'done', progress: 1, etaSec: 0, result });
   } catch (e) {

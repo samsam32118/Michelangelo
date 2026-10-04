@@ -30,7 +30,7 @@ function checkFreeId(ctx: CommandContext, id: string) {
 }
 
 /** The bus entry, created for a built-in bus that has none yet. */
-function busEntry(ctx: CommandContext, id: string): Bus {
+export function busEntry(ctx: CommandContext, id: string): Bus {
   const buses = (ctx.project.buses ??= []);
   let b = buses.find((x) => x.id === id);
   if (!b) {

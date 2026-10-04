@@ -15,9 +15,11 @@ mgl render video.mgl.json out/video.mp4 --draft  # est. first, then render and v
 
 The CLI (`mgl`, also `michelangelo`) has nine verbs: `new`, `show`, `edit`, `check`, `look`, `render`,
 `docs`, `plugin`, `doctor`. Every verb takes `--json` and exits 0 (ok), 1 (the input is wrong) or 2 (the
-environment is wrong). The SDK (`import { open, create } from 'michelangelo'`) uses the same commands.
+environment is wrong); `mgl --version` prints the version and plugin API. The SDK
+(`import { open, create } from 'michelangelo'`, with the package installed next to the script) uses the same commands.
 
-- Agent guide: [SKILL.md](SKILL.md) (also `mgl docs`); reference: [docs/reference](docs/reference/) (`mgl docs <topic>`).
+- Agent guide: [SKILL.md](SKILL.md) (also `mgl docs`); reference: [docs/reference](docs/reference/) (`mgl docs <topic>`);
+  tested recipes for common jobs: [docs/reference/recipes.md](docs/reference/recipes.md) (`mgl docs recipes`).
 - Design: [DESIGN.md](DESIGN.md); lessons from FrameCraft: [LESSONS.md](LESSONS.md); evals: [evals/tasks](evals/tasks/README.md).
 - Requirements: Node ≥ 22, ffmpeg ≥ 6 with libx264 and aac (`mgl doctor` checks; `mgl doctor --fetch` downloads a pinned build).
 

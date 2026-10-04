@@ -13,8 +13,17 @@ import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { MglError } from '../core/errors.js';
 import type { ProjectFile } from '../core/schema/index.js';
-import type { EffectDef, GeneratorDef, TransitionDef, PluginDef, Surface, CheckContext } from './api.js';
-import { createSurface } from './surface.js';
+import type { EffectDef, GeneratorDef, TransitionDef, PluginDef, Surface, CheckContext, AudioLevels } from './api.js';
+import type { FilterSpec } from '../render/types.js';
+import { createSurface as rawSurface } from './surface.js';
+import { registerFonts } from '../render/text.js';
+
+let fontsReady = false;
+/** Surfaces for tests and previews: the bundled fonts (Inter, ...) are registered first, as in a render. */
+function createSurface(w: number, h: number): Surface {
+  if (!fontsReady) { fontsReady = true; try { registerFonts(); } catch { /* fonts are optional for pixel tests */ } }
+  return rawSurface(w, h);
+}
 import { PluginRegistry } from './registry.js';
 
 type TestFn = (name: string, fn: () => unknown | Promise<unknown>) => void;
@@ -134,12 +143,34 @@ function parseParams(def: { type: string; params: { parse(v: unknown): unknown }
 
 /** Run a layer-stage effect on `src` (default: the test pattern) and return the result. */
 export function renderEffect(def: EffectDef, params?: Record<string, unknown>, opts: FrameOpts & { src?: Surface } = {}): { dst: Surface; src: Surface; stats: RenderStats } {
-  if (!def.draw) throw new MglError({ code: 'E_ARG', message: `effect "${def.type}" has no draw() (source-stage only).`, fix: 'test source-stage effects by calling def.source(params) and checking the filters.' });
+  if (!def.draw) throw new MglError({ code: 'E_ARG', message: `effect "${def.type}" has no draw() (${def.audio && !def.source ? 'an audio effect' : 'source/audio stage only'}).`, fix: 'test it with effectFilters(def, params): it returns the source and audio filters, checked against the allowlist.' });
   const src = opts.src ?? testPattern(opts.width, opts.height);
   const dst = createSurface(src.width, src.height);
   const t0 = performance.now();
   def.draw({ src, dst, params: parseParams(def, params), ...frameInfo(opts, src.width, src.height) });
   return { dst, src, stats: stats(dst, t0) };
+}
+
+export interface EffectFilters {
+  /** source-stage (video) filters with the params, as the effect returns them */
+  source: FilterSpec[];
+  /** audio-stage filters (clip sound or bus mix) */
+  audio: FilterSpec[];
+  /** the ffmpeg filtergraph text of each stage ('' when the stage is absent) */
+  sourceGraph: string;
+  audioGraph: string;
+}
+
+/**
+ * The ffmpeg filters a source-stage or audio-stage effect produces for `params` (defaults filled in), checked
+ * against the allowlist and escaped exactly as the renderer does. Throws E_FILTER for a disallowed filter or option.
+ */
+export async function effectFilters(def: EffectDef, params?: Record<string, unknown>): Promise<EffectFilters> {
+  if (!def.source && !def.audio) throw new MglError({ code: 'E_ARG', message: `effect "${def.type}" has no source() or audio() stage.`, fix: 'test a layer effect with renderEffect(def, params).' });
+  const p = parseParams(def, params);
+  const { filtersToString } = await import('../media/filters.js');
+  const source = def.source ? def.source(p as never) : [], audio = def.audio ? def.audio(p as never) : [];
+  return { source, audio, sourceGraph: filtersToString(source, { stage: 'video' }), audioGraph: filtersToString(audio, { stage: 'audio' }) };
 }
 
 /** Draw a transition at `progress` from `from` (default: the test pattern) to `to` (default: solid blue). */
@@ -153,14 +184,29 @@ export function renderTransition(def: TransitionDef, progress: number, opts: Fra
 }
 
 /** Draw a generator at a clip-local frame (size from def.size, else the given / default comp size). */
-export function renderGenerator(def: GeneratorDef, params?: Record<string, unknown>, frame = 0, opts: FrameOpts = {}): { dst: Surface; stats: RenderStats } {
+export function renderGenerator(def: GeneratorDef, params?: Record<string, unknown>, frame = 0, opts: FrameOpts & { audio?: AudioLevels } = {}): { dst: Surface; stats: RenderStats } {
   const p = parseParams(def, params);
   const comp = { width: opts.width ?? 320, height: opts.height ?? 180 };
   const [w, h] = def.size ? def.size(p, comp) : [comp.width, comp.height];
   const dst = createSurface(w, h);
   const t0 = performance.now();
-  def.draw({ dst, params: p, ...frameInfo({ ...opts, frame }, comp.width, comp.height) });
+  const audio = opts.audio ?? (def.audioSource ? testLevels(frame) : undefined);
+  def.draw({ dst, params: p, ...(audio ? { audio } : {}), ...frameInfo({ ...opts, frame }, comp.width, comp.height) });
   return { dst, stats: stats(dst, t0) };
+}
+
+/**
+ * Synthetic sound levels for audio-reactive generators: `frames` frames of a 2 Hz pulse (at 30 fps) with a falling
+ * spectrum of `bands` bands, positioned at `frame`. Generators with audioSource() get these in renderGenerator by default.
+ */
+export function testLevels(frame = 0, opts: { frames?: number; bands?: number } = {}): AudioLevels {
+  const n = opts.frames ?? 300, bands = opts.bands ?? 16;
+  const rms = new Float32Array(n), spectrum = new Float32Array(n * bands);
+  for (let f = 0; f < n; f++) {
+    rms[f] = 0.5 + 0.4 * Math.sin((f / 30) * Math.PI * 4);
+    for (let b = 0; b < bands; b++) spectrum[f * bands + b] = Math.max(0, Math.min(1, rms[f]! * (1 - b / bands) + 0.1 * Math.sin(f * 0.3 + b)));
+  }
+  return { rms, spectrum, bands, frame: Math.max(0, Math.min(n - 1, frame)) };
 }
 
 /** A path named `name` inside a fresh temporary folder. */

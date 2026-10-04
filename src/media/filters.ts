@@ -16,6 +16,19 @@ export const ALLOWED_VIDEO_FILTERS = new Set([
   'lenscorrection', 'perspective', 'pixelize', 'chromashift', 'rgbashift', 'gradfun', 'yadif', 'bwdif', 'fade', 'geq',
 ]);
 
+/**
+ * Audio filters an audio-stage effect (clip sound or bus mix) may use. Filters that read files or load code
+ * (amovie, afir with a file, ladspa, lv2, arnndn models, sofalizer, firequalizer dumps) and filters that change
+ * the length of the sound (atempo, silenceremove, areverse) are absent.
+ */
+export const ALLOWED_AUDIO_FILTERS = new Set([
+  'highpass', 'lowpass', 'bandpass', 'bandreject', 'allpass', 'equalizer', 'anequalizer', 'superequalizer', 'bass', 'treble',
+  'lowshelf', 'highshelf', 'tiltshelf', 'afftdn', 'anlmdn', 'adeclick', 'adeclip', 'acompressor', 'alimiter', 'agate', 'compand',
+  'mcompand', 'deesser', 'dynaudnorm', 'speechnorm', 'loudnorm', 'volume', 'aecho', 'chorus', 'flanger', 'aphaser', 'tremolo',
+  'vibrato', 'stereotools', 'extrastereo', 'stereowiden', 'haas', 'pan', 'crystalizer', 'aexciter', 'asoftclip', 'acrusher',
+  'aemphasis', 'acontrast', 'asubboost', 'asupercut', 'asubcut', 'adelay', 'dcshift', 'afade', 'aformat', 'aresample', 'channelmap',
+]);
+
 /** Options that name files; only lut3d `file` (a LUT, by extension) is permitted. */
 const FILE_OPTIONS = new Set(['file', 'filename', 'textfile', 'fontfile', 'psfile', 'commands', 'map_file', 'stats_file', 'plot', 'stats', 'logfile', 'passlogfile', 'model', 'result']);
 
@@ -38,15 +51,25 @@ export function escapeValue(v: string): string {
   return lvl1.replace(/[\\'\[\],;]/g, (c) => '\\' + c);
 }
 
-export interface FilterBuildOptions { /** resolve relative LUT paths against this directory */ baseDir?: string }
+export interface FilterBuildOptions {
+  /** resolve relative LUT paths against this directory */
+  baseDir?: string;
+  /** the stage the filter runs in: video (source-stage effects, default) or audio (audio-stage effects) */
+  stage?: 'video' | 'audio';
+}
 
 /** One FilterSpec → "name=k=v:k=v". Throws E_FILTER for disallowed filters or options. */
 export function filterToString(f: FilterSpec, opts: FilterBuildOptions = {}): string {
   const name = f.filter;
-  if (!/^[a-z0-9_]+$/.test(name) || !ALLOWED_VIDEO_FILTERS.has(name)) {
-    const dym = suggest(name, ALLOWED_VIDEO_FILTERS);
-    fail('E_FILTER', `ffmpeg filter "${name}" is not allowed in a source-stage effect.`,
-      `use an allowed filter${dym.length ? ` (did you mean "${dym[0]}"?)` : ''}; filters that read files, open URLs or run commands (movie, amovie, sendcmd, ...) are refused.`, { didYouMean: dym });
+  const audio = opts.stage === 'audio';
+  const allowed = audio ? ALLOWED_AUDIO_FILTERS : ALLOWED_VIDEO_FILTERS;
+  if (!/^[a-z0-9_]+$/.test(name) || !allowed.has(name)) {
+    const dym = suggest(name, allowed);
+    const other = audio ? ALLOWED_VIDEO_FILTERS.has(name) : ALLOWED_AUDIO_FILTERS.has(name);
+    fail('E_FILTER', `ffmpeg filter "${name}" is not allowed in ${audio ? 'an audio-stage' : 'a source-stage'} effect${other ? ` (it is ${audio ? 'a video' : 'an audio'} filter)` : ''}.`,
+      other
+        ? (audio ? 'return video filters from the effect\'s source() and audio filters from audio().' : 'return audio filters from the effect\'s audio() (plugin API 1.1), not source().')
+        : `use an allowed filter${dym.length ? ` (did you mean "${dym[0]}"?)` : ''}; filters that read files, open URLs or run commands (movie, amovie, sendcmd, ...) are refused.`, { didYouMean: dym });
   }
   const parts: string[] = [];
   for (const [k, v0] of Object.entries(f.args ?? {})) {

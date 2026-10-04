@@ -1,6 +1,7 @@
 # Rendering
 
 `mgl render <file> [out] [--draft|--final|--hq] [--range a-b] [--still t] [--alpha] [--comp id] [--segments n] [--detach] [--status]`
+plus delivery flags: `[--crf n] [--bitrate 8M] [--audio-bitrate 320k] [--pcm 16|24] [--prores proxy|lt|422|hq|4444|4444xq] [--timecode HH:MM:SS:FF] [--color-range tv|pc] [--bus <id>|all]`
 
 The format comes from the extension of `out` (default `out/<name>.mp4` next to the project):
 
@@ -8,11 +9,12 @@ The format comes from the extension of `out` (default `out/<name>.mp4` next to t
 |---|---|
 | `.mp4` | H.264 + AAC, yuv420p, BT.709, `+faststart` |
 | `.webm` | VP9 + Opus (`--alpha`: with transparency) |
-| `.mov` | ProRes 422 (`--alpha`: ProRes 4444 with transparency) |
+| `.mov` | ProRes 422 HQ, 10-bit, PCM audio (`--prores` picks the profile; `--alpha`: ProRes 4444 with transparency) |
 | `.gif` | palette GIF, ≤ 15 fps |
-| `.png` | one frame (`--still <time>`, default the start) |
-| `.wav` `.mp3` `.m4a` `.opus` `.flac` | the audio mix only |
+| `.png` | one frame (`--still <time>`, default the start), RGBA: transparent where the comp has no `bg` |
+| `.wav` `.mp3` `.m4a` `.opus` `.flac` | the audio mix only (`--bus` for stems) |
 | `.srt` `.vtt` | the caption cues |
+| `.chapters.txt` `.chapters.vtt` | chapters from the comp's markers that have a `note` (YouTube description lines, WebVTT chapters) |
 
 | Quality | Video |
 |---|---|
@@ -30,6 +32,43 @@ mgl render r.mgl.json out/frame.png --still 1.5s
 mgl render r.mgl.json out/part.gif --draft --range 0.5s-1.5s
 mgl render r.mgl.json out/r.mp3
 ```
+
+## Delivery settings
+
+| Flag | Applies to | Effect |
+|---|---|---|
+| `--crf n` | `.mp4` (x264 0–51, default 20), `.webm` (VP9 0–63, default 32) | quality; lower = better and bigger |
+| `--bitrate 8M` | `.mp4`, `.webm` | target video bitrate (with `--crf`: a cap) |
+| `--audio-bitrate 320k` | `.mp4`, `.webm`, `.mp3`, `.m4a`, `.opus` | audio bitrate (default 192k AAC) |
+| `--pcm 24` | `.wav`, `.flac`, `.mov` | PCM bit depth (default 16) |
+| `--prores proxy` | `.mov` | proxy, lt, 422, hq (default), 4444 (default with `--alpha`), 4444xq |
+| `--timecode 10:00:00:00` | `.mov`, `.mp4` | start timecode of the file (`;` before the frames for drop-frame at 29.97/59.94) |
+| `--color-range pc` | video | range flag: tv (limited, the default) or pc (full) |
+| `--bus dialogue` | `.wav` and other audio | a **stem**: that bus's contribution to the mix (other buses muted, ducking kept); `--bus all` writes one stereo pair per bus in a multichannel `.wav` |
+
+A flag that does not apply to the output is an error naming the ones that do. With a loudness target on master,
+stems get the full mix's gain (they are not normalised on their own), so the stems sum to the mix. For a
+broadcast-legal picture put a `legalize` effect on an adjustment layer over everything (QA's `luma-range` rule
+reports out-of-range frames in `look`); `letterbox` adds a 2.39 or 1.85 matte.
+
+```sh
+mgl render r.mgl.json out/r-web.mp4 --range 0-1s --crf 24 --audio-bitrate 128k
+mgl render r.mgl.json out/r-master.mov --range 0-1s --prores proxy --pcm 24 --timecode 10:00:00:00
+mgl render r.mgl.json out/r-24bit.wav --pcm 24
+```
+
+## Chapters
+
+Markers with a `note` are chapters (the note is the title): `mgl edit r.mgl.json marker.add at=0 note="Intro"`,
+then `mgl render r.mgl.json out/r.chapters.txt` (lines `0:00 Intro` for a YouTube description) or
+`out/r.chapters.vtt`. An "Intro" chapter is added at 0:00 when none starts there, and the result notes
+YouTube's rules (at least 3 chapters, each at least 10 s).
+
+## Transparency
+
+`--alpha` writes transparency to `.webm` (VP9) and `.mov` (ProRes 4444). Only what the comp leaves empty is
+transparent: a comp with `bg` renders opaque (`mgl check <file> --alpha` warns), so remove `bg` for an overlay.
+`look` shows transparent areas over dark grey.
 
 ## The estimate and long renders
 

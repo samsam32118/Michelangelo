@@ -85,9 +85,12 @@ defineCommand({
     const assets = ctx.project.assets ?? [];
     const i = assets.findIndex((a) => a.id === p.id);
     if (i < 0) fail('E_REF', `asset "${p.id}" does not exist.`, 'list assets with: mgl show <file> --assets');
-    const users = (ctx.project.clips ?? []).filter((c) => c.asset === p.id);
+    // media clips of the asset, and generators that visualise its sound (gen.asset)
+    const uses = (c: { asset?: string; gen?: Record<string, unknown> }) => c.asset === p.id || c.gen?.asset === p.id;
+    const users = (ctx.project.clips ?? []).filter(uses);
     if (users.length && !p.clips) fail('E_IN_USE', `asset "${p.id}" is used by ${users.length} clip(s): ${users.slice(0, 5).map((c) => c.id).join(', ')}.`, 'remove those clips first, or pass clips=true to remove them too.');
-    ctx.project.clips = (ctx.project.clips ?? []).filter((c) => c.asset !== p.id);
+    const gone = new Set(users.map((c) => c.id));
+    ctx.project.clips = (ctx.project.clips ?? []).filter((c) => !gone.has(c.id));
     assets.splice(i, 1);
     ctx.summary(`removed asset "${p.id}"${users.length ? ` and ${users.length} clip(s)` : ''}.`);
   },
@@ -196,7 +199,7 @@ defineCommand({
 defineCommand({
   op: 'track.add', group: 'track', doc: 'Add a track to a comp; visual tracks stack in order (later = on top), audio tracks mix into a bus.',
   schema: z.strictObject({ id: Id.optional(), comp: Id.optional(), audio: z.boolean().optional(), bus: Id.optional(), below: Id.optional(), above: Id.optional() }),
-  example: { id: 'T1', audio: false },
+  primary: 'id', example: { id: 'V2' },
   apply(ctx, p) {
     const comp = p.comp ?? ctx.project.project?.main ?? ctx.project.comps[0]!.id;
     ctx.comp(comp);
@@ -204,7 +207,8 @@ defineCommand({
     const prefix = p.audio ? 'A' : 'V';
     let id = p.id;
     if (!id) { for (let n = 1; ; n++) { const cand = ctx.project.comps.length > 1 && comp !== ctx.project.comps[0]!.id ? `${comp}-${prefix}${n}` : `${prefix}${n}`; if (!tracks.some((t) => t.id === cand)) { id = cand; break; } } }
-    if (tracks.some((t) => t.id === id)) fail('E_DUPLICATE_ID', `track "${id}" already exists.`, 'choose another id or omit it.');
+    if (tracks.some((t) => t.id === id)) fail('E_DUPLICATE_ID', `track "${id}" already exists.`, 'choose another id or omit it (or just use that track: track=' + id + ').');
+    if (TABLES.some((tb) => ((ctx.project[tb] as { id: string }[] | undefined) ?? []).some((e) => e.id === id))) fail('E_DUPLICATE_ID', `id "${id}" is already used by another entity.`, 'choose another id or omit it.');
     const t: Track = { id: id!, comp };
     if (p.audio) t.audio = true;
     if (p.bus) t.bus = p.bus;
@@ -288,28 +292,53 @@ defineCommand({
 });
 
 defineCommand({
-  op: 'id.rename', group: 'project', doc: 'Rename any entity and update every reference to it.',
+  op: 'id.rename', group: 'project', doc: 'Rename any entity and update every reference to it (only references to that kind of entity: renaming a clip never touches a bus of the same name).',
   schema: z.strictObject({ id: z.string(), to: Id }), primary: 'id', example: { id: 'clip3', to: 'hook' },
   apply(ctx, p) {
     const pr = ctx.project;
-    let found = '';
-    for (const t of TABLES) for (const e of (pr[t] as { id: string }[] | undefined) ?? []) { if (e.id === p.to) fail('E_DUPLICATE_ID', `id "${p.to}" is already used (${t}).`, 'choose another id.'); if (e.id === p.id) found = t; }
+    let found: (typeof TABLES)[number] | '' = '';
+    for (const t of TABLES) for (const e of (pr[t] as { id: string }[] | undefined) ?? []) { if (e.id === p.to) fail('E_DUPLICATE_ID', `id "${p.to}" is already used (${t}).`, 'choose another id.'); if (e.id === p.id && !found) found = t; }
     if (!found) fail('E_REF', `nothing has id "${p.id}".`, 'check the id with: mgl show <file>');
     const r = (v: string | undefined) => (v === p.id ? p.to : v);
-    for (const t of TABLES) for (const e of (pr[t] as { id: string }[] | undefined) ?? []) if (e.id === p.id) e.id = p.to;
-    for (const t of pr.tracks ?? []) { t.comp = r(t.comp)!; if (t.bus) t.bus = r(t.bus); }
-    for (const c of pr.clips ?? []) {
-      c.track = r(c.track)!;
-      for (const k of ['asset', 'comp', 'parent'] as const) if (c[k]) c[k] = r(c[k]);
-      if (typeof c.style === 'string') c.style = r(c.style);
-      else if (c.style && typeof c.style === 'object' && c.style.base) c.style.base = r(c.style.base);
-      if (c.matte) c.matte.clip = r(c.matte.clip)!;
+    for (const e of (pr[found] as { id: string }[] | undefined) ?? []) if (e.id === p.id) e.id = p.to;
+    switch (found) {
+      case 'assets':
+        for (const c of pr.clips ?? []) {
+          if (c.asset) c.asset = r(c.asset);
+          // audio-reactive generators name the asset they visualise
+          const g = c.gen as Record<string, unknown> | undefined;
+          if (g && typeof g.asset === 'string') g.asset = r(g.asset);
+        }
+        break;
+      case 'comps':
+        for (const t of pr.tracks ?? []) t.comp = r(t.comp)!;
+        for (const c of pr.clips ?? []) if (c.comp) c.comp = r(c.comp);
+        for (const m of pr.markers ?? []) m.comp = r(m.comp)!;
+        if (pr.project?.main) pr.project.main = r(pr.project.main);
+        break;
+      case 'tracks':
+        for (const c of pr.clips ?? []) c.track = r(c.track)!;
+        break;
+      case 'clips':
+        for (const c of pr.clips ?? []) {
+          if (c.parent) c.parent = r(c.parent);
+          if (c.matte) c.matte.clip = r(c.matte.clip)!;
+        }
+        for (const q of pr.cues ?? []) q.clip = r(q.clip)!;
+        break;
+      case 'styles':
+        for (const c of pr.clips ?? []) {
+          if (typeof c.style === 'string') c.style = r(c.style);
+          else if (c.style && typeof c.style === 'object' && c.style.base) c.style.base = r(c.style.base);
+        }
+        for (const s of pr.styles ?? []) if (s.base) s.base = r(s.base);
+        break;
+      case 'buses':
+        for (const t of pr.tracks ?? []) if (t.bus) t.bus = r(t.bus);
+        for (const b of pr.buses ?? []) { if (b.duck) b.duck.by = r(b.duck.by)!; if (b.to) b.to = r(b.to); }
+        break;
+      default: break; // cues and markers are not referenced
     }
-    for (const q of pr.cues ?? []) q.clip = r(q.clip)!;
-    for (const m of pr.markers ?? []) m.comp = r(m.comp)!;
-    for (const b of pr.buses ?? []) { if (b.duck) b.duck.by = r(b.duck.by)!; if (b.to) b.to = r(b.to); }
-    for (const s of pr.styles ?? []) if (s.base) s.base = r(s.base);
-    if (pr.project?.main) pr.project.main = r(pr.project.main);
     ctx.summary(`renamed ${found.replace(/s$/, '')} "${p.id}" to "${p.to}".`);
   },
 });

@@ -104,7 +104,9 @@ describe('frame stage', () => {
     const layers = new Map([[30, [bgLayer]], [60, [bgLayer]]]);
     const f = runCheck('frozen', p, { frames: new Map([[30, img([50, 80, 90])], [60, img([50, 80, 90])]]), layers });
     expect(f).toHaveLength(1);
-    expect(f[0]!.fix).toBe('mgl edit <file> clip.trim bg end=31 ripple=true');
+    // no known source end: info, and never a (ripple) trim
+    expect(f[0]).toMatchObject({ severity: 'info', clip: 'bg' });
+    expect(f[0]!.fix).toBeUndefined();
     expect(runCheck('frozen', p, { frames: new Map([[30, img([50, 80, 90])], [60, img([150, 80, 90])]]), layers })).toEqual([]);
   });
 

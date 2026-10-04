@@ -1,6 +1,7 @@
 /** Shape layers: rect, ellipse, line, polygon, star, SVG path; fill, stroke, gradient, trim (dash). */
 import { Path2D, type SKRSContext2D, type CanvasGradient } from '@napi-rs/canvas';
 import type { ShapeSpec } from '../../core/schema/index.js';
+import { pathBounds, pathLength, pointsBounds } from '../path.js';
 
 type Pt = [number, number];
 
@@ -22,46 +23,7 @@ function polyLength(pts: Pt[], closed: boolean): number {
   return L;
 }
 
-/** Approximate length of SVG path data (curves flattened, arcs as chords). */
-export function pathLength(d: string): number {
-  const toks = d.match(/[a-zA-Z]|-?(?:\d+\.?\d*|\.\d+)(?:e[-+]?\d+)?/g) ?? [];
-  let i = 0, cmd = '', x = 0, y = 0, sx = 0, sy = 0, L = 0, lcx = 0, lcy = 0;
-  const num = () => Number(toks[i++]);
-  const seg = (nx: number, ny: number) => { L += Math.hypot(nx - x, ny - y); x = nx; y = ny; };
-  const curve = (pts: Pt[]) => {
-    const p0: Pt = [x, y];
-    const all = [p0, ...pts];
-    let px = x, py = y;
-    for (let s = 1; s <= 16; s++) {
-      const t = s / 16;
-      let q = all.map((p) => [...p] as Pt);
-      while (q.length > 1) q = q.slice(1).map((p, k) => [q[k]![0] + (p[0] - q[k]![0]) * t, q[k]![1] + (p[1] - q[k]![1]) * t] as Pt);
-      L += Math.hypot(q[0]![0] - px, q[0]![1] - py);
-      [px, py] = q[0]!;
-    }
-    x = px; y = py;
-  };
-  while (i < toks.length) {
-    if (/[a-zA-Z]/.test(toks[i]!)) cmd = toks[i++]!;
-    const rel = cmd === cmd.toLowerCase();
-    const ox = rel ? x : 0, oy = rel ? y : 0;
-    switch (cmd.toUpperCase()) {
-      case 'M': x = sx = num() + ox; y = sy = num() + oy; cmd = rel ? 'l' : 'L'; break;
-      case 'L': seg(num() + ox, num() + oy); break;
-      case 'H': seg(num() + ox, y); break;
-      case 'V': seg(x, num() + oy); break;
-      case 'C': { const c1: Pt = [num() + ox, num() + oy], c2: Pt = [num() + ox, num() + oy], e: Pt = [num() + ox, num() + oy]; [lcx, lcy] = c2; curve([c1, c2, e]); break; }
-      case 'S': { const c1: Pt = [2 * x - lcx, 2 * y - lcy], c2: Pt = [num() + ox, num() + oy], e: Pt = [num() + ox, num() + oy]; [lcx, lcy] = c2; curve([c1, c2, e]); break; }
-      case 'Q': { const c: Pt = [num() + ox, num() + oy], e: Pt = [num() + ox, num() + oy]; [lcx, lcy] = c; curve([c, e]); break; }
-      case 'T': { const c: Pt = [2 * x - lcx, 2 * y - lcy], e: Pt = [num() + ox, num() + oy]; [lcx, lcy] = c; curve([c, e]); break; }
-      case 'A': { i += 5; seg(num() + ox, num() + oy); break; }
-      case 'Z': seg(sx, sy); break;
-      default: i++;
-    }
-    if (!'CSQT'.includes(cmd.toUpperCase())) { lcx = x; lcy = y; }
-  }
-  return L;
-}
+export { pathLength } from '../path.js';
 
 function shapePath(s: ShapeSpec, w: number, h: number): { path: Path2D; length: number; closed: boolean } {
   const p = new Path2D();
@@ -104,27 +66,55 @@ function gradientOf(ctx: SKRSContext2D, g: NonNullable<ShapeSpec['gradient']>, w
   return grad;
 }
 
-/** Margin a shape draws outside its box (half the stroke). */
+/** Stroke styling and partial outlines added to shapes (fields may be absent from older schemas). */
+export interface ShapeStroke { lineCap?: 'butt' | 'round' | 'square'; lineJoin?: 'miter' | 'round' | 'bevel' }
+
+/** Margin a shape draws outside its box: half the stroke (more for miter joins), and path/point geometry at negative coordinates. */
 export function shapeOverhang(s: ShapeSpec): number {
-  return s.stroke || s.type === 'line' ? Math.ceil((s.strokeWidth ?? 4) / 2) + 1 : 0;
+  const st = s as ShapeSpec & ShapeStroke;
+  const half = s.stroke || s.type === 'line' ? Math.ceil(((s.strokeWidth ?? 4) / 2) * (st.lineJoin === 'miter' ? 4 : st.lineCap === 'square' ? Math.SQRT2 : 1)) + 1 : 0;
+  let neg = 0;
+  const b = s.type === 'path' && s.d ? pathBounds(s.d) : (s.type === 'line' || s.type === 'polygon') && s.points?.length ? pointsBounds(s.points) : null;
+  if (b) neg = Math.ceil(Math.max(0, -b.x, -b.y));
+  return half + neg;
+}
+
+/**
+ * Dash pattern + offset that strokes only the fraction [start, end) of an outline of length L, shifted by `offset`
+ * (fractions; the window wraps around the start of the path, as After Effects' trim paths offset does).
+ * null = the whole outline; 'none' = nothing.
+ */
+export function trimDash(L: number, start: number, end: number, offset: number): { dash: number[]; offset: number } | null | 'none' {
+  let a = Math.min(start, end), b = Math.max(start, end);
+  if (b - a >= 1 - 1e-9) return null;
+  if (b - a <= 1e-9 || !(L > 0)) return 'none';
+  const o = offset - Math.floor(offset);
+  a += o; b += o;
+  if (a >= 1) { a -= 1; b -= 1; }
+  if (b <= 1 + 1e-9) return { dash: [(b - a) * L, 2 * L + 1], offset: -a * L };
+  // wraps: on [0, b-1), off, on [a, 1)
+  return { dash: [(b - 1) * L, (a - (b - 1)) * L, (1 - a) * L + 1, 2 * L], offset: 0 };
 }
 
 /** Draw a shape in layer px (0,0)-(w,h) on a context already transformed to layer px. */
-export function drawShape(ctx: SKRSContext2D, s: ShapeSpec, w: number, h: number, trim?: number): void {
+export function drawShape(ctx: SKRSContext2D, s: ShapeSpec, w: number, h: number, trim?: number, trimStart = 0, trimOffset = 0): void {
   const { path, length } = shapePath(s, w, h);
+  const st = s as ShapeSpec & ShapeStroke;
   const t = trim ?? 1;
+  const dash = trimDash(length, trimStart, t, trimOffset);
+  const trimmed = dash !== null;
   ctx.save();
   if (s.type !== 'line' && s.fill !== 'none') {
     ctx.fillStyle = s.gradient ? gradientOf(ctx, s.gradient, w, h) : (s.fill ?? '#ffffff');
     ctx.fill(path);
   }
   const strokeColor = s.stroke ?? (s.type === 'line' ? (s.fill && s.fill !== 'none' ? s.fill : '#ffffff') : undefined);
-  if (strokeColor && t > 0) {
+  if (strokeColor && dash !== 'none') {
     ctx.strokeStyle = s.type === 'line' && s.gradient ? gradientOf(ctx, s.gradient, w, h) : strokeColor;
     ctx.lineWidth = s.strokeWidth ?? 4;
-    ctx.lineJoin = 'round';
-    ctx.lineCap = t < 1 ? 'butt' : 'round';
-    if (t < 1) ctx.setLineDash([length * t, length + 1]);
+    ctx.lineJoin = st.lineJoin ?? 'round';
+    ctx.lineCap = st.lineCap ?? (trimmed ? 'butt' : 'round');
+    if (dash) { ctx.setLineDash(dash.dash); ctx.lineDashOffset = dash.offset; }
     ctx.stroke(path);
   }
   ctx.restore();

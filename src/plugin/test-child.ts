@@ -9,9 +9,9 @@ import type { PluginDef, Surface } from './api.js';
 import { pluginEntry } from './loader.js';
 import { checkPluginDef, kindsOf } from './validate.js';
 import { builtinRegistry } from '../builtin/index.js';
-import { renderEffect, renderGenerator, renderTransition, savePNG, solid } from './testing.js';
+import { effectFilters, renderEffect, renderGenerator, renderTransition, savePNG, solid } from './testing.js';
 
-interface Result { name?: string; errors: string[]; kinds: string[]; preview?: string; previewOf?: string }
+interface Result { name?: string; errors: string[]; kinds: string[]; preview?: string; previewOf?: string; filters?: string[] }
 
 /** Generators draw on transparency: show them over a dark background. */
 function overDark(s: Surface): Surface {
@@ -37,6 +37,17 @@ async function main(dir: string): Promise<Result> {
     return { errors: [`${(e as Error).message} by a built-in, so the plugin cannot load in a project (fix: rename it, e.g. prefix it with the plugin name).`], kinds: [] };
   }
   const r: Result = { name: def.name, errors, kinds: kindsOf(def) };
+  // source/audio-stage effects: their default filters must pass the allowlist (a render would refuse them)
+  for (const e of def.effects ?? []) {
+    if (!e.source && !e.audio) continue;
+    try {
+      const f = await effectFilters(e, {});
+      r.filters = [...(r.filters ?? []), `${e.type}: ${[f.sourceGraph && `source ${f.sourceGraph}`, f.audioGraph && `audio ${f.audioGraph}`].filter(Boolean).join('; ') || '(no filters with default params)'}`];
+    } catch (err) {
+      const x = err as { message?: string; fix?: string };
+      r.errors.push(`effect "${e.type}" with default params: ${x.message ?? String(err)}${x.fix ? ` (fix: ${x.fix})` : ''}`);
+    }
+  }
   const W = 480, H = 270, file = join(dir, '.preview.png');
   try {
     const fx = def.effects?.find((e) => e.draw), tr = def.transitions?.[0], gen = def.generators?.[0];

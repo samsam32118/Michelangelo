@@ -10,7 +10,7 @@ import { MglError } from '../src/core/errors.js';
 import { listCommands, type CommandDef } from '../src/core/commands/index.js';
 import { shellExampleLine } from '../src/cli/shell.js';
 import { builtinRegistry } from '../src/builtin/index.js';
-import { fieldsOf, type FieldDoc } from '../src/cli/docs.js';
+import { catalogPage, fieldsOf, type FieldDoc } from '../src/cli/docs.js';
 import type { z } from 'zod';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
@@ -41,25 +41,7 @@ export function commandsPage(): string {
 }
 
 export function effectsPage(): string {
-  const reg = builtinRegistry();
-  const params = (p?: z.ZodType) => (p && 'shape' in (p as object) ? fieldsOf(p as z.ZodObject).map(fieldText).join('; ') : '');
-  const out = [HEADER('the built-in plugin registry'), '# Effects, transitions, generators, templates, styles', '',
-    'The built-in catalog (every entry is a plugin-API definition in `src/builtin/`; plugins add more). `mgl docs <name>` prints one.', '',
-    '## Effects', '', '`fx` on a clip is an ordered list: `mgl edit video.mgl.json fx.add shot1 type=blur radius=8`; address a parameter as',
-    '`fx.blur.radius` (first of that type) or `fx.0.radius`. Numeric parameters accept keyframes. Stage `source` runs in ffmpeg while',
-    'decoding (media clips only); `layer` runs in Skia on the rendered layer.', ''];
-  for (const [id, e] of reg.effects) out.push(`- **${id}** (${[e.source ? 'source' : '', e.draw ? 'layer' : ''].filter(Boolean).join(' + ')}): ${md(e.describe)}${params(e.params) ? `  \n  ${params(e.params)}` : ''}`);
-  out.push('', '## Transitions', '', 'A transition is the incoming clip\'s `in` (centred on the cut): `mgl edit video.mgl.json transition.set shot2 type=wipe len=0.5s`.', '');
-  for (const [id, t] of reg.transitions) out.push(`- **${id}**: ${md(t.describe)}${params(t.params) ? `  \n  ${params(t.params)}` : ''}`);
-  out.push('', '## Generators', '', 'Clips that draw: `{"gen": {"type": "gradient", "colors": ["#000", "#333"]}}`.', '');
-  for (const [id, g] of reg.generators) out.push(`- **${id}**: ${md(g.describe)}${params(g.params) ? `  \n  ${params(g.params)}` : ''}`);
-  out.push('', '## Templates', '', '`mgl edit video.mgl.json template.apply <id> at=1s params=\'{...}\'` (see templates.md).', '');
-  for (const [id, t] of reg.templates) out.push(`- **${id}**: ${md(t.describe)}${params(t.params) ? `  \n  ${params(t.params)}` : ''}`);
-  out.push('', '## Styles', '', 'Built-in text styles, usable as `"style": "<id>"` or as `base` of your own style.', '');
-  for (const [id, s] of reg.styles) out.push(`- **${id}**: ${md(s.describe)} \`${md(JSON.stringify(s.style))}\``);
-  out.push('', '## Text animations', '', '`text.animate <clip> in=<id> by=word` (char, word, line, all).', '');
-  out.push(`${[...reg.textAnimations].map(([id, a]) => `**${id}** (${md(a.describe)})`).join(' · ')}`, '');
-  return out.join('\n');
+  return HEADER('the built-in plugin registry') + catalogPage(builtinRegistry()).join('\n');
 }
 
 // ------------------------------------------------------------------------------------------- errors

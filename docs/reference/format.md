@@ -45,7 +45,7 @@ by hand, and removed on the next save). The JSON Schema is `schema/v1.json` (`mg
 
 - **Tables, not nesting.** Tracks point to their comp, clips to their track, cues to their captions clip.
   `grep '"track": "V1"'` finds a track's clips. Order inside `tracks` is the stacking order (later = on
-  top; audio tracks mix). Order inside `clips` is free; the writer sorts by comp, track, start.
+  top; audio tracks mix). A track you add goes on top, above the preset's text track `T1`. Order inside `clips` is free; the writer sorts by comp, track, start.
 - **Ids** are unique across the project: letters, digits, `_`, `-`, `.`, starting with a letter or digit.
   Ids you give are kept; generated ones are readable (`title`, `shot-2`, `c17`). Rename with
   `id.rename <old> to=<new>` (it updates every reference).
@@ -62,28 +62,45 @@ by hand, and removed on the next save). The JSON Schema is `schema/v1.json` (`mg
 
 | Table | Fields |
 |---|---|
-| `project` | `name`, `platform` (shorts, tiktok, reels, youtube, none: safe zones and loudness target), `main` (default comp), `plugins` (name → semver range) |
+| `project` | `name`, `platform` (safe zones and loudness target; names: `mgl docs project.set`), `main` (default comp), `plugins` (name → semver range) |
 | `assets` | `id`, `src` (path relative to the project file), `kind` (override), `note` |
 | `styles` | `id`, `base` (inherit another style), and any text style field (below) |
 | `comps` | `id`, `size` [w, h], `fps`, `length` (frames or `"auto"` = end of the last clip), `bg` |
 | `tracks` | `id`, `comp`, `audio`, `bus`, `hidden`, `muted`, `locked` |
 | `clips` | `id`, `track`, `at`, `len`, one source, then properties (below) |
 | `cues` | `id`, `clip`, `at`, `len`, `text`, `words`, `speaker` |
-| `buses` | `id`, `gain`, `muted`, `duck` {by, db, attack, release}, `loudness` {lufs, peak}, `to` |
+| `buses` | `id`, `gain`, `muted`, `duck` {by, db, attack, release}, `loudness` {lufs, peak; master only}, `to`, `fx` (audio effects on the bus mix) |
 | `markers` | `id`, `comp`, `at`, `len`, `note` |
 
-**Clip sources (exactly one):** `asset` (video, image, audio), `text`, `shape` {type: rect, ellipse, line,
-polygon, star, path, size, radius, fill, stroke, strokeWidth, gradient, trim}, `color` (a solid),
+**Clip sources (exactly one):** `asset` (video, image, audio), `text`, `shape` (below), `color` (a solid),
 `comp` (nested comp), `captions: true` (shows its cues), `adjustment: true` (its fx apply to the tracks
 below), `gen` {type, ...params} (a generator: gradient, particles, counter, ...).
 
+**Shapes:** `{"type": "rect"|"ellipse"|"line"|"polygon"|"star"|"path", ...}` with `size` [w, h] (the layer box;
+a `path` needs it or it is clipped), `radius` (rect corners), `sides` (polygon/star), `points` ([[x, y], ...] for
+line/polygon), `d` (SVG path data in shape px), `fill` (default white; `"none"` for an outline), `stroke`,
+`strokeWidth`, `lineCap` (butt, round, square), `lineJoin` (miter, round, bevel), `gradient` {type: linear|radial,
+stops: [[0, "#f00"], [1, "#00f"]], angle}, and **trim paths**: `trim` (end of the drawn part, 0..1), `trimStart`
+(its start), `trimOffset` (shifts the drawn part along the outline; 1 = once around). Trim values are keyframable
+through clip keys: `key.set logo prop=shape.trim at=0 value=0`.
+
 **Clip properties:** `x`, `y` (where the anchor sits, comp px; default the centre), `anchor`, `scale`
 (number or [sx, sy]), `rotate` (degrees), `opacity`, `blend` (normal, multiply, screen, overlay, add, ...),
-`fit` (contain, cover, fill, none), `crop` [l, t, r, b], `in` (source offset, frames), `speed` (2, 0.5,
+`fit` (contain, cover, fill, none; default: video `cover`, images `contain`, i.e. scaled to the frame: use
+`fit=none` for a logo at its pixel size, or `scale`), `crop` [l, t, r, b], `in` (source offset, frames), `speed` (2, 0.5,
 "3/2"; 0 = freeze), `remap` (source frame by clip frame, keyframed), `loop`, `gain` (dB), `fade` [in, out],
 `muted`, `style` (a style id or an inline object), `animate` {in, out, by, stagger, len}, `fx` (ordered
 effects `[{type, ...params}]`), `masks`, `matte` {clip, mode}, `transition` {in, out}, `parent`, `link`,
-`clock`, `hidden`, `locked`, `tags`, `note`.
+`clock`, `hidden`, `locked`, `tags` (e.g. `qa-ignore:safe-zone`, see look-and-qa.md), `note`.
+
+- **parent**: a child's own `x`/`y`/`scale`/`rotate` place it while the parent is at rest (the parent's first
+  frame); the parent's movement, rotation (around its anchor) and scale since then carry the child along.
+- **masks**: `[{shape: rect|ellipse|path, box: [x, y, w, h], d, space: comp|clip, feather, radius, invert, mode:
+  add|subtract|intersect, opacity}]`. `box` is in comp px, or in fractions of the clip box with `space: "clip"`
+  (then it follows the clip's transform). `box` can be keyframes `[[frame, [x, y, w, h], easing?], ...]` (clip-local).
+- **text**: wraps at `maxWidth` (or, without it, at the frame edge from `x`), so give long single-line crawls a
+  large `maxWidth`. A line break is `\n` inside the JSON string; from the CLI write the value as a JSON string:
+  `text='"Line one\nLine two"'`.
 
 **Text style fields:** `font` (Inter, Noto Sans, Anton, JetBrains Mono, or a font asset id), `size`,
 `weight`, `italic`, `color`, `align`, `lineHeight`, `letterSpacing`, `stroke`, `strokeWidth`, `shadow`,

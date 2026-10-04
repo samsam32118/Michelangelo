@@ -1,8 +1,8 @@
-/** Clip commands: add, set, remove, move, trim, split, ripple-delete, slip, slide, roll, speed, freeze, detach-audio, nest. */
+/** Clip commands: add, set, remove, move, trim, split, ripple-delete, slip, slide, roll, speed, freeze, detach-audio, nest, duplicate, punch-in. */
 import { z } from 'zod';
 import { fail, suggest } from '../errors.js';
 import { defineCommand, TimeArg, type CommandContext } from './registry.js';
-import { Id, inputSchemas, type Clip, type Cue, type Track } from '../schema/index.js';
+import { Easing, Id, inputSchemas, type Clip, type Cue, type Track } from '../schema/index.js';
 import { kindFromExtension } from './structure.js';
 import { parseSpeed, secondsToNearestFrame } from '../time.js';
 import { isKeyframes, ANIMATABLE_CLIP_KEYS } from '../load.js';
@@ -153,6 +153,95 @@ export function defaultTrack(ctx: CommandContext, audio: boolean, compId?: strin
   return nt.id;
 }
 
+/** A solid colour with no transparency ("#rgb", "#rrggbb", a CSS name; not "transparent", "#rrggbbaa" < ff, rgba()). */
+function opaqueColour(c: string): boolean {
+  if (c === 'transparent' || c.startsWith('rgba') || c.startsWith('hsla')) return false;
+  if (/^#[0-9a-fA-F]{8}$/.test(c)) return c.slice(7).toLowerCase() === 'ff';
+  if (/^#[0-9a-fA-F]{4}$/.test(c)) return c.slice(4).toLowerCase() === 'f';
+  return true;
+}
+
+/**
+ * Whether a clip hides everything below it while it plays: an opaque layer filling the frame at rest (no transform
+ * moving it, no opacity, masks, matte or blend). Nested comps cover when their background is opaque or one of
+ * their own clips covers. A cheap, conservative test used to choose tracks (it never claims coverage it can't see).
+ */
+export function coversFrame(ctx: CommandContext, c: Clip, depth = 0): boolean {
+  if (c.hidden || depth > 8) return false;
+  if ((c.blend && c.blend !== 'normal') || c.masks?.length || c.matte) return false;
+  if (c.opacity !== undefined && c.opacity !== 1) return false;
+  if (c.rotate !== undefined && c.rotate !== 0) return false;
+  const comp = ctx.compOfClip(c);
+  if (c.x !== undefined && c.x !== comp.size[0] / 2) return false;
+  if (c.y !== undefined && c.y !== comp.size[1] / 2) return false;
+  if (c.anchor !== undefined && (c.anchor[0] !== 0.5 || c.anchor[1] !== 0.5)) return false;
+  if (c.scale !== undefined) {
+    const sc = c.scale;
+    const ok = typeof sc === 'number' ? sc >= 1 : Array.isArray(sc) && sc.length === 2 && typeof sc[0] === 'number' && typeof sc[1] === 'number' && sc[0] >= 1 && sc[1] >= 1;
+    if (!ok) return false;
+  }
+  if (c.color !== undefined) return opaqueColour(c.color);
+  if (c.asset !== undefined) {
+    const a = (ctx.project.assets ?? []).find((x) => x.id === c.asset);
+    if (!a) return false;
+    const kind = a.kind ?? kindFromExtension(a.src);
+    const fit = c.fit ?? (kind === 'image' ? 'contain' : 'cover');
+    if (fit !== 'cover' && fit !== 'fill') return false;
+    if (kind === 'video') return true;
+    // images: only formats without alpha
+    return kind === 'image' && /\.(jpe?g|bmp)$/i.test(a.src.split('?')[0]!);
+  }
+  if (c.comp !== undefined) {
+    const child = ctx.project.comps.find((x) => x.id === c.comp);
+    if (!child) return false;
+    if (child.size[0] < comp.size[0] || child.size[1] < comp.size[1]) return false;
+    if (child.bg !== undefined && opaqueColour(child.bg)) return true;
+    const tracks = new Set(tracksOfComp(ctx, child.id).filter((t) => !t.audio && !t.hidden).map((t) => t.id));
+    return (ctx.project.clips ?? []).some((x) => tracks.has(x.track) && coversFrame(ctx, x, depth + 1));
+  }
+  return false;
+}
+
+/** A new track on top of a comp's stack (named V<n>/A<n>), returned by id. */
+function newTopTrack(ctx: CommandContext, compId: string, audio: boolean): string {
+  const tracks = (ctx.project.tracks ??= []);
+  const prefix = audio ? 'A' : 'V';
+  let n = 1;
+  while (ctx.project.comps.some((x) => x.id === `${prefix}${n}`) || tracks.some((x) => x.id === `${prefix}${n}`) || (ctx.project.clips ?? []).some((x) => x.id === `${prefix}${n}`)) n++;
+  const nt: Track = { id: `${prefix}${n}`, comp: compId };
+  if (audio) nt.audio = true;
+  tracks.push(nt);
+  ctx.note(`created track ${nt.id}.`);
+  return nt.id;
+}
+
+/**
+ * The track for a clip spanning [at, at+len) when none was named: `preferred` when it is free; for audio the first
+ * free audio track; for visuals the topmost free track ABOVE every opaque full-frame clip playing at that time (so a
+ * new overlay is never hidden under, e.g., a nested comp clip), else a new track on top.
+ */
+export function pickTrack(ctx: CommandContext, compId: string, audio: boolean, at: number, len: number, preferred?: string): string {
+  const busy = (tid: string) => (ctx.project.clips ?? []).some((c) => c.track === tid && c.at < at + len && at < clipEnd(c));
+  const same = tracksOfComp(ctx, compId).filter((t) => !!t.audio === audio);
+  if (audio) {
+    if (preferred && !busy(preferred)) return preferred;
+    return same.find((t) => !busy(t.id))?.id ?? newTopTrack(ctx, compId, true);
+  }
+  let floor = -1;
+  same.forEach((t, i) => {
+    if (t.hidden) return;
+    if ((ctx.project.clips ?? []).some((c) => c.track === t.id && c.at < at + len && at < clipEnd(c) && coversFrame(ctx, c))) floor = i;
+  });
+  const above = same.slice(floor + 1);
+  if (preferred && !busy(preferred) && above.some((t) => t.id === preferred)) return preferred;
+  const free = [...above].reverse().find((t) => !busy(t.id));
+  if (free) {
+    if (floor >= 0 && preferred && preferred !== free.id) ctx.note(`put the clip on ${free.id}, above "${(ctx.project.clips ?? []).find((c) => c.track === same[floor]!.id && c.at < at + len && at < clipEnd(c))?.id}" on ${same[floor]!.id} (it fills the frame and would hide it).`);
+    return free.id;
+  }
+  return newTopTrack(ctx, compId, false);
+}
+
 // ---------------------------------------------------------------------------
 // commands
 // ---------------------------------------------------------------------------
@@ -160,7 +249,7 @@ export function defaultTrack(ctx: CommandContext, audio: boolean, compId?: strin
 const ClipFields = inputSchemas.Clip.partial().extend({ id: Id.optional(), track: Id.optional(), at: TimeArg.optional(), len: TimeArg.optional() });
 
 defineCommand({
-  op: 'clip.add', group: 'clip', doc: 'Add a clip: media (asset or src), text, shape, solid colour, nested comp, captions, adjustment or generator. Missing track/at/len are chosen for you.',
+  op: 'clip.add', group: 'clip', doc: 'Add a clip: media (asset or src), text, shape, solid colour, nested comp, captions, adjustment or generator. Missing track/at/len are chosen for you: after=<clip> starts it where that clip ends, on that clip\'s track; with no track a visual clip goes on the topmost free track above any full-frame opaque clip at that time (never hidden under one).',
   schema: ClipFields.extend({ src: z.string().optional(), after: Id.optional() }),
   example: { track: 'T1', at: '2s', len: '3s', text: 'Hello', style: 'title' },
   async apply(ctx, p) {
@@ -182,12 +271,15 @@ defineCommand({
     if (clip.asset !== undefined && !asset) fail('E_REF', `asset "${String(clip.asset)}" does not exist.`, 'add it with asset.add, or pass src=<path> to clip.add.');
     const kind = asset ? asset.kind ?? kindFromExtension(asset.src) : undefined;
     const isAudio = kind === 'audio';
-    const trackId = (clip.track as string | undefined) ?? defaultTrack(ctx, isAudio);
+    // track: given; else the track of the `after` clip (same kind); else the default (topmost visual / first audio)
+    const afterClip = after !== undefined ? ctx.clip(after) : undefined;
+    const afterTrack = afterClip && clip.track === undefined && !!ctx.track(afterClip.track).audio === isAudio ? afterClip.track : undefined;
+    const trackId = (clip.track as string | undefined) ?? afterTrack ?? defaultTrack(ctx, isAudio);
     const comp = ctx.compOfTrack(trackId);
     clip.track = trackId;
     // start: given, after another clip, or the end of the track
     if (clip.at === undefined) {
-      if (after) clip.at = clipEnd(ctx.clip(after));
+      if (afterClip) clip.at = clipEnd(afterClip);
       else clip.at = clipsOnTrack(ctx, trackId).reduce((m, c) => Math.max(m, clipEnd(c)), 0);
     } else clip.at = ctx.time(clip.at as string | number, comp, 'at');
     if (clip.len === undefined) {
@@ -214,22 +306,10 @@ defineCommand({
     const at = clip.at as number, len = clip.len as number;
     const busy = (tid: string) => clipsOnTrack(ctx, tid).find((c) => c.at < at + len && at < clipEnd(c));
     let hit = busy(trackId);
-    if (hit && fields.track === undefined) {
-      // no track was named: use the topmost free track of the same kind, or put a new one on top
-      const same = tracksOfComp(ctx, comp.id).filter((t) => !!t.audio === isAudio);
-      const free = (isAudio ? same : [...same].reverse()).find((t) => !busy(t.id));
-      if (free) clip.track = free.id;
-      else {
-        const tracks = (ctx.project.tracks ??= []);
-        const prefix = isAudio ? 'A' : 'V';
-        let n = 1;
-        while (tracks.some((x) => x.id === `${prefix}${n}`)) n++;
-        const nt: Track = { id: `${prefix}${n}`, comp: comp.id };
-        if (isAudio) nt.audio = true;
-        tracks.push(nt);
-        clip.track = nt.id;
-        ctx.note(`created track ${nt.id}.`);
-      }
+    if (fields.track === undefined) {
+      // no track was named: keep the chosen track when it is free (and, for visuals, not hidden under an opaque
+      // full-frame layer); else the topmost free track above such layers, else a new track on top
+      clip.track = pickTrack(ctx, comp.id, isAudio, at, len, afterTrack ?? (hit ? undefined : trackId));
       hit = undefined;
     }
     if (hit) fail('E_OVERLAP', `clip would overlap "${hit.id}" (${hit.at}–${clipEnd(hit)}) on track ${trackId}.`, `use at=${clipEnd(hit)}, another track (track=...), or omit at to append.`);
@@ -698,5 +778,188 @@ defineCommand({
     ctx.project.clips!.push(nc);
     ctx.out.id = nc.id;
     ctx.summary(`nested ${clips.length} clip(s) into comp "${compId}" (clip "${nc.id}" on ${host.id}).`);
+  },
+});
+
+// ---------------------------------------------------------------------------
+// duplicate, punch-in
+// ---------------------------------------------------------------------------
+
+/** Fit a source of sw×sh into W×H like the renderer does (contain/cover keep the aspect, fill stretches, none keeps the size). */
+function fitSize(sw: number, sh: number, W: number, H: number, fit: string): { w: number; h: number } {
+  if (fit === 'fill') return { w: W, h: H };
+  if (fit === 'none') return { w: sw, h: sh };
+  const s = fit === 'contain' ? Math.min(W / sw, H / sh) : Math.max(W / sw, H / sh);
+  return { w: sw * s, h: sh * s };
+}
+
+/**
+ * A clip's layer box at scale 1 in comp px (the box `anchor` and clip-space masks refer to), as the renderer sizes it:
+ * media fitted to the comp (probed size; the comp size when unknown), a nested comp's size, the comp size for solids,
+ * adjustments and generators. `known` is false for text and shapes (their size depends on fonts / geometry).
+ */
+export async function layerBox(ctx: CommandContext, c: Clip): Promise<{ w: number; h: number; known: boolean; fit?: string }> {
+  const comp = ctx.compOfClip(c);
+  const [W, H] = comp.size;
+  if (c.asset !== undefined) {
+    const a = (ctx.project.assets ?? []).find((x) => x.id === c.asset);
+    const kind = a ? a.kind ?? kindFromExtension(a.src) : undefined;
+    const fit = c.fit ?? (kind === 'image' ? 'contain' : 'cover');
+    if (a && ctx.services.probe && !a.src.startsWith('lavfi:') && (kind === 'video' || kind === 'image')) {
+      try {
+        const info = await ctx.services.probe(a.src);
+        if (info.width && info.height) {
+          const [l, t, r, b] = c.crop ?? [0, 0, 0, 0];
+          return { ...fitSize(Math.max(1, info.width - l - r), Math.max(1, info.height - t - b), W, H, fit), known: true, fit };
+        }
+      } catch { /* fall back to the comp size, like the renderer */ }
+    }
+    return { w: W, h: H, known: true, fit };
+  }
+  if (c.comp !== undefined) { const cc = ctx.comp(c.comp); return { w: cc.size[0], h: cc.size[1], known: true }; }
+  if (c.text !== undefined || c.shape !== undefined || c.captions) {
+    if (c.shape?.size) return { w: c.shape.size[0], h: c.shape.size[1], known: true };
+    return { w: W, h: H, known: false };
+  }
+  return { w: W, h: H, known: true };
+}
+
+/** A constant uniform scale of a clip (keyframes and non-uniform [sx, sy] are refused with a fix). */
+function constScale(c: Clip, op: string): number {
+  const sc = c.scale ?? 1;
+  if (isKeyframes(sc)) fail('E_KEYFRAMED', `clip "${c.id}" scale is animated by keyframes; ${op} writes its own.`, `remove them first: mgl edit <file> key.clear ${c.id} prop=scale`);
+  if (Array.isArray(sc)) { if (sc[0] !== sc[1]) fail('E_ARG', `clip "${c.id}" has a non-uniform scale ${JSON.stringify(sc)}.`, `set a uniform scale first: mgl edit <file> clip.set ${c.id} scale=${sc[0]}`); return sc[0] as number; }
+  return sc as number;
+}
+
+function constNum(c: Clip, key: 'x' | 'y' | 'rotate', def: number, op: string): number {
+  const v = c[key];
+  if (isKeyframes(v)) fail('E_KEYFRAMED', `clip "${c.id}" ${key} is animated by keyframes; ${op} writes its own.`, `remove them first: mgl edit <file> key.clear ${c.id} prop=${key}`);
+  return (v as number | undefined) ?? def;
+}
+
+const round = (v: number, d: number) => Math.round(v * 10 ** d) / 10 ** d;
+
+defineCommand({
+  op: 'clip.duplicate', group: 'clip',
+  doc: 'Copy a clip with everything on it (keyframes, effects, masks, transitions, cues of a captions clip): at= its start (default: right after the original, or the same time when track= is given), track= (default: the same track, else a free one), newId=; linked=true also copies its linked clips (same offset, as a new link group).',
+  schema: z.strictObject({ id: Id, at: TimeArg.optional(), track: Id.optional(), newId: Id.optional(), linked: z.boolean().optional() }),
+  primary: 'id', example: { id: 'title', at: '8s' },
+  apply(ctx, p) {
+    const c = ctx.clip(p.id);
+    const comp = ctx.compOfClip(c);
+    const at = p.at !== undefined ? ctx.time(p.at, comp, 'at') : p.track !== undefined ? c.at : clipEnd(c);
+    const delta = at - c.at;
+    if (p.newId !== undefined && (ctx.project.clips ?? []).some((x) => x.id === p.newId)) fail('E_DUPLICATE_ID', `clip "${p.newId}" already exists.`, 'choose another newId or omit it.');
+    const group = p.linked ? linked(ctx, c) : [c];
+    // every copy's id up front (parent/matte links inside the group point to the copies)
+    const ids = new Map<string, string>();
+    const taken = new Set<string>(p.newId ? [p.newId] : []);
+    for (const g of [c, ...group.filter((x) => x !== c)]) {
+      if (g === c && p.newId) { ids.set(g.id, p.newId); continue; }
+      let nid = ctx.newId(`${g.id}-copy`);
+      for (let n = 2; taken.has(nid); n++) nid = ctx.newId(`${g.id}-copy${n}`);
+      taken.add(nid);
+      ids.set(g.id, nid);
+    }
+    const link = group.length > 1 ? ids.get(c.id)! : undefined;
+    const made: Clip[] = [];
+    for (const g of group) {
+      const n = structuredClone(g);
+      n.id = ids.get(g.id)!;
+      n.at = g.at + delta;
+      if (n.at < 0) fail('E_RANGE', `the copy of "${g.id}" would start at ${n.at}, before 0.`, 'use a later at=.');
+      delete n.locked;
+      if (link) n.link = link; else delete n.link;
+      if (n.parent && ids.has(n.parent)) n.parent = ids.get(n.parent);
+      if (n.matte && ids.has(n.matte.clip)) n.matte.clip = ids.get(n.matte.clip)!;
+      const audio = !!ctx.track(g.track).audio;
+      const busy = (tid: string) => (ctx.project.clips ?? []).find((x) => x.track === tid && x.at < n.at + n.len && n.at < clipEnd(x));
+      if (g === c && p.track !== undefined) {
+        const t = ctx.track(p.track);
+        if (t.comp !== comp.id) fail('E_ARG', `track "${t.id}" is in comp "${t.comp}", not "${comp.id}".`, 'duplicate within one comp (or nest first).');
+        if (!!t.audio !== audio) fail('E_TRACK_KIND', `track "${t.id}" is ${t.audio ? 'an audio' : 'a visual'} track.`, 'use a track of the same kind.');
+        const hit = busy(t.id);
+        if (hit) fail('E_OVERLAP', `the copy would overlap "${hit.id}" (${hit.at}–${clipEnd(hit)}) on ${t.id}.`, `use another at= or track=, or omit track= to pick a free one.`);
+        n.track = t.id;
+      } else if (busy(g.track)) {
+        n.track = pickTrack(ctx, comp.id, audio, n.at, n.len);
+      }
+      (ctx.project.clips ??= []).push(n);
+      made.push(n);
+      if (g.captions) {
+        const cues = (ctx.project.cues ?? []).filter((q) => q.clip === g.id);
+        for (const q of cues) (ctx.project.cues ??= []).push({ ...structuredClone(q), id: ctx.newId(`${q.id}-copy`), clip: n.id });
+      }
+    }
+    ctx.out.id = made[0]!.id;
+    ctx.out.created = made.map((m) => m.id);
+    ctx.summary(`duplicated "${c.id}" as ${made.map((m) => `"${m.id}" on ${m.track} at ${m.at}`).join(', ')}.`);
+  },
+});
+
+const Box4 = z.tuple([z.number(), z.number(), z.number().positive(), z.number().positive()]);
+
+defineCommand({
+  op: 'clip.punch-in', group: 'clip',
+  doc: 'Zoom a clip into a region (box=[x, y, w, h] in comp px as the clip shows now): writes scale/x/y keyframes that ramp in over len= (default 0.5s; 0 = a hard cut) from at= (comp time; local=true for clip-local frames; default the clip start), hold= (default: to the end), then out= ramps back. ease= (default inOutCubic). The zoom shows the whole box centred and is clamped so no edge of the layer shows when it fills the frame (cover-fit media, nested comps).',
+  schema: z.strictObject({ id: Id, box: Box4, at: TimeArg.optional(), local: z.boolean().optional(), len: TimeArg.optional(), hold: TimeArg.optional(), out: TimeArg.optional(), ease: Easing.optional() }),
+  primary: 'id', example: { id: 'screen', box: [1200, 600, 480, 270], at: '3s', len: '0.6s', hold: '4s', out: '0.6s' },
+  async apply(ctx, p) {
+    const c = ctx.clip(p.id);
+    assertUnlocked(ctx, c);
+    const comp = ctx.compOfClip(c);
+    const [W, H] = comp.size;
+    if (ctx.track(c.track).audio) fail('E_ARG', `"${c.id}" is an audio clip.`, 'punch in on a visual clip.');
+    const t0 = p.at === undefined ? 0 : ctx.time(p.at, comp, 'at') - (p.local ? 0 : c.at);
+    if (t0 < 0 || t0 >= c.len) fail('E_RANGE', `the punch-in starts at clip frame ${t0}, outside "${c.id}" (0..${c.len - 1}).`, p.local ? 'at= is clip-local with local=true.' : `at= is a comp time between ${c.at} and ${clipEnd(c) - 1} (or pass local=true for clip-local frames).`);
+    const len = p.len === undefined ? ctx.time('0.5s', comp) : ctx.time(p.len, comp, 'len');
+    const out = p.out === undefined ? undefined : ctx.time(p.out, comp, 'out');
+    const hold = p.hold === undefined ? Math.max(0, c.len - t0 - len - (out ?? 0)) : ctx.time(p.hold, comp, 'hold');
+    const end = t0 + len + (out !== undefined ? hold + out : 0);
+    if (end > c.len) ctx.note(`the punch-in runs to clip frame ${end}, past the end of "${c.id}" (${c.len} frames); the part after the clip end is not seen.`);
+    const ease = p.ease ?? 'inOutCubic';
+    const s0 = constScale(c, 'clip.punch-in');
+    const x0 = constNum(c, 'x', W / 2, 'clip.punch-in');
+    const y0 = constNum(c, 'y', c.captions ? H / 2 : H / 2, 'clip.punch-in');
+    if (constNum(c, 'rotate', 0, 'clip.punch-in') !== 0) fail('E_ARG', `clip "${c.id}" is rotated; punch-in boxes are axis-aligned.`, `remove the rotation first: mgl edit <file> clip.set ${c.id} rotate=null`);
+    const [bx, by, bw, bh] = p.box;
+    const k = Math.min(W / bw, H / bh);
+    if (k < 1) ctx.note(`the box ${bw}x${bh} is larger than the frame, so this zooms out (${round(k, 3)}x).`);
+    const s1 = s0 * k;
+    const lb = await layerBox(ctx, c);
+    const [ax, ay] = c.anchor ?? [0.5, 0.5];
+    let x1 = W / 2 - s1 * ((bx + bw / 2 - x0) / s0);
+    let y1 = H / 2 - s1 * ((by + bh / 2 - y0) / s0);
+    // keep the frame filled: the layer's edges stay outside the frame wherever the zoomed layer is big enough
+    const clamped: string[] = [];
+    const clamp = (v: number, size: number, a: number, frame: number, axis: string) => {
+      if (s1 * size < frame - 1e-6) return v;
+      const lo = frame - s1 * (1 - a) * size, hi = s1 * a * size;
+      const r = Math.min(hi, Math.max(lo, v));
+      if (Math.abs(r - v) > 0.01) clamped.push(axis);
+      return r;
+    };
+    if (lb.known) { x1 = clamp(x1, lb.w, ax, W, 'x'); y1 = clamp(y1, lb.h, ay, H, 'y'); }
+    if (clamped.length) ctx.note(`moved the zoom ${clamped.join(' and ')} so no edge of "${c.id}" shows (the box is near the edge of the picture).`);
+    const keys = (base: number, zoom: number) => {
+      const out2: [number, number, (typeof ease)?][] = [];
+      const push = (f: number, v: number, e?: typeof ease) => {
+        const last = out2[out2.length - 1];
+        if (last && last[0] === f) { out2[out2.length - 1] = e !== undefined ? [f, v, e] : [f, v]; return; }
+        out2.push(e !== undefined ? [f, v, e] : [f, v]);
+      };
+      if (len > 0) { push(t0, base, ease); push(t0 + len, zoom); } else { if (t0 > 0) push(0, base, 'hold'); push(t0, zoom); }
+      if (out !== undefined) {
+        const t2 = t0 + len + hold;
+        if (out > 0) { push(t2, zoom, ease); push(t2 + out, base); }
+        else { const last = out2[out2.length - 1]!; out2[out2.length - 1] = [last[0], last[1], 'hold']; push(Math.max(t2, last[0] + 1), base); }
+      }
+      return out2.length === 1 ? out2[0]![1] : out2;
+    };
+    c.scale = keys(round(s0, 4), round(s1, 4)) as never;
+    c.x = keys(round(x0, 2), round(x1, 2)) as never;
+    c.y = keys(round(y0, 2), round(y1, 2)) as never;
+    ctx.summary(`punch-in on "${c.id}": ${round(k, 3)}x into [${p.box.join(', ')}] from clip frame ${t0} (${len}-frame ramp${out !== undefined ? `, hold ${hold}, out ${out}` : ', held to the end'}).`);
   },
 });

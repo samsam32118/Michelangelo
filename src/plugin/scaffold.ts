@@ -10,7 +10,7 @@ import { builtinRegistry } from '../builtin/index.js';
 import '../core/commands/index.js';
 import { listCommands } from '../core/commands/registry.js';
 
-export const SCAFFOLD_KINDS = ['effect', 'transition', 'generator', 'template', 'command', 'check', 'importer', 'exporter'] as const;
+export const SCAFFOLD_KINDS = ['effect', 'audio-effect', 'transition', 'generator', 'template', 'command', 'check', 'importer', 'exporter'] as const;
 export type ScaffoldKind = (typeof SCAFFOLD_KINDS)[number];
 
 interface Parts { src: string; test: string; task: string; checks: string[]; use: string; what: string }
@@ -71,6 +71,59 @@ test('amount 1 paints the colour and keeps alpha', () => {
       task: `Apply the \`${n}\` effect to the clip in \`demo.mgl.json\` with \`amount\` 0.8 and \`color\` "#00aaff", and render a still at 1 s to \`out/${n}.png\`.`,
       checks: [`demo.mgl.json names the plugin and the clip has fx ${n} amount=0.8`, `out/${n}.png: the clip area is tinted towards #00aaff`],
       use: `mgl edit demo.mgl.json clip.set <clip> 'fx=[{"type": "${n}", "amount": 0.8}]'`,
+    };
+    case 'audio-effect': return {
+      what: 'an audio effect (a voice clean-up chain: high-pass, de-esser, compressor) for clip sound or a bus mix',
+      src: `import { definePlugin, defineEffect, z, type FilterSpec } from 'michelangelo/plugin';
+
+/**
+ * An audio effect: only an audio() stage, which returns ffmpeg audio filters (checked against an allowlist and
+ * escaped by Michelangelo). Put it on a clip with sound (fx.add <clip> type=${n}) or on a bus (fx.add bus=<id> type=${n}).
+ */
+const ${v} = defineEffect({
+  type: '${n}',
+  describe: 'Voice clean-up: removes rumble below lowCut Hz, tames sibilance and evens out the level (amount 0 = off).',
+  params: z.object({
+    lowCut: z.number().min(20).max(400).default(90).describe('high-pass cutoff in Hz'),
+    amount: z.number().min(0).max(1).default(0.6).describe('de-esser and compressor strength'),
+  }),
+  audio(p) {
+    // annotate the list: mixed literal args would otherwise not match FilterSpec
+    const chain: FilterSpec[] = [{ filter: 'highpass', args: { f: p.lowCut, poles: 2 } }];
+    if (p.amount > 0) {
+      chain.push({ filter: 'deesser', args: { i: Math.round(p.amount * 0.6 * 100) / 100 } });
+      chain.push({ filter: 'acompressor', args: { threshold: Math.round((0.25 - p.amount * 0.2) * 1000) / 1000, ratio: 1 + p.amount * 4, attack: 10, release: 150 } });
+    }
+    return chain;
+  },
+});
+
+export default definePlugin({ name: '${n}', version: '0.1.0', effects: [${v}] });
+`,
+      test: `import { test, assert, loadPlugin, effectFilters } from 'michelangelo/testing';
+
+const plugin = await loadPlugin(import.meta.url);
+const effect = plugin.effects![0]!;
+
+test('is an audio effect (no draw, no source stage)', () => {
+  assert.equal(typeof effect.audio, 'function');
+  assert.equal(effect.draw, undefined);
+});
+
+test('default params give an allowed high-pass + de-esser + compressor chain', async () => {
+  const f = await effectFilters(effect, {});
+  assert.deepEqual(f.audio.map((x) => x.filter), ['highpass', 'deesser', 'acompressor']);
+  assert.match(f.audioGraph, /^highpass=f=90/);
+});
+
+test('amount 0 keeps only the high-pass', async () => {
+  const f = await effectFilters(effect, { amount: 0, lowCut: 120 });
+  assert.equal(f.audioGraph, 'highpass=f=120:poles=2');
+});
+`,
+      task: `Add the \`${n}\` audio effect to the dialogue bus of \`demo.mgl.json\` (create the bus and route the voice track to it if needed), and render the mix to \`out/${n}.wav\`.`,
+      checks: [`demo.mgl.json names the plugin and bus "dialogue" has fx ${n}`, `out/${n}.wav: less energy below 80 Hz than the raw voice`],
+      use: `mgl edit demo.mgl.json fx.add bus=dialogue type=${n}`,
     };
     case 'transition': return {
       what: 'a transition that wipes from left to right',
@@ -399,7 +452,7 @@ export function builtinClash(kind: ScaffoldKind, name: string): string | undefin
   const r = builtinRegistry();
   if (r.plugins.has(name)) return `"${name}" is the name of a built-in plugin`;
   const maps: Partial<Record<ScaffoldKind, Map<string, unknown>>> = {
-    effect: r.effects, transition: r.transitions, generator: r.generators, template: r.templates, check: r.checks, importer: r.importers, exporter: r.exporters,
+    effect: r.effects, 'audio-effect': r.effects, transition: r.transitions, generator: r.generators, template: r.templates, check: r.checks, importer: r.importers, exporter: r.exporters,
   };
   if (maps[kind]?.has(name)) return `a built-in ${kind} is already called "${name}"`;
   if (kind === 'command' && listCommands().some((c) => c.op.split('.')[0] === name || c.group === name)) return `built-in commands already use the "${name}." prefix`;
@@ -418,7 +471,7 @@ export function scaffoldPlugin(kind: ScaffoldKind, name: string, dir: string): {
   const files: Record<string, string> = {
     'package.json': JSON.stringify({
       name, version: '0.1.0', description: `${p.what[0]!.toUpperCase()}${p.what.slice(1)}.`, type: 'module', main: 'src/index.ts',
-      michelangelo: { api: `^${PLUGIN_API_VERSION}`, kinds: [kind] },
+      michelangelo: { api: `^${PLUGIN_API_VERSION}`, kinds: [kind === 'audio-effect' ? 'effect' : kind] },
       scripts: { test: 'node --test test/*.test.ts' },
       peerDependencies: { michelangelo: '*' },
     }, null, 2) + '\n',
@@ -442,7 +495,7 @@ export function scaffoldPlugin(kind: ScaffoldKind, name: string, dir: string): {
 function readme(kind: ScaffoldKind, n: string, p: Parts): string {
   return `# ${n}
 
-A Michelangelo ${kind} plugin: ${p.what}. Start from \`src/index.ts\`; it imports only \`michelangelo/plugin\`.
+A Michelangelo ${kind === 'audio-effect' ? 'audio effect' : kind} plugin: ${p.what}. Start from \`src/index.ts\`; it imports only \`michelangelo/plugin\`.
 
 ## Develop
 
@@ -451,7 +504,7 @@ mgl plugin test plugins/${n}     # manifest, definition, type-check, tests, .pre
 \`\`\`
 
 Tests live in \`test/\` and run with \`node --test\` using \`michelangelo/testing\`
-(\`renderEffect\`, \`renderTransition\`, \`renderGenerator\`, \`runCommandOn\`, \`checkContext\`, \`pixel\`, \`meanColor\`, ...).
+(\`renderEffect\`, \`effectFilters\` (source/audio stages), \`renderTransition\`, \`renderGenerator\`, \`runCommandOn\`, \`checkContext\`, \`pixel\`, \`meanColor\`, ...).
 Keep \`src/index.ts\` to erasable TypeScript (no enums or namespaces): Node runs it directly.
 
 ## Use it in a project

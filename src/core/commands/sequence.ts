@@ -80,11 +80,12 @@ defineCommand({
 
 defineCommand({
   op: 'clip.sequence', group: 'clip',
-  doc: 'Place one clip per file (srcs) or asset (assets) back to back on a track from at= (default 0), each len= long (default 2s); on=markers cuts on the markers whose id starts with prefix= (default "beat"), on=beats cuts on the beats of clip=<id>: each item starts on a beat and lasts until the next (the last lasts the median beat interval). Optional fit= and transition={type, len} between items; refuses overlaps.',
+  doc: 'Place one clip per file (srcs) or asset (assets) back to back on a track from at= (default 0), each len= long (default 2s; full=true plays each file\'s whole source length, from the probe); on=markers cuts on the markers whose id starts with prefix= (default "beat"), on=beats cuts on the beats of clip=<id>: each item starts on a beat and lasts until the next (the last lasts the median beat interval). Optional fit= and transition={type, len} between items; refuses overlaps.',
   schema: z.strictObject({
     srcs: z.array(z.string().min(1)).min(1).optional(), assets: z.array(Id).min(1).optional(), track: Id.optional(), at: TimeArg.optional(), len: TimeArg.optional(),
     on: z.enum(['markers', 'beats']).optional(), prefix: Id.optional(), clip: Id.optional(), fit: z.enum(FITS).optional(),
     transition: z.strictObject({ type: z.string().min(1), len: TimeArg }).optional(),
+    full: z.boolean().optional(),
   }),
   example: { srcs: ['media/a.mp4', 'media/b.mp4', 'media/c.mp4'], on: 'markers', prefix: 'beat', fit: 'cover' },
   async apply(ctx, p) {
@@ -112,6 +113,9 @@ defineCommand({
     if (p.on === 'beats' && !p.clip) fail('E_ARG', 'on=beats needs clip=<id> (the music clip whose beats set the cuts).', 'example: mgl edit <file> clip.sequence srcs=\'["a.mp4","b.mp4"]\' on=beats clip=bed');
     if (p.clip && p.on !== 'beats') fail('E_ARG', 'clip= is used only with on=beats.', 'add on=beats, or remove clip=.');
     if (p.prefix && p.on !== 'markers') fail('E_ARG', 'prefix= is used only with on=markers.', 'add on=markers, or remove prefix=.');
+    if (p.full && p.on) fail('E_ARG', 'full=true plays whole files back to back; it does not combine with on= (the cuts set the lengths).', 'remove full=true or on=.');
+    if (p.full && p.len !== undefined) fail('E_ARG', 'full=true takes each file\'s own length; it does not combine with len=.', 'remove len= (images still get 2s each), or remove full=true.');
+    if (p.full && !ctx.services.probe) fail('E_NO_SERVICE', 'full=true needs the media probe to read each file\'s length.', 'run through the CLI or the SDK (open(file)), which provide media services.');
 
     let trackId = p.track;
     if (!trackId) {
@@ -128,7 +132,19 @@ defineCommand({
 
     // the slots [start, len) of the items
     const slots: [number, number][] = [];
-    if (!p.on) {
+    if (p.full) {
+      let t = at0 ?? 0;
+      for (const [i, a] of items.entries()) {
+        let len = each;
+        if (kinds[i] === 'video' || kinds[i] === 'audio') {
+          const info = await ctx.services.probe!(a.src);
+          if (info.duration) len = Math.max(1, secondsToNearestFrame(info.duration, ctx.rate(comp)));
+          else ctx.note(`"${a.src}" has no known duration; it gets ${each} frames.`);
+        } else ctx.note(`"${a.src}" is ${kinds[i] === 'image' ? 'an image' : 'not a timed file'}; it gets ${each} frames.`);
+        slots.push([t, len]);
+        t += len;
+      }
+    } else if (!p.on) {
       items.forEach((_a, i) => slots.push([(at0 ?? 0) + i * each, each]));
     } else {
       let cuts: number[];

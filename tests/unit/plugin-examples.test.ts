@@ -6,7 +6,7 @@ import { loadRegistry } from '../../src/plugin/loader.js';
 import { testProject } from '../../src/plugin/testing.js';
 import { REPO, tempProjectDir } from './plugin-fixtures.js';
 
-const EXAMPLES = ['glitch', 'clock-wipe', 'confetti', 'lower-third-pro'];
+const EXAMPLES = ['glitch', 'clock-wipe', 'confetti', 'lower-third-pro', 'on-air'];
 let dir: string;
 const results = new Map<string, PluginTestResult>();
 
@@ -37,11 +37,11 @@ describe('example plugins', () => {
     }
   });
 
-  it('all four load together into one registry when allowed', async () => {
+  it('all examples load together into one registry when allowed', async () => {
     const plugins = Object.fromEntries(EXAMPLES.map((n) => [n, '^1.0.0']));
     const r = await loadRegistry(testProject({ plugins }), dir, { allowUntrusted: true });
     expect(r.problems).toEqual([]);
-    expect(r.effects.has('glitch') && r.transitions.has('clock-wipe') && r.generators.has('confetti') && r.templates.has('lower-third-pro')).toBe(true);
+    expect(r.effects.has('glitch') && r.transitions.has('clock-wipe') && r.generators.has('confetti') && r.templates.has('lower-third-pro') && r.effects.has('telephone') && r.generators.has('level-meter')).toBe(true);
     expect(r.commands.has('lower-third-pro.add')).toBe(true);
   });
 });

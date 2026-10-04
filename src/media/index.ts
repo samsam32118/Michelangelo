@@ -1,5 +1,6 @@
 /** The native-ffmpeg media backend. */
 import { analyzeAudio } from './analysis.js';
+import { analyzeLevels } from './levels.js';
 import { renderAudio } from './audio-render.js';
 import { decodeImage, grab, openVideo } from './decode.js';
 import { concat, encode, transcodeAudio } from './encode.js';
@@ -25,11 +26,12 @@ export function getMediaBackend(opts: MediaBackendOptions = {}): MediaBackend {
     grab: (file, sourceFrame, rate, o = {}) => grab(file, sourceFrame, rate, { ...c, ...b, ...o }),
     openVideo: (file, o) => openVideo(file, { ...c, ...b, ...o }),
     decodeImage: (file, maxSize) => decodeImage(file, maxSize, c),
-    renderAudio: async (plan, out, o = {}) => { await renderAudio(plan, out, { ...c, ...b, ...o }); },
+    renderAudio: (plan, out, o = {}) => renderAudio(plan, out, { ...c, ...b, ...o }),
     encode: (o) => encode(o),
-    transcodeAudio: (wav, out) => transcodeAudio(wav, out),
+    transcodeAudio: (wav, out, o) => transcodeAudio(wav, out, o),
     analyzeAudio: (file, o) => analyzeAudio(file, o),
     concat: (parts, out) => concat(parts, out),
+    analyzeLevels: (file, rate) => analyzeLevels(file, rate, opts.cacheDir ? { cacheDir: opts.cacheDir } : {}),
   };
 }
 
@@ -41,5 +43,6 @@ export { grab, openVideo, decodeImage } from './decode.js';
 export { encode, transcodeAudio, concat, encodeArgs } from './encode.js';
 export { renderAudio, buildMixGraph, duckParams } from './audio-render.js';
 export { analyzeAudio } from './analysis.js';
-export { filterToString, filtersToString, ALLOWED_VIDEO_FILTERS } from './filters.js';
+export { analyzeLevels, computeLevels, bandEdges, LEVEL_BANDS, type AudioLevelsData } from './levels.js';
+export { filterToString, filtersToString, ALLOWED_VIDEO_FILTERS, ALLOWED_AUDIO_FILTERS } from './filters.js';
 export type * from './types.js';

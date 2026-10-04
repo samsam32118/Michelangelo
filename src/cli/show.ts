@@ -46,6 +46,40 @@ function fpsText(r: Rate): string {
   return Number.isInteger(v) ? String(v) : v.toFixed(3).replace(/0+$/, '');
 }
 
+/** "counter from=3 to=1 decimals=0": a generator's type and its first params (keyframed ones as name~Nkeys). */
+export function genSummary(g: Record<string, unknown>): string {
+  const ps = Object.entries(g).filter(([k]) => k !== 'type').map(([k, v]) => {
+    if (isKeyframes(v)) return `${k}~${(v as unknown[]).length}keys`;
+    if (v !== null && typeof v === 'object') return `${k}=${cut(JSON.stringify(v), 24)}`;
+    return `${k}=${typeof v === 'string' ? cut(v.includes(' ') ? JSON.stringify(v) : v, 24) : String(v)}`;
+  });
+  return cut([String(g.type), ...ps].join(' '), 90);
+}
+
+/** "dialogue fx highpass,deesser → master" */
+export function busText(b: { id: string; to?: string; gain?: number; muted?: boolean; duck?: { by: string; db: number }; loudness?: { lufs: number; peak?: number }; fx?: { type: string }[] }): string {
+  const bits = [b.id];
+  if (b.gain !== undefined) bits.push(`${b.gain}dB`);
+  if (b.muted) bits.push('muted');
+  if (b.fx?.length) bits.push(`fx ${b.fx.map((f) => f.type).join(',')}`);
+  if (b.duck) bits.push(`ducked ${b.duck.db}dB by ${b.duck.by}`);
+  if (b.loudness) bits.push(`${b.loudness.lufs} LUFS${b.loudness.peak !== undefined ? ` / ${b.loudness.peak} dBTP` : ''}`);
+  if (b.id !== 'master') bits.push(`→ ${b.to ?? 'master'}`);
+  return bits.join(' ');
+}
+
+/** Marker entries packed into lines of at most ~160 characters ("markers: a 0.00 \"Intro\", b 12.00 ..."). */
+function markerLines(items: string[]): string[] {
+  const out: string[] = [];
+  let cur = 'markers:';
+  for (const it of items) {
+    if (cur.length + it.length + 2 > 160 && cur !== 'markers:') { out.push(cur.replace(/,$/, '')); cur = ' '; }
+    cur += ` ${it},`;
+  }
+  out.push(cur.replace(/,$/, ''));
+  return out;
+}
+
 const KIND_LABEL: Record<string, string> = { text: 'text', shape: 'shape', solid: 'solid', comp: 'comp', captions: 'caps', adjustment: 'adjust', gen: 'gen' };
 
 class View {
@@ -109,7 +143,7 @@ class View {
     } else if (k === 'shape') parts.push(`${c.shape!.type}${c.shape!.fill ? ' ' + c.shape!.fill : ''}`);
     else if (k === 'solid') parts.push(c.color!);
     else if (k === 'comp') parts.push(`comp ${c.comp}${c.in ? ` from ${this.t(c.in, r)}` : ''}${c.loop ? ' loop' : ''}`);
-    else if (k === 'gen') parts.push(c.gen!.type);
+    else if (k === 'gen') parts.push(genSummary(c.gen as Record<string, unknown>));
     else if (k === 'adjustment') parts.push('adjustment');
     const tf = [num('x', c.x), num('y', c.y), num('scale', c.scale), num('rotate', c.rotate), num('opacity', c.opacity)].filter(Boolean);
     if (tf.length) parts.push(tf.join(' '));
@@ -131,7 +165,7 @@ class View {
     if (t?.audio || (k === 'media' && this.kindOf(c) === 'audio')) {
       const bus = t?.bus ?? 'master';
       const b = (this.d.buses ?? []).find((x) => x.id === bus);
-      parts.push(`bus ${bus}${b?.duck ? ` (ducked ${b.duck.db}dB by ${b.duck.by})` : ''}`);
+      parts.push(`bus ${bus}${b?.duck ? ` (ducked ${b.duck.db}dB by ${b.duck.by})` : ''}${b?.fx?.length ? ` (bus fx ${b.fx.map((f) => f.type).join(',')})` : ''}`);
     }
     return parts.join('  ');
   }
@@ -139,7 +173,8 @@ class View {
   private clipLines(clips: Clip[], r: Rate): string[] {
     const idW = Math.min(14, Math.max(4, ...clips.map((c) => c.id.length)));
     const tW = Math.max(2, ...clips.map((c) => c.track.length));
-    return clips.map((c) => cut(`${c.track.padEnd(tW)}  ${c.id.padEnd(idW)}  ${this.kindOf(c).padEnd(6)}${this.span(c, r).padEnd(12)} ${this.describe(c, r)}`, 200));
+    const kW = Math.max(5, ...clips.map((c) => this.kindOf(c).length));
+    return clips.map((c) => cut(`${c.track.padEnd(tW)}  ${c.id.padEnd(idW)}  ${this.kindOf(c).padEnd(kW)}  ${this.span(c, r).padEnd(12)} ${this.describe(c, r)}`, 200));
   }
 
   /** Tracks of a comp top → bottom: visual tracks in reverse table order, then audio tracks. */
@@ -183,14 +218,16 @@ class View {
       perTrack.push(`${t.id}  ${clips.length} clip${clips.length > 1 ? 's' : ''} ${this.t(clips[0]!.at, r)}–${this.t(end, r)} (${[...kinds].map(([k, n]) => `${k} ×${n}`).join(', ')})${t.audio ? `  bus ${t.bus ?? 'master'}` : ''}${t.hidden ? ' hidden' : ''}${t.muted ? ' muted' : ''}${t.locked ? ' locked' : ''}`);
     }
     body.push(...this.clipLines(shown, r));
-    const markers = (this.d.markers ?? []).filter((m) => m.comp === comp.id);
+    const markers = (this.d.markers ?? []).filter((m) => m.comp === comp.id).sort((a, b) => a.at - b.at);
     const foot: string[] = [];
-    if (markers.length) foot.push(`markers: ${markers.map((m) => `${m.id} ${this.t(m.at, r)}`).join(', ')}`);
+    if (markers.length) foot.push(...markerLines(markers.map((m) => `${m.id} ${this.t(m.at, r)}${m.len ? `–${this.t(m.at + m.len, r)}` : ''}${m.note ? ` ${JSON.stringify(cut(m.note, 40))}` : ''}`)));
+    const buses = (this.d.buses ?? []).filter((b) => b.fx?.length || b.duck || b.loudness || b.gain !== undefined || b.muted || (b.to && b.to !== 'master'));
+    if (buses.length) foot.push(cut(`buses: ${buses.map((b) => busText(b)).join(' · ')}`, 200));
     const issues = this.p.problems.filter((x) => x.severity === 'error').length, warns = this.p.problems.filter((x) => x.severity === 'warning').length;
     if (issues || warns) foot.push(`${issues ? `${issues} render-blocking issue${issues > 1 ? 's' : ''}` : ''}${issues && warns ? ', ' : ''}${warns ? `${warns} warning${warns > 1 ? 's' : ''}` : ''} (mgl check ${file})`);
     if (!shown.length) body.push(onlyTrack || from > -Infinity ? '(no clips in that range)' : '(no clips yet; add one: mgl edit ' + file + ' clip.add text="Hello" len=2s)');
     const all = [...head, ...body, ...foot];
-    o.set({ comp: comp.id, header: head[0], clips: shown.map((c) => ({ id: c.id, track: c.track, kind: this.kindOf(c), at: c.at, len: c.len, line: this.p.line('clips', c.id), desc: this.describe(c, r) })) });
+    o.set({ comp: comp.id, header: head[0], markers: markers.map((m) => ({ id: m.id, at: m.at, ...(m.len ? { len: m.len } : {}), ...(m.note ? { note: m.note } : {}) })), clips: shown.map((c) => ({ id: c.id, track: c.track, kind: this.kindOf(c), at: c.at, len: c.len, line: this.p.line('clips', c.id), desc: this.describe(c, r) })) });
     if (o.unbounded || all.length <= MAX_LINES) { o.line(...all); return; }
     // over budget: per-track summary plus the full outline in a file
     const dir = workDir(this.p.file);

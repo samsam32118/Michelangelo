@@ -15,6 +15,7 @@ import type {
 } from './types.js';
 import { interpolate, ease, isKeyframeList } from './keyframes.js';
 import { bounds, invert, multiply, rotation, scaling, translate } from './matrix.js';
+import { pathBounds, pointsBounds } from './path.js';
 
 export { interpolate, ease, easingFn, cubicBezier, EASING_FUNCTIONS } from './keyframes.js';
 
@@ -341,13 +342,15 @@ function clipBox(cx: Ctx, c: Clip, t: number): { w: number; h: number } {
   }
 }
 
-function shapeBox(c: Clip): { w: number; h: number } {
+/**
+ * A shape's layer box: its size; else, for points and SVG paths, the extent of the geometry from the shape origin
+ * (the bounding box's right and bottom edges, so shape-local coordinates stay layer px); else 200 × 200.
+ */
+export function shapeBox(c: Pick<Clip, 'shape'>): { w: number; h: number } {
   const s = c.shape!;
   if (s.size) return { w: s.size[0], h: s.size[1] };
-  if (s.points?.length) {
-    const xs = s.points.map((p) => p[0]), ys = s.points.map((p) => p[1]);
-    return { w: Math.max(1, Math.max(...xs)), h: Math.max(1, Math.max(...ys)) };
-  }
+  const b = s.points?.length && s.type !== 'path' ? pointsBounds(s.points) : s.type === 'path' && s.d ? pathBounds(s.d) : null;
+  if (b) return { w: Math.max(1, b.x + b.w), h: Math.max(1, b.y + b.h) };
   return { w: 200, h: 200 };
 }
 
@@ -405,15 +408,37 @@ function resolveFx(cx: Ctx, c: Clip, t: number, media: boolean): { fx: ResolvedE
     const animated = Object.values(raw).some((v) => isKeyframeList(v));
     if (media && def.source && !(animated && def.draw)) filters.push(...def.source(params as never));
     else if (def.draw) fx.push(id ? { type, params, id } : { type, params });
+    else if (!media) {
+      // no layer stage: on anything but a media clip the effect would silently do nothing
+      const kind = clipKind(c);
+      const stage = def.source ? 'a source-stage effect (it runs while a media clip is decoded)' : def.audio ? 'an audio effect' : 'an effect with no layer stage';
+      const idx = (c.fx ?? []).indexOf(e);
+      fail('E_FX_STAGE', `clip "${c.id}" (${kind}): effect "${type}" is ${stage}, so it has no effect on this clip.`,
+        kind === 'adjustment' && def.source
+          ? `put it on the media clips below instead (mgl edit <file> fx.add <clip> type=${type} ...) and remove it here: mgl edit <file> fx.remove ${c.id} fx=${idx}.`
+          : `remove it: mgl edit <file> fx.remove ${c.id} fx=${idx}${def.source ? `, or add it to a video/image clip` : ''}.`);
+    }
   }
   return { fx, filters };
 }
 
-function resolveMasks(c: Clip, box: { w: number; h: number }): ResolvedMask[] {
-  return (c.masks ?? []).map((m) => {
-    if (m.space !== 'clip' || !m.box) return { ...m };
-    const [x, y, w, h] = m.box;
-    return { ...m, box: [x * box.w, y * box.h, w * box.w, h * box.h] as [number, number, number, number] };
+type Box4 = [number, number, number, number];
+
+/** A mask's box at clip-local frame t: a constant [x, y, w, h] or keyframes [[frame, [x, y, w, h], ease?], ...]. */
+export function maskBoxAt(box: unknown, t: number): Box4 | undefined {
+  if (box === undefined || box === null) return undefined;
+  const v = interpolate(box as Box4 | [number, Box4][], t);
+  return Array.isArray(v) && v.length === 4 && v.every((x) => typeof x === 'number') ? (v as Box4) : undefined;
+}
+
+function resolveMasks(c: Clip, box: { w: number; h: number }, t: number): ResolvedMask[] {
+  return (c.masks ?? []).map((m0) => {
+    const b = maskBoxAt((m0 as { box?: unknown }).box, t);
+    const m = { ...m0 } as ResolvedMask;
+    if (b) m.box = b; else delete m.box;
+    if (m.space !== 'clip' || !b) return m;
+    const [x, y, w, h] = b;
+    return { ...m, box: [x * box.w, y * box.h, w * box.w, h * box.h] as Box4 };
   });
 }
 
@@ -438,7 +463,7 @@ function clipNode(cx: Ctx, c: Clip, frame: number, matteSeen: Set<string>): Laye
   const matrix = multiply(parentDelta(cx, c, frame, new Set([c.id])), localMatrix(cx, c, t, box));
   const opacity = clamp01(interpolate(c.opacity ?? 1, t) as number) * fadeFactor(c, t);
   const { fx, filters } = resolveFx(cx, c, t, isMedia);
-  const base: LayerBase = { clipId: c.id, box, matrix, opacity, blend: c.blend ?? 'normal', fx, masks: resolveMasks(c, box), localFrame: lf, seed: seedOf(c.id) };
+  const base: LayerBase = { clipId: c.id, box, matrix, opacity, blend: c.blend ?? 'normal', fx, masks: resolveMasks(c, box, t), localFrame: lf, seed: seedOf(c.id) };
   if (kind === 'adjustment') return { type: 'adjustment', ...base };
 
   let source: LayerSource;
@@ -452,13 +477,27 @@ function clipNode(cx: Ctx, c: Clip, frame: number, matteSeen: Set<string>): Laye
       break;
     }
     case 'shape': {
-      source = { type: 'shape', shape: c.shape! };
-      if (c.shape!.trim !== undefined) source.trim = clamp01(interpolate(c.shape!.trim, t) as number);
+      const sh = c.shape! as typeof c.shape & { trimStart?: unknown; trimOffset?: unknown };
+      const shape: LayerSource & { type: 'shape' } = { type: 'shape', shape: c.shape! };
+      if (sh.trim !== undefined) shape.trim = clamp01(interpolate(sh.trim, t) as number);
+      if (sh.trimStart !== undefined) shape.trimStart = clamp01(interpolate(sh.trimStart as number, t) as number);
+      if (sh.trimOffset !== undefined) shape.trimOffset = interpolate(sh.trimOffset as number, t) as number;
+      source = shape;
       break;
     }
     case 'solid': source = { type: 'solid', color: c.color! }; break;
     case 'comp': source = { type: 'comp', list: nestedList(cx, c, t) }; break;
-    case 'gen': source = { type: 'gen', gen: c.gen!, params: genParams(cx, c, t), frame: lf, time: (lf * cx.rate.den) / cx.rate.num }; break;
+    case 'gen': {
+      const params = genParams(cx, c, t);
+      const gen: LayerSource & { type: 'gen' } = { type: 'gen', gen: c.gen!, params, frame: lf, time: (lf * cx.rate.den) / cx.rate.num };
+      const follows = cx.opts.registry.generators.get(c.gen!.type)?.audioSource?.(params as never);
+      if (follows) {
+        const sp = parseSpeed(c.speed ?? 1);
+        gen.audio = { assetId: follows, frame: Math.max(0, (c.in ?? 0) + (sp.num === 0 ? 0 : floorRatio([t, sp.num], [sp.den]))) };
+      }
+      source = gen;
+      break;
+    }
     case 'captions': {
       const cap = captionsAt(cx, c, t);
       if (!cap) return null;

@@ -24,13 +24,15 @@ mgl check demo.mgl.json
 mgl look demo.mgl.json
 ```
 
-1. `mgl new` creates the file (presets: shorts, tiktok, reels, youtube, square, portrait, 4k).
+1. `mgl new` creates the file (presets: shorts, tiktok, reels, vertical, youtube, landscape, square, portrait, 4k).
 2. `mgl show` prints the outline: comp, then one line per clip (track, id, kind, start–end, what it shows).
    **Run `mgl show` before reading a big project file**, and `mgl show <file> --clip <id>` for one clip.
 3. Change it (below), then `mgl check` (file problems + QA that needs no pixels).
 4. `mgl look` writes `.mgl/<name>/look/sheet.png`. **Open sheet.png with your image viewer and read it
    before saying the video is done**, and fix every QA finding (each comes with a ready `fix:` command).
 5. Render: `mgl render demo.mgl.json out/demo.mp4 --draft` for checking, `--final` (default) to deliver.
+   Delivery flags (`--crf`, `--bitrate`, `--prores hq`, `--pcm 24`, `--timecode 10:00:00:00`), stems
+   (`out/vo.wav --bus dialogue`) and chapters (`out/x.chapters.txt` from markers with a `note`): `mgl docs rendering`.
 
 ```sh
 mgl render demo.mgl.json out/demo.mp4 --draft
@@ -52,8 +54,8 @@ then poll `mgl render demo.mgl.json --status` until it says `done`.
 numbers (`edit` prints the changed lines as `L12 ~ {...}`). Hand edits are re-validated on every load; a
 broken file names the line and the fix (`mgl check` lists every problem).
 
-`mgl edit` syntax: `mgl edit <file> <op> [bare word] [key=value ...]`. The bare word fills the main field
-(usually the clip id). Values are JSON when they parse (`2`, `true`, `null`, `[1,2]`, `{"a":1}`), else text;
+`mgl edit` syntax: `mgl edit <file> <op> [bare word] [key=value ...]`. The bare word fills the op's main field
+(usually the clip id; `mgl docs <op>` marks it `(bare word)`, and some ops such as `track.add` have none: use `id=`). Values are JSON when they parse (`2`, `true`, `null`, `[1,2]`, `{"a":1}`), else text;
 quote text with spaces for the shell. Dotted keys set nested fields (`fx.blur.radius=8`). Also:
 `mgl edit <file> '{"op": "clip.split", "id": "a", "at": "2s"}'`, `--batch edits.jsonl` (atomic),
 `--dry-run` (prints the changes, writes nothing), `undo [n]`, `redo [n]`, `history`.
@@ -93,7 +95,8 @@ the stacking order (later = on top). A clip shows exactly one thing: `asset`, `t
 `comp` (nested), `captions`, `adjustment` or `gen` (generator). Common clip fields: `x`, `y` (comp px,
 default the centre), `scale`, `rotate`, `opacity` (a number or keyframes `[[frame, value, easing?], ...]`),
 `fit`, `blend`, `fx` (effects), `masks`, `transition`, `animate`, `style`, `gain`, `fade`, `speed`, `in`.
-Defaults are omitted. Unknown keys are errors with a did-you-mean. Full reference: `mgl docs format`.
+Defaults are omitted (`fit`: video cover, images contain = scaled to the frame; `fit=none` keeps pixel size).
+Unknown keys are errors with a did-you-mean. Full reference: `mgl docs format`.
 
 ## The 12 commands you will use most
 
@@ -115,7 +118,9 @@ mgl edit demo.mgl.json clip.ripple-delete shot-2
 Also: `asset.add`, `clip.add`, `clip.move`, `clip.slip`, `clip.roll`, `clip.slide`, `clip.speed`,
 `clip.freeze`, `captions.import file=subs.srt`, `audio.duck bus=music by=dialogue db=9`,
 `audio.cut-silences <clip>`, `marker.beats <clip>` and `clip.sequence srcs=[...] on=markers` (cut to the beat),
-`comp.reframe main preset=youtube to=wide`, `mask.add`, `style.add`.
+`comp.reframe main preset=youtube to=wide`, `mask.add`, `style.add`, `clip.duplicate`, `clip.punch-in <clip>
+box=[x,y,w,h]` (zoom to a region), `layout.grid ids=[...]` (split screens), `fx.add bus=dialogue type=voice`
+(audio effects on a bus or a clip with sound).
 `mgl docs commands` lists all of them; `mgl docs <op>` prints one with its fields and an example.
 
 ## Look and QA
@@ -125,6 +130,8 @@ runs QA (safe zones per platform, text overlapping other elements, tiny or cut-o
 stretches, gaps, clipping or off-target loudness, music over voice) and reports the sound as text
 (LUFS, true peak, silences, tempo). Each finding has a crop image, the file line and a `fix:` command.
 `mgl check` runs the checks that need no pixels. Both exit 0 with findings; `--strict` exits 1 on errors.
+`--platforms tiktok,reels,shorts` checks several platforms' safe zones at once. Tag a clip `qa-ignore:<rule>`
+(e.g. `tags='["qa-ignore:safe-zone"]'` on a burned-in timecode) when a finding is intended.
 
 ## Exit codes and errors
 
@@ -138,7 +145,7 @@ Errors print `error E_CODE: message` and `fix: ...`; do what the fix says. With 
 `{"ok": false, "error": {"code", "message", "fix", "line"}}`. Codes: `mgl docs errors`.
 No ffmpeg? `mgl doctor --fetch` downloads a pinned build.
 
-## Plugins (new effects, transitions, generators, templates, commands, checks)
+## Plugins (new effects, audio effects, transitions, generators, templates, commands, checks)
 
 ```sh
 mgl plugin new effect posterize
@@ -155,6 +162,9 @@ edit). Plugins are code on your machine with no sandbox. Guide: `mgl docs plugin
 
 ## SDK
 
+Scripts need the package installed where they run (`npm install michelangelo`, or `npm link michelangelo`
+after a global install); `mgl --version` prints the version.
+
 ```js
 import { open } from 'michelangelo';
 const p = await open('demo.mgl.json');
@@ -164,10 +174,13 @@ console.log(p.clips({ track: 'T1' }).map((c) => c.id).join(' '));
 
 `p.data` is the plain project (read it, never mutate it); every change is `p.edit(command)` and is saved.
 Also `create(file, {preset})`, `p.dryRun(cmd)`, `p.undo()`, `p.look()`,
-`p.render(out, { quality: 'draft' })`, `p.check()`. Guide: `mgl docs sdk`.
+`p.render(out, { quality: 'draft' })` (renders unsaved `{ save: false }` edits too), `p.check()`,
+`p.services.analyzeLevels` / `measureText`. Guide: `mgl docs sdk`.
 
 ## More
 
-`mgl docs <topic>`: format, commands, editing (trim/split/ripple/slip/slide/roll/speed/freeze),
+**Recipes** (multicam sync, screencast zoom + redaction, podcast audiogram, chapters, multi-platform delivery,
+split screen, credits, loops with alpha, review copies): `mgl docs recipes`.
+`mgl docs <topic>`: recipes, format, commands, editing (trim/split/ripple/slip/slide/roll/speed/freeze/punch-in),
 text-and-captions, audio, effects, templates, rendering, look-and-qa, plugins, sdk, errors.
 `mgl doctor` reports ffmpeg, fonts, cores, disk and gaps with fixes.

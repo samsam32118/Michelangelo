@@ -7,11 +7,12 @@
  */
 import { createCanvas, type Canvas, type ImageData } from '@napi-rs/canvas';
 import type { BlendMode } from '../../core/schema/index.js';
+import type { Rate } from '../../core/time.js';
 import { fail, suggest } from '../../core/errors.js';
 import type { Surface } from '../../plugin/api.js';
 import { createSurface } from '../../plugin/surface.js';
 import type {
-  AdjustmentNode, DisplayList, DisplayNode, FrameProvider, LayerNode, Matrix, MediaSource, Renderer, RendererRegistry, RenderSession,
+  AdjustmentNode, AudioLevelsTable, DisplayList, DisplayNode, FrameProvider, LayerNode, Matrix, MediaSource, Renderer, RendererRegistry, RenderSession,
   ResolvedEffect, RGBAFrame, TextLayouter, TransitionNode,
 } from '../types.js';
 import { createTextLayouter, registerFontAsset, registerFonts, BUNDLED_FONTS_DIR } from '../text.js';
@@ -39,6 +40,7 @@ interface DrawCtx {
   list: DisplayList;
   /** copy RGBA bytes into a canvas (pooled per session) */
   upload(w: number, h: number, data: Uint8Array | Buffer): Canvas;
+  audioLevels?: (assetId: string, rate: Rate) => AudioLevelsTable | undefined;
 }
 
 const setT = (s: Surface, m: Matrix) => s.ctx.setTransform(m[0], m[1], m[2], m[3], m[4], m[5]);
@@ -98,7 +100,7 @@ async function drawSource(dc: DrawCtx, s: Surface, node: LayerNode, k: number): 
   switch (src.type) {
     case 'solid': ctx.fillStyle = src.color; ctx.fillRect(0, 0, w, h); return;
     case 'media': return drawMedia(dc, s, src, node.box, k);
-    case 'shape': return drawShape(ctx, src.shape, w, h, src.trim);
+    case 'shape': return drawShape(ctx, src.shape, w, h, src.trim, src.trimStart, src.trimOffset);
     case 'text': return drawTextLayer(ctx, dc.layouter, src, node.box);
     case 'captions': return drawTextLayer(ctx, dc.layouter, src, node.box);
     case 'comp': {
@@ -111,7 +113,9 @@ async function drawSource(dc: DrawCtx, s: Surface, node: LayerNode, k: number): 
       const def = dc.registry.generators.get(src.gen.type);
       if (!def) fail('E_UNKNOWN_GENERATOR', `generator "${src.gen.type}" is not known to the renderer.`, 'pass the project\'s plugin registry to renderer.open({ registry }).');
       const g = createSurface(w, h);
-      def.draw({ dst: g, params: src.params as never, ...frameInfo(dc, src.frame, node.seed) });
+      const lv = src.audio ? dc.audioLevels?.(src.audio.assetId, dc.list.rate) : undefined;
+      const audio = lv && src.audio ? { rms: lv.rms, spectrum: lv.spectrum, bands: lv.bands, frame: src.audio.frame } : undefined;
+      def.draw({ dst: g, params: src.params as never, ...(audio ? { audio } : {}), ...frameInfo(dc, src.frame, node.seed) });
       ctx.drawImage(g.canvas, 0, 0, w, h);
       return;
     }
@@ -289,7 +293,7 @@ function readRGBA(canvas: Canvas): Uint8Array {
 class SkiaSession implements RenderSession {
   /** media upload canvases by size; slots are reused across frames (the readback flushes all draws) */
   private pool = new Map<string, { canvas: Canvas; img: ImageData }[]>();
-  constructor(readonly width: number, readonly height: number, readonly layouter: TextLayouter, readonly registry: RendererRegistry) {}
+  constructor(readonly width: number, readonly height: number, readonly layouter: TextLayouter, readonly registry: RendererRegistry, readonly audioLevels?: (assetId: string, rate: Rate) => AudioLevelsTable | undefined) {}
 
   /** the output surface, reused (the readback copies its pixels) */
   private out: Surface | null = null;
@@ -313,7 +317,7 @@ class SkiaSession implements RenderSession {
       slot.canvas.getContext('2d').putImageData(slot.img, 0, 0);
       return slot.canvas;
     };
-    await drawList({ frames, layouter: this.layouter, registry: this.registry, list, upload }, list, out, root);
+    await drawList({ frames, layouter: this.layouter, registry: this.registry, list, upload, ...(this.audioLevels ? { audioLevels: this.audioLevels } : {}) }, list, out, root);
     return { width: this.width, height: this.height, data: readRGBA(out.canvas) };
   }
 
@@ -325,6 +329,6 @@ export const skiaRenderer: Renderer = {
   async open(opts) {
     registerFonts(opts.fontsDir ? [BUNDLED_FONTS_DIR, opts.fontsDir] : [BUNDLED_FONTS_DIR]);
     for (const f of opts.fontAssets ?? []) registerFontAsset(f.path, f.id);
-    return new SkiaSession(Math.round(opts.width), Math.round(opts.height), createTextLayouter(), opts.registry ?? EMPTY_REGISTRY);
+    return new SkiaSession(Math.round(opts.width), Math.round(opts.height), createTextLayouter(), opts.registry ?? EMPTY_REGISTRY, opts.audioLevels);
   },
 };

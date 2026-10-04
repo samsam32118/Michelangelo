@@ -10,8 +10,14 @@ import type { Problem } from '../core/load.js';
 import type { ProjectFile } from '../core/schema/index.js';
 import type { TextLayouter } from '../render/types.js';
 import { safeArea } from './safezones.js';
+import { ignores } from '../builtin/checks/index.js';
 
 export type { Finding };
+/** A finding from a multi-platform run: `platform` is set when it applies to that platform only. */
+export type PlatformFinding = Finding & { platform?: string };
+/** Probed facts of a media file (MediaBackend.probe is one). */
+export type ProbeFn = (absPath: string) => Promise<{ duration?: number; width?: number; height?: number }>;
+export type MediaFacts = { duration?: number; width?: number; height?: number };
 export type Layers = NonNullable<CheckContext['layers']>;
 export type Stage = 'project' | 'frame' | 'audio';
 
@@ -25,6 +31,14 @@ export interface CheckOptions {
   comp?: string;
   /** override project.platform */
   platform?: string;
+  /** check against several platforms at once: findings that differ per platform carry `platform` and a [name] prefix */
+  platforms?: string[];
+  /** the project file as the user named it: replaces "<file>" in fixes (default: fixes keep "<file>") */
+  file?: string;
+  /** probe media for sizes and durations (enables clip-past-source and exact media boxes); e.g. MediaBackend.probe */
+  probe?: ProbeFn;
+  /** the render will use --alpha (enables alpha-with-bg) */
+  alpha?: boolean;
 }
 
 const SEVERITY = { error: 0, warning: 1, info: 2 } as const;
@@ -54,7 +68,27 @@ export function makeContext(project: ProjectFile, compId: string, platform: stri
   return { project, compId, platform: pf, safeArea: (p) => safeArea(p ?? pf, comp.size[0], comp.size[1]), ...extra };
 }
 
-/** Run every check of a stage; a check that throws becomes an info finding instead of failing the run. */
+/** Rules whose findings are about a stretch of the timeline: a tagged clip playing at that frame silences them. */
+const FRAME_SCOPED = new Set(['black-frames', 'trailing-black', 'gaps', 'long-silence', 'luma-range']);
+
+/**
+ * Drop findings that clips opted out of with a "qa-ignore:<rule>" tag (or "qa-ignore:all"): the finding's clip;
+ * for timeline rules any clip of the comp playing at the finding's frame; for findings with no clip or frame, any clip of the comp.
+ */
+export function applyIgnores(project: ProjectFile, compId: string, fs: Finding[]): Finding[] {
+  const all = new Map((project.clips ?? []).map((c) => [c.id, c]));
+  const tracks = new Set((project.tracks ?? []).filter((t) => t.comp === compId).map((t) => t.id));
+  const inComp = (project.clips ?? []).filter((c) => tracks.has(c.track) && c.tags?.some((t) => t.startsWith('qa-ignore:')));
+  if (!inComp.length && ![...all.values()].some((c) => c.tags?.length)) return fs;
+  return fs.filter((f) => {
+    if (f.clip && ignores(all.get(f.clip), f.rule)) return false;
+    if (f.frame !== undefined && FRAME_SCOPED.has(f.rule) && inComp.some((c) => f.frame! >= c.at && f.frame! < c.at + c.len && ignores(c, f.rule))) return false;
+    if (!f.clip && f.frame === undefined && inComp.some((c) => ignores(c, f.rule))) return false;
+    return true;
+  });
+}
+
+/** Run every check of a stage; a check that throws becomes an info finding instead of failing the run. Honours qa-ignore tags. */
 export async function runStage(registry: PluginRegistry, stage: Stage, ctx: CheckContext): Promise<Finding[]> {
   const out: Finding[] = [];
   for (const def of registry.checks.values()) {
@@ -63,7 +97,69 @@ export async function runStage(registry: PluginRegistry, stage: Stage, ctx: Chec
       out.push({ rule: def.id, severity: 'info', message: `check "${def.id}" failed: ${(e as Error).message.split('\n')[0]}`, fix: `mgl plugin list # report it to the plugin that provides "${def.id}"` });
     }
   }
+  return applyIgnores(ctx.project, ctx.compId, out);
+}
+
+/**
+ * Merge per-platform runs: a finding every platform shares is kept once; the rest are prefixed "[platform]" and carry
+ * `platform`. One platform: its findings unchanged.
+ */
+export function mergePlatforms(runs: [string, Finding[]][]): PlatformFinding[] {
+  if (runs.length === 1) return runs[0]![1];
+  const key = (f: Finding) => `${f.rule}|${f.clip ?? ''}|${f.frame ?? ''}|${f.message}|${f.fix ?? ''}`;
+  const count = new Map<string, number>();
+  for (const [, fs] of runs) for (const k of new Set(fs.map(key))) count.set(k, (count.get(k) ?? 0) + 1);
+  const common = (f: Finding) => count.get(key(f)) === runs.length;
+  const out: PlatformFinding[] = runs[0]![1].filter(common);
+  for (const [pf, fs] of runs) for (const f of fs) if (!common(f)) out.push({ ...f, message: `[${pf}] ${f.message}`, platform: pf });
   return out;
+}
+
+/** The platforms to check: opts.platforms (deduplicated), else the single override or the project's platform. */
+export function platformsOf(project: ProjectFile, o: { platform?: string; platforms?: string[] }): string[] {
+  const list = [...new Set((o.platforms ?? []).map((p) => p.trim()).filter(Boolean))];
+  return list.length ? list : [o.platform ?? project.project?.platform ?? 'none'];
+}
+
+/** Replace "<file>" in fixes with the project file's name. */
+export function withFile<F extends Finding>(fs: F[], file: string | undefined): F[] {
+  if (!file) return fs;
+  for (const f of fs) if (f.fix) f.fix = f.fix.replaceAll('<file>', /\s/.test(file) ? `'${file}'` : file);
+  return fs;
+}
+
+/** Probe the media assets used by clips (no generators/URLs, existing files only): asset id → facts. */
+export async function probeAssets(project: ProjectFile, baseDir: string, probe: ProbeFn | undefined): Promise<Map<string, MediaFacts>> {
+  const out = new Map<string, MediaFacts>();
+  if (!probe) return out;
+  const used = new Set((project.clips ?? []).map((c) => c.asset).filter((a): a is string => a !== undefined));
+  await Promise.all((project.assets ?? []).filter((a) => used.has(a.id) && a.kind !== 'font' && a.kind !== 'lut' && a.kind !== 'subtitles' && a.kind !== 'data').map(async (a) => {
+    if (/^[a-z][a-z0-9+.-]+:/i.test(a.src) && !/^[a-z]:[\\/]/i.test(a.src)) return;
+    const p = isAbsolute(a.src) ? a.src : resolve(baseDir, a.src);
+    if (!existsSync(p)) return;
+    try {
+      const r = await probe(p);
+      const facts: MediaFacts = {};
+      if (typeof r.duration === 'number' && r.duration > 0 && !IMAGE.test(a.src) && a.kind !== 'image') facts.duration = r.duration;
+      if (r.width) facts.width = r.width;
+      if (r.height) facts.height = r.height;
+      out.set(a.id, facts);
+    } catch { /* unreadable media is reported by missing-media / render */ }
+  }));
+  return out;
+}
+
+/** Frames across every visual clip (10%, 50% and 90% of its span), for coverage and position checks (at most 96). */
+export function sampleFrames(project: ProjectFile, compId: string): number[] {
+  const tracks = new Set((project.tracks ?? []).filter((t) => t.comp === compId && !t.audio && !t.hidden).map((t) => t.id));
+  const set = new Set<number>();
+  for (const c of project.clips ?? []) {
+    if (!tracks.has(c.track) || c.hidden || c.len <= 0) continue;
+    for (const k of [0.1, 0.5, 0.9]) set.add(c.at + Math.min(c.len - 1, Math.floor(c.len * k)));
+  }
+  const all = [...set].sort((a, b) => a - b);
+  if (all.length <= 96) return all;
+  return [...new Set(Array.from({ length: 96 }, (_, i) => all[Math.round((i * (all.length - 1)) / 95)]!))];
 }
 
 const IMAGE = /\.(png|jpe?g|webp|gif|bmp|svg|tiff?|avif)$/i;
@@ -88,7 +184,7 @@ export function restFrames(project: ProjectFile, compId: string): number[] {
 }
 
 /** Layer boxes (comp px) at the given frames from evaluate, with no pixels. Frames that fail to evaluate are skipped. */
-export async function projectLayers(project: ProjectFile, compId: string, frames: number[], opts: { baseDir: string; registry: PluginRegistry; layouter?: TextLayouter }): Promise<Layers> {
+export async function projectLayers(project: ProjectFile, compId: string, frames: number[], opts: { baseDir: string; registry: PluginRegistry; layouter?: TextLayouter; media?: Map<string, MediaFacts> }): Promise<Layers> {
   const out: Layers = new Map();
   if (!frames.length) return out;
   const { evaluateLayers } = await import('../render/evaluate.js');
@@ -99,8 +195,10 @@ export async function projectLayers(project: ProjectFile, compId: string, frames
   }
   const layouter = opts.layouter ?? text.createTextLayouter();
   const kinds = new Map((project.assets ?? []).map((a) => [a.id, a]));
+  const media = opts.media;
   const eo = {
     layouter, registry: opts.registry,
+    ...(media?.size ? { media: (id: string) => media.get(id) } : {}),
     assetKind: (id: string) => {
       const a = kinds.get(id);
       const k = a?.kind ?? (a && IMAGE.test(a.src) ? 'image' : a && AUDIO.test(a.src) ? 'audio' : 'video');
@@ -152,13 +250,29 @@ export function problemFindings(problems: Problem[]): Finding[] {
   return problems.map((p) => ({ rule: p.code.startsWith('E_PLUGIN') || p.code.startsWith('W_PLUGIN') ? 'plugin' : p.code.toLowerCase(), severity: p.severity, message: p.message, fix: p.fix }));
 }
 
-/** Project-stage QA (no pixels): plugin problems, missing media, and every project-stage check. Load problems are reported separately by the loader. */
-export async function checkProject(project: ProjectFile, opts: CheckOptions): Promise<Finding[]> {
+/** Project-stage QA (no pixels): plugin problems, missing media, and every project-stage check (per platform with `platforms`). Load problems are reported separately by the loader. */
+export async function checkProject(project: ProjectFile, opts: CheckOptions): Promise<PlatformFinding[]> {
   const compId = compIdOf(project, opts.comp);
   let registry = opts.registry, problems: Problem[] = [];
   if (!registry) ({ registry, problems } = await projectRegistry(project, opts.baseDir));
   else if (Array.isArray((registry as { problems?: unknown }).problems)) problems = (registry as unknown as { problems: Problem[] }).problems;
-  const layers = await projectLayers(project, compId, restFrames(project, compId), { baseDir: opts.baseDir, registry, ...(opts.layouter ? { layouter: opts.layouter } : {}) });
-  const ctx = makeContext(project, compId, opts.platform, { layers });
-  return sortFindings([...problemFindings(problems), ...missingMedia(project, opts.baseDir), ...await runStage(registry, 'project', ctx)]);
+  const facts = await probeAssets(project, opts.baseDir, opts.probe);
+  const lo = { baseDir: opts.baseDir, registry, media: facts, ...(opts.layouter ? { layouter: opts.layouter } : {}) };
+  const rest = restFrames(project, compId);
+  const layers = await projectLayers(project, compId, rest, lo);
+  const sampled = await projectLayers(project, compId, sampleFrames(project, compId).filter((f) => !layers.has(f)), lo);
+  for (const [f, ls] of layers) sampled.set(f, ls);
+  const extra = qaExtras(facts, opts.alpha, sampled, !!opts.probe);
+  const runs: [string, Finding[]][] = [];
+  for (const pf of platformsOf(project, opts)) runs.push([pf, await runStage(registry, 'project', makeContext(project, compId, pf, { layers, ...extra }))]);
+  return withFile(sortFindings([...problemFindings(problems), ...missingMedia(project, opts.baseDir), ...mergePlatforms(runs)]), opts.file);
+}
+
+/** The context fields beyond plugin API 1.1 that the built-in checks read (see QaContext in src/builtin/checks). */
+export function qaExtras(facts: Map<string, MediaFacts>, alpha: boolean | undefined, sampled: Layers | undefined, probed: boolean): Partial<CheckContext> {
+  const extra: Record<string, unknown> = {};
+  if (sampled) extra.sampled = sampled;
+  if (probed) extra.sourceDuration = (id: string) => facts.get(id)?.duration;
+  if (alpha) extra.alpha = true;
+  return extra as Partial<CheckContext>;
 }

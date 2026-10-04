@@ -7,19 +7,19 @@ import { resolve } from 'node:path';
 import { MglError, fail } from '../core/errors.js';
 import type { Problem } from '../core/load.js';
 import { PRESETS } from '../core/commands/structure.js';
-import type { ProjectFile } from '../core/schema/index.js';
+import { PLATFORMS, type ProjectFile } from '../core/schema/index.js';
 import { parseRate, parseTime } from '../core/time.js';
 import type { PluginRegistry } from '../plugin/registry.js';
 import type { Command } from '../core/commands/registry.js';
 import { Project, emptyProject, type EditResult } from './project.js';
-import { makeServices } from './services.js';
+import { makeServices, type MglServices } from './services.js';
 import '../core/commands/index.js';
 
 export { MglError } from '../core/errors.js';
 export type { MglErrorInfo, ErrorKind } from '../core/errors.js';
 export { listCommands, getCommand, type Command, type CommandDef } from '../core/commands/index.js';
 export { Project, emptyProject, workDir, type EditResult, type ChangedLine } from './project.js';
-export { makeServices } from './services.js';
+export { makeServices, type MglServices } from './services.js';
 export { parseTime, parseRate, formatSeconds, framesToSeconds } from '../core/time.js';
 export { formatProject } from '../core/format.js';
 export type * from '../core/schema/index.js';
@@ -35,12 +35,27 @@ export interface LookOptions {
   cuts?: boolean;
   /** skip the sound report */
   audio?: boolean;
+  /** check safe zones (and project-stage rules) against several platforms at once; default: project.platform */
+  platforms?: string[];
+  /** the render will use --alpha (enables the alpha-with-bg rule) */
+  alpha?: boolean;
+  /** how fixes name the project file (default: the file relative to the cwd when below it, else as opened) */
+  displayFile?: string;
+}
+
+export interface CheckOptions {
+  /** run the checks once per platform and merge the findings (a platform-specific finding names its platform) */
+  platforms?: string[];
+  /** the render will use --alpha (enables the alpha-with-bg rule) */
+  alpha?: boolean;
+  /** how fixes name the project file (default: the file relative to the cwd when below it, else as opened) */
+  displayFile?: string;
 }
 
 /** What look returns (src/qa): the contact sheet, findings with fixes, the sound summary. */
 export interface LookResult {
   sheet: string;
-  findings: { rule: string; severity: 'error' | 'warning' | 'info'; message: string; clip?: string; frame?: number; fix?: string }[];
+  findings: { rule: string; severity: 'error' | 'warning' | 'info'; message: string; clip?: string; frame?: number; fix?: string; platform?: string }[];
   frames: number[];
   crops: { finding: number; path: string }[];
   sound?: { integrated: number; truePeak: number; lra: number; silences: { start: number; end: number }[]; bpm?: number };
@@ -56,6 +71,22 @@ export interface RenderOpts {
   alpha?: boolean;
   comp?: string;
   segments?: number;
+  /** audio stems: one bus's contribution to master, or 'all' (one stereo pair per bus in a multichannel .wav) */
+  bus?: string;
+  /** video constant rate factor (mp4 x264 0–51, webm VP9 0–63; lower = better) */
+  crf?: number;
+  /** video bitrate, e.g. "8M" (mp4/webm) */
+  bitrate?: string;
+  /** audio bitrate for aac/opus/mp3, e.g. "320k" */
+  audioBitrate?: string;
+  /** PCM bit depth for .wav/.flac and .mov audio */
+  pcmDepth?: 16 | 24;
+  /** ProRes profile for .mov: proxy, lt, 422, hq (default), 4444 (default with alpha), 4444xq */
+  prores?: 'proxy' | 'lt' | '422' | 'hq' | '4444' | '4444xq';
+  /** start timecode written to .mov/.mp4, "HH:MM:SS:FF" (";" before FF for drop-frame) */
+  timecode?: string;
+  /** colour range flag of the video: tv (limited, default) or pc (full) */
+  colorRange?: 'tv' | 'pc';
   onEstimate?(e: { seconds: number; note: string }): void;
   onProgress?(p: { frame: number; total: number; fps: number; etaSec: number }): void;
 }
@@ -64,7 +95,7 @@ export interface CheckReport {
   /** load warnings and render-blocking issues, plugin problems */
   problems: Problem[];
   /** QA findings that need no pixels */
-  findings: { rule: string; severity: 'error' | 'warning' | 'info'; message: string; clip?: string; frame?: number; fix?: string; line?: number }[];
+  findings: { rule: string; severity: 'error' | 'warning' | 'info'; message: string; clip?: string; frame?: number; fix?: string; line?: number; platform?: string }[];
   /** errors (problems with severity error + findings with severity error) */
   errors: number;
 }
@@ -72,13 +103,15 @@ export interface CheckReport {
 /** A project session with the plugin registry and the look / render / check verbs. */
 export type MglProject = Project & {
   registry: PluginRegistry;
+  /** probe, analyzeAudio, analyzeLevels, measureText, readText ... bound to the project folder */
+  services: MglServices;
   /** plugin problems (untrusted, not found, wrong version) */
   pluginProblems: Problem[];
   /** what p.edit(cmd) would change, without changing anything */
   dryRun(cmds: Command | Command[]): Promise<EditResult>;
   look(opts?: LookOptions): Promise<LookResult>;
   render(out: string, opts?: RenderOpts): Promise<import('../render/pipeline.js').RenderResult>;
-  check(): Promise<CheckReport>;
+  check(opts?: CheckOptions): Promise<CheckReport>;
 };
 
 /** Error codes for a name a plugin might have defined (effect type, op, template, ...). */
@@ -114,7 +147,7 @@ async function attach(p: Project): Promise<MglProject> {
   self.dryRun = (cmds) => p.edit(cmds, { dryRun: true });
   self.look = (opts = {}) => lookProject(self, opts);
   self.render = (out, opts = {}) => renderProject(self, out, opts);
-  self.check = () => checkProject(self);
+  self.check = (opts = {}) => checkProject(self, opts);
   return self;
 }
 
@@ -173,6 +206,9 @@ export function assertRenderable(p: MglProject) {
   }
 }
 
+/** RenderOpts fields passed to the pipeline as they are (stems and delivery settings). */
+export const DELIVERY_FIELDS = ['bus', 'crf', 'bitrate', 'audioBitrate', 'pcmDepth', 'prores', 'timecode', 'colorRange'] as const;
+
 async function renderProject(p: MglProject, out: string, o: RenderOpts) {
   assertRenderable(p);
   const pipeline = await import('../render/pipeline.js');
@@ -183,6 +219,7 @@ async function renderProject(p: MglProject, out: string, o: RenderOpts) {
   if (o.still !== undefined) opts.still = parseTime(o.still, rate, 'still');
   if (o.alpha) opts.alpha = true;
   if (o.segments) opts.segments = o.segments;
+  for (const k of DELIVERY_FIELDS) if (o[k] !== undefined) (opts as unknown as Record<string, unknown>)[k] = o[k];
   if (o.onEstimate) opts.onEstimate = o.onEstimate;
   if (o.onProgress) opts.onProgress = o.onProgress;
   return pipeline.render(p.data, resolve(out), opts);
@@ -191,12 +228,21 @@ async function renderProject(p: MglProject, out: string, o: RenderOpts) {
 /** The QA functions (src/qa: look, checkProject, formatLook, formatFindings), when present in this build. */
 export async function qaModule(): Promise<Record<string, any> | undefined> {
   const mods: Record<string, any> = {};
-  for (const m of ['look', 'check', 'format']) {
-    try { Object.assign(mods, await import(`../qa/${m}.js`)); } catch (e) {
+  // literal specifiers, so bundlers and vitest resolve them too
+  for (const load of [() => import('../qa/look.js'), () => import('../qa/check.js'), () => import('../qa/format.js')]) {
+    try { Object.assign(mods, await load()); } catch (e) {
       if ((e as NodeJS.ErrnoException).code !== 'ERR_MODULE_NOT_FOUND') throw e;
     }
   }
   return Object.keys(mods).length ? mods : undefined;
+}
+
+/** Validate a platform list ("tiktok,reels" or an array); unknown names are an error with the known list. */
+export function parsePlatforms(v: string | string[]): string[] {
+  const list = (Array.isArray(v) ? v : v.split(',')).map((x) => x.trim().toLowerCase()).filter(Boolean);
+  const bad = list.filter((x) => !(PLATFORMS as readonly string[]).includes(x));
+  if (!list.length || bad.length) fail('E_ARG', bad.length ? `"${bad.join('", "')}" ${bad.length > 1 ? 'are not platforms' : 'is not a platform'}.` : 'no platform given.', `use a comma-separated list of ${PLATFORMS.join(', ')} (e.g. --platform tiktok,reels,shorts).`);
+  return [...new Set(list)];
 }
 
 async function lookProject(p: MglProject, o: LookOptions) {
@@ -211,15 +257,36 @@ async function lookProject(p: MglProject, o: LookOptions) {
   if (o.frames !== undefined) opts.n = o.frames;
   if (o.cuts) opts.cuts = true;
   if (o.audio === false) opts.audio = false;
+  // several platforms: the QA module runs the platform-dependent rules once per platform and tags what differs
+  if (o.platforms?.length) opts.platforms = parsePlatforms(o.platforms);
+  if (o.alpha) opts.alpha = true;
+  if (o.displayFile) opts.displayFile = o.displayFile;
   return qa.look(p.data, opts) as Promise<LookResult>;
 }
 
-async function checkProject(p: MglProject): Promise<CheckReport> {
+/** A probe for QA (absolute paths): media sizes and durations for exact boxes and the clip-past-source rule. */
+async function qaProbe(p: MglProject): Promise<(abs: string) => Promise<{ duration?: number; width?: number; height?: number }>> {
+  const { getMediaBackend } = await import('../media/index.js');
+  const backend = getMediaBackend({ baseDir: p.dir });
+  return async (abs) => {
+    const info = await backend.probe(abs);
+    return { ...(info.duration ? { duration: info.duration } : {}), ...(info.width ? { width: info.width, height: info.height } : {}) };
+  };
+}
+
+async function checkProject(p: MglProject, o: CheckOptions = {}): Promise<CheckReport> {
   const qa = await qaModule();
   // with the QA module, plugin problems come back as findings (rule "plugin")
   const problems = qa?.checkProject ? [...p.problems] : [...p.problems, ...p.pluginProblems];
   let findings: CheckReport['findings'] = [];
-  if (qa?.checkProject) findings = await qa.checkProject(p.data, { baseDir: p.dir, registry: p.registry });
+  if (qa?.checkProject) {
+    const opts: Record<string, unknown> = { baseDir: p.dir, registry: p.registry, probe: await qaProbe(p) };
+    if (o.platforms?.length) opts.platforms = parsePlatforms(o.platforms);
+    if (o.alpha) opts.alpha = true;
+    const file = o.displayFile ?? (typeof qa.displayName === 'function' ? qa.displayName(p.file) : p.file);
+    if (file) opts.file = file;
+    findings = await qa.checkProject(p.data, opts);
+  }
   for (const f of findings) if (f.clip) { const l = p.line('clips', f.clip); if (l) f.line = l; }
   const errors = problems.filter((x) => x.severity === 'error').length + findings.filter((f) => f.severity === 'error').length;
   return { problems, findings, errors };

@@ -13,7 +13,7 @@ import { readManifest } from './loader.js';
 import { childEnv, childNodeArgs, fromSource, libraryTypes } from './resolve.js';
 import { PLUGIN_KINDS } from './validate.js';
 
-export interface PluginTestStep { step: 'manifest' | 'definition' | 'typecheck' | 'tests' | 'preview'; ok: boolean; skipped?: boolean; detail: string }
+export interface PluginTestStep { step: 'manifest' | 'definition' | 'filters' | 'typecheck' | 'tests' | 'preview'; ok: boolean; skipped?: boolean; detail: string }
 
 export interface PluginTestResult {
   ok: boolean;
@@ -129,12 +129,13 @@ export async function runPluginTests(pluginDir: string, opts: { typecheck?: bool
   if (!line) {
     steps.push({ step: 'definition', ok: false, detail: `validation crashed${v.timedOut ? ' (timed out)' : ''}:\n${v.out.trim().slice(-3000)}` });
   } else {
-    const r = JSON.parse(line.slice(11)) as { name?: string; errors: string[]; kinds: string[]; preview?: string; previewOf?: string };
+    const r = JSON.parse(line.slice(11)) as { name?: string; errors: string[]; kinds: string[]; preview?: string; previewOf?: string; filters?: string[] };
     const missing = declared.filter((k) => !r.kinds.includes(k));
     const extra = r.kinds.filter((k) => !declared.includes(k));
     const errs = [...r.errors];
     if (!errs.length && missing.length) errs.push(`package.json declares ${missing.join(', ')} but the plugin defines none (fix: add them or remove them from "michelangelo.kinds").`);
     steps.push({ step: 'definition', ok: !errs.length, detail: errs.length ? errs.join('\n') : `plugin "${r.name}" defines ${r.kinds.join(', ')}${extra.length ? ` (note: add ${extra.join(', ')} to "michelangelo.kinds")` : ''}` });
+    if (!errs.length && r.filters?.length) steps.push({ step: 'filters', ok: true, detail: r.filters.join(' | ') });
     if (r.preview) { preview = r.preview; steps.push({ step: 'preview', ok: true, detail: `${r.preview} (${r.previewOf}, default params)` }); }
   }
 

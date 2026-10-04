@@ -28,6 +28,14 @@ Built-in templates (parameters and defaults: `mgl docs template <id>`, or effect
 | `progress-bar` | a bar that fills over the comp length | color, trackColor, position, thickness |
 | `quote` | a quotation with a large quote mark and the author (5 s) | quote, author, accent |
 | `listicle-item` | a numbered list item (3 s) | number, text, accent, numberColor |
+| `bars-and-tone` | head-leader colour bars (SMPTE or EBU) with an ident line (10 s; add the 1 kHz tone as audio) | ident, standard, level |
+| `slate` | programme slate: title, version, date, duration, client on a dark card (5 s) | title, version, date, duration, client |
+| `countdown` | countdown leader, one number per second down to 1 with a sweeping hand | from, color, bg |
+
+Leader and review generators work as clips too: `smpte-bars`, `countdown-leader`, and `timecode` (burned-in
+HH:MM:SS:FF from `start`, or a clock, seconds or frames). The `counter` generator counts with any keyframe
+`easing` and `rounding` (`round`, `floor`, `ceil`, or `step` for equal holds: a 3-2-1 countdown is
+`{"type": "counter", "from": 3, "to": 1, "easing": "linear", "rounding": "step", "duration": 90}`).
 
 After applying, adjust with normal commands (`clip.set lower-third-name style.color=#ffffff`, `clip.move`,
 `text.set`), or remove all of it: the ids are listed in the `edit` output (`--json` → `out[0].ids`).
@@ -36,6 +44,10 @@ After applying, adjust with normal commands (`clip.set lower-third-name style.co
 mgl edit tpl.mgl.json --json template.apply listicle-item at=8s params='{"number": 1, "text": "Phone in another room"}' > applied.json
 node -e "const r = require('./applied.json'); console.log(r.out[0].ids.join(' '))"
 ```
+
+Templates place their layers on free tracks (new tracks are named `V2`, `V3`, ...; a later `clip.add` with no
+`track=` may land on one of them, so name the track you want). Timing is fixed when applied: after changing the
+comp length, apply a comp-length template such as `progress-bar` again (remove the old clips first).
 
 Plugins add templates (`mgl plugin new template <name>`): a `defineTemplate({ id, describe, params, build })`
 whose `build` returns the entities with local ids; the core prefixes them and places their layers.

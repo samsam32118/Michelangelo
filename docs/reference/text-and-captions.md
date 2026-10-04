@@ -4,7 +4,9 @@
 
 A text clip is `{"text": "...", "style": ...}` on a visual track. `x`, `y` place the text box's anchor
 (default: the comp centre); long text wraps at `style.maxWidth` and shrinks to fit `maxLines` or `box`.
-Fonts bundled with Michelangelo render the same everywhere: **Inter**, **Noto Sans**, **Anton** (display),
+A line break is `\n` in the JSON string; on the command line pass the value as a JSON string
+(`text='"Line one\nLine two"'`), since an unquoted `\n` is kept as the two characters. Fonts bundled with
+Michelangelo render the same everywhere: **Inter**, **Noto Sans**, **Anton** (display),
 **JetBrains Mono**. Another font is an asset (`asset.add fonts/Brand.ttf id=brand-font`) used as
 `"font": "brand-font"`.
 

@@ -55,8 +55,8 @@ export function checkPluginDef(def: unknown, deep = false): string[] {
           }
         }
       }
-      const fn = { effect: o.draw ?? o.source, transition: o.draw, generator: o.draw, template: o.build, command: o.apply, check: o.run, importer: o.import, exporter: o.export, style: true, 'text-animation': o.state }[kind as PluginKind];
-      if (typeof fn !== 'function' && fn !== true) out.push(`${where} has no ${kind === 'effect' ? 'draw or source' : ({ transition: 'draw', generator: 'draw', template: 'build', command: 'apply', check: 'run', importer: 'import', exporter: 'export', 'text-animation': 'state' } as Record<string, string>)[kind]} function (fix: implement it).`);
+      const fn = { effect: o.draw ?? o.source ?? o.audio, transition: o.draw, generator: o.draw, template: o.build, command: o.apply, check: o.run, importer: o.import, exporter: o.export, style: true, 'text-animation': o.state }[kind as PluginKind];
+      if (typeof fn !== 'function' && fn !== true) out.push(`${where} has no ${kind === 'effect' ? 'draw, source or audio' : ({ transition: 'draw', generator: 'draw', template: 'build', command: 'apply', check: 'run', importer: 'import', exporter: 'export', 'text-animation': 'state' } as Record<string, string>)[kind]} function (fix: implement it).`);
     }
   }
   if (!items && !out.length) out.push('the plugin defines nothing (fix: add effects, transitions, generators, templates, commands, checks, importers or exporters).');

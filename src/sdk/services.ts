@@ -9,6 +9,8 @@ import type { PluginRegistry } from '../plugin/registry.js';
 import type { MediaBackend } from '../media/types.js';
 import type { ResolvedTextStyle, TextLayouter } from '../render/types.js';
 import { createTextLayouter } from '../render/text.js';
+import type { Rate } from '../core/time.js';
+import type { AudioLevelsData } from '../media/levels.js';
 
 const outside = (rel: string) => rel === '..' || rel.startsWith('..' + sep) || isAbsolute(rel);
 
@@ -35,11 +37,16 @@ export interface ServiceOptions {
   backend?: MediaBackend;
 }
 
-export function makeServices(projectDir: string, registry?: PluginRegistry, opts: ServiceOptions = {}): CommandServices {
+/** CommandServices plus SDK extras: per-frame sound levels (RMS + spectrum) of a media file, for sync and audio-reactive work. */
+export type MglServices = CommandServices & {
+  analyzeLevels?(src: string, rate: Rate): Promise<AudioLevelsData>;
+};
+
+export function makeServices(projectDir: string, registry?: PluginRegistry, opts: ServiceOptions = {}): MglServices {
   let backend: Promise<MediaBackend> | undefined = opts.backend ? Promise.resolve(opts.backend) : undefined;
   const media = () => (backend ??= import('../media/index.js').then((m) => m.getMediaBackend({ baseDir: projectDir })));
   let layouter: TextLayouter | undefined;
-  const services: CommandServices = {
+  const services: MglServices = {
     async probe(src) {
       const kind = kindFromExtension(src);
       if (kind && !['video', 'audio', 'image'].includes(kind)) return { kind } as ProbeInfo;
@@ -62,6 +69,11 @@ export function makeServices(projectDir: string, registry?: PluginRegistry, opts
     async readText(p) {
       const abs = confined(projectDir, p);
       try { return await readFile(abs, 'utf8'); } catch { return fail('E_NO_FILE', `cannot read ${p} (looked in ${abs}).`, 'give the path relative to the project file.'); }
+    },
+    async analyzeLevels(src, rate) {
+      const b = await media();
+      if (!b.analyzeLevels) return fail('E_NATIVE', 'this media backend cannot measure sound levels.', 'use the default native-ffmpeg backend.');
+      return b.analyzeLevels(confined(projectDir, src), rate);
     },
     measureText(text, style) {
       layouter ??= createTextLayouter();

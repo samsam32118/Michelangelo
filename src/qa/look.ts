@@ -3,7 +3,7 @@
  * frame and audio checks, writes a zoomed crop per finding, and summarises the mix as text.
  */
 import { mkdirSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
-import { basename, dirname, isAbsolute, join, resolve } from 'node:path';
+import { basename, dirname, isAbsolute, join, relative, resolve } from 'node:path';
 import { createCanvas, ImageData, type Canvas } from '@napi-rs/canvas';
 import type { Finding } from '../plugin/api.js';
 import type { PluginRegistry } from '../plugin/registry.js';
@@ -11,7 +11,7 @@ import type { ProjectFile } from '../core/schema/index.js';
 import { parseRate, rateToNumber } from '../core/time.js';
 import type { AudioAnalysisReport, MediaBackend } from '../media/types.js';
 import type { AudioPlan, RGBAFrame } from '../render/types.js';
-import { compIdOf, makeContext, missingMedia, problemFindings, projectLayers, projectRegistry, restFrames, runStage, sortFindings, type Layers } from './check.js';
+import { compIdOf, makeContext, mergePlatforms, missingMedia, platformsOf, probeAssets, problemFindings, projectLayers, projectRegistry, qaExtras, restFrames, runStage, sampleFrames, sortFindings, withFile, type Layers, type PlatformFinding, type ProbeFn } from './check.js';
 
 export const SHEET_MAX = 1568;
 const LABEL_H = 20, PAD = 6, MAX_FRAMES = 24, CROP_MIN = 512;
@@ -34,9 +34,15 @@ export interface LookOptions {
   cuts?: boolean;
   audio?: boolean;
   platform?: string;
+  /** check against several platforms at once (findings that differ per platform carry `platform`) */
+  platforms?: string[];
+  /** the render will use --alpha (enables alpha-with-bg) */
+  alpha?: boolean;
+  /** how fixes name the project file (default: `file` relative to the cwd when below it, else as given) */
+  displayFile?: string;
   registry?: PluginRegistry;
-  /** injected for tests / other backends */
-  deps?: { renderStills?: StillsFn; backend?: Pick<MediaBackend, 'renderAudio' | 'analyzeAudio'>; planAudio?: PlanFn };
+  /** injected for tests / other backends (a backend with `probe` gives clip-past-source and source-end aware frozen checks) */
+  deps?: { renderStills?: StillsFn; backend?: Pick<MediaBackend, 'renderAudio' | 'analyzeAudio'> & Partial<Pick<MediaBackend, 'probe'>>; planAudio?: PlanFn };
 }
 
 export interface SoundSummary {
@@ -55,7 +61,7 @@ export interface LookReport {
   size: [number, number];
   grid: [number, number];
   crops: { finding: number; path: string }[];
-  findings: Finding[];
+  findings: PlatformFinding[];
   sound?: SoundSummary;
   frames: number[];
   /** render scale used */
@@ -155,9 +161,20 @@ export async function look(project: ProjectFile, opts: LookOptions): Promise<Loo
   let registry = opts.registry, problems = (registry as { problems?: Parameters<typeof problemFindings>[0] } | undefined)?.problems ?? [];
   if (!registry) ({ registry, problems } = await projectRegistry(project, opts.baseDir));
 
+  // media facts (sizes, durations) for exact boxes, clip-past-source and source-end aware frozen checks
+  const probeFn: ProbeFn | undefined = opts.deps ? opts.deps.backend?.probe?.bind(opts.deps.backend) : await realProbe(opts.baseDir);
+  const facts = await probeAssets(project, opts.baseDir, probeFn);
+  const platforms = platformsOf(project, opts);
+
   // project stage first (no pixels): its boxed findings' frames are rendered too, for their crops
-  const rest = await projectLayers(project, compId, restFrames(project, compId), { baseDir: opts.baseDir, registry });
-  const projectFindings = await runStage(registry, 'project', makeContext(project, compId, opts.platform, { layers: rest }));
+  const lo = { baseDir: opts.baseDir, registry, media: facts };
+  const rest = await projectLayers(project, compId, restFrames(project, compId), lo);
+  const sampled = await projectLayers(project, compId, sampleFrames(project, compId).filter((f) => !rest.has(f)), lo);
+  for (const [f, ls] of rest) sampled.set(f, ls);
+  const extras = qaExtras(facts, opts.alpha, sampled, !!probeFn);
+  const projectRuns: [string, Finding[]][] = [];
+  for (const pf of platforms) projectRuns.push([pf, await runStage(registry, 'project', makeContext(project, compId, pf, { layers: rest, ...extras }))]);
+  const projectFindings = mergePlatforms(projectRuns);
   const frames = chooseFrames(project, compId, length, opts);
   const extra = [...new Set(projectFindings.filter((f) => f.box && f.frame !== undefined && !frames.includes(f.frame)).map((f) => f.frame!))].slice(0, 8);
   const layout = sheetLayout(frames.length, W, H);
@@ -192,14 +209,19 @@ export async function look(project: ProjectFile, opts: LookOptions): Promise<Loo
   // frame stage on the rendered stills, audio stage on the analysis
   const imgs = new Map(stills.map((s) => [s.frame, { width: s.image.width, height: s.image.height, data: s.image.data, scale: s.image.width / W }]));
   const layers: Layers = new Map(stills.map((s) => [s.frame, s.layers]));
-  const frameFindings = await runStage(registry, 'frame', makeContext(project, compId, opts.platform, { frames: imgs, layers }));
-  const audioFindings = audio ? await runStage(registry, 'audio', makeContext(project, compId, opts.platform, { audio })) : [];
+  const frameRuns: [string, Finding[]][] = [], audioRuns: [string, Finding[]][] = [];
+  for (const pf of platforms) {
+    frameRuns.push([pf, await runStage(registry, 'frame', makeContext(project, compId, pf, { frames: imgs, layers, ...extras }))]);
+    if (audio) audioRuns.push([pf, await runStage(registry, 'audio', makeContext(project, compId, pf, { audio, ...extras }))]);
+  }
+  const frameFindings = mergePlatforms(frameRuns), audioFindings = audio ? mergePlatforms(audioRuns) : [];
   // overlap-alpha refines caption-overlap on every frame it saw
   const refined = registry.checks.has('overlap-alpha');
   const kept = projectFindings.filter((f) => !(refined && f.rule === 'caption-overlap' && f.frame !== undefined && imgs.has(f.frame)));
   const seen = new Set<string>();
   const findings = sortFindings([...problemFindings(problems), ...missingMedia(project, opts.baseDir), ...kept, ...frameFindings, ...audioFindings])
     .filter((f) => { const k = `${f.rule}|${f.clip ?? ''}|${f.message}`; return !seen.has(k) && !!seen.add(k); });
+  withFile(findings, opts.displayFile ?? displayName(opts.file));
 
   // crops come from a sharper render of the frames with boxed findings (enough px for a 512 px crop, at most comp size)
   const boxed = findings.filter((f) => f.box && f.frame !== undefined && byFrame.has(f.frame));
@@ -229,6 +251,57 @@ export async function look(project: ProjectFile, opts: LookOptions): Promise<Loo
   return report;
 }
 
+/** How a fix names the project file: relative to the cwd when it is below it, else as given. */
+export function displayName(file: string, cwd = process.cwd()): string {
+  const r = relative(cwd, resolve(file));
+  return r && !r.startsWith('..') && !isAbsolute(r) ? r : file;
+}
+
+async function realProbe(baseDir: string): Promise<ProbeFn | undefined> {
+  try {
+    const media = await import('../media/index.js');
+    const b = media.getMediaBackend({ baseDir });
+    return (p: string) => b.probe(p);
+  } catch { return undefined; }
+}
+
+export interface LookEstimate {
+  /** predicted wall time (s) */
+  seconds: number;
+  /** frames the sheet will render */
+  frames: number;
+  /** seconds of sound to analyse (0 with audio off) */
+  audioSeconds: number;
+  /** true when the look may take over 2 minutes: print `note` first */
+  slow: boolean;
+  /** "est. 140 s (look: 12 frames + sound analysis of 600 s)" */
+  note: string;
+}
+
+/** Predict how long `look` takes (cheap for typical projects; measures a draft frame for long or video-heavy comps). */
+export async function estimateLook(project: ProjectFile, opts: { baseDir: string; registry?: PluginRegistry; comp?: string; frames?: number[]; n?: number; cuts?: boolean; audio?: boolean }): Promise<LookEstimate> {
+  const compId = compIdOf(project, opts.comp);
+  const comp = project.comps.find((c) => c.id === compId)!;
+  const rate = parseRate(comp.fps);
+  const { compLength } = await import('../render/evaluate.js');
+  const length = compLength(project, compId);
+  const seconds = (length * rate.den) / rate.num;
+  const tracks = new Set((project.tracks ?? []).filter((t) => t.comp === compId).map((t) => t.id));
+  const videos = (project.clips ?? []).filter((c) => tracks.has(c.track) && c.asset !== undefined).length;
+  const n = opts.frames?.length ?? (opts.cuts ? MAX_FRAMES : Math.min(MAX_FRAMES, opts.n ?? 12));
+  const audioSeconds = opts.audio === false ? 0 : seconds;
+  let est: number;
+  if (seconds < 300 && videos < 8) est = 1 + n * 0.3 + audioSeconds * 0.02; // a look of a typical project takes seconds
+  else {
+    const pipeline = await import('../render/pipeline.js');
+    const registry = opts.registry ?? (await projectRegistry(project, opts.baseDir)).registry;
+    const e = await pipeline.estimate(project, { baseDir: opts.baseDir, registry, comp: compId, quality: 'draft', range: [0, Math.min(length, 3)] });
+    est = (n * (e.perFrameMs + e.decodeMs * 4)) / 1000 + audioSeconds * 0.05;
+  }
+  const s = Math.max(1, Math.round(est));
+  return { seconds: s, frames: n, audioSeconds, slow: est > 120, note: `est. ${s} s (look: ${n} frames${audioSeconds ? ` + sound analysis of ${Math.round(audioSeconds)} s` : ''})` };
+}
+
 async function runAudio(project: ProjectFile, compId: string, opts: LookOptions, dir: string, notes: string[]): Promise<AudioAnalysisReport | undefined> {
   const media = opts.deps?.planAudio && opts.deps.backend ? undefined : await import('../media/index.js');
   const backend = opts.deps?.backend ?? media!.getMediaBackend({ baseDir: opts.baseDir });
@@ -244,7 +317,7 @@ async function runAudio(project: ProjectFile, compId: string, opts: LookOptions,
       } catch { /* missing media is reported elsewhere */ }
     }));
   }
-  const plan = (opts.deps?.planAudio ?? media!.planAudio)(project, compId, { baseDir: opts.baseDir, duration: (id) => durations.get(id) });
+  const plan = (opts.deps?.planAudio ?? media!.planAudio)(project, compId, { baseDir: opts.baseDir, duration: (id) => durations.get(id), ...(opts.registry ? { registry: opts.registry } : {}) });
   if (!plan.segments.length) { notes.push('no audio in this comp'); return undefined; }
   const wav = join(dir, 'mix.wav');
   try {

@@ -20,6 +20,10 @@ describe('built-in plugin shape', () => {
       if (d.type === 'lut') {
         expect(d.params.safeParse({}).success).toBe(false);
         expect(d.params.parse({ file: 'look.cube' })).toEqual({ file: 'look.cube', interp: 'tetrahedral' });
+      } else if (d.type === 'waveform' || d.type === 'spectrum') {
+        // audio-reactive generators need the asset whose sound they show
+        expect(d.params.safeParse({}).success).toBe(false);
+        expect(d.params.safeParse({ asset: 'vo' }).success).toBe(true);
       } else expect(d.params.safeParse({}).success, d.type).toBe(true);
     }
   });

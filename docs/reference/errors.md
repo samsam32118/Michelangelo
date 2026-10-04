@@ -11,7 +11,7 @@ exception is `E_INTERNAL` (exit 1). Below: each code with one example message an
 |---|---|---|---|
 | `E_INTERNAL` | 1 | unexpected error: … | report this; run with --debug for the stack. |
 | `E_USAGE` | 1 | a verb or its arguments are wrong | the usage line printed with the error (mgl help) |
-| `E_ALPHA` | 1 | … cannot carry an alpha channel. | render to .mov (ProRes 4444) or .webm (VP9) for alpha. |
+| `E_ALPHA` | 1 | ProRes … cannot carry an alpha channel. | use prores=4444 (or 4444xq) with alpha, or drop alpha. |
 | `E_ARG` | 1 | … takes a number of steps, got "…". | mgl edit … 2 |
 | `E_BUS_CYCLE` | 1 | bus "…" routes or ducks in a cycle. | check the buses table: "to" and "duck.by" must not loop back. |
 | `E_BUSY` | 1 | a render of … is already running (pid …, …%). | wait for it (mgl render --status) or stop it with kill …. |
@@ -27,8 +27,9 @@ exception is `E_INTERNAL` (exit 1). Below: each code with one example message an
 | `E_EXISTS` | 1 | … already exists. | choose another name (-o other.mgl.json), or add --force to overwrite it. |
 | `E_EXPORT` | 1 | exporter "…" did not write …. | check the plugin that provides "…". |
 | `E_FFMPEG` | 2 | this ffmpeg has no … encoder (needed for …). | run "mgl doctor --fetch" for a full build, or choose another output format. |
-| `E_FILTER` | 1 | ffmpeg filter "…" is not allowed in a source-stage effect. | use an allowed filter…; filters that read files, open URLs or run commands (movie, amovie, sendcmd, ...) are refused. |
+| `E_FILTER` | 1 | ffmpeg filter "…" is not allowed in … effect…. | use an allowed filter…; filters that read files, open URLs or run commands (movie, amovie, sendcmd, ...) are refused. |
 | `E_FORMAT` | 1 | output format "…" is not supported. | use mp4, webm, mov, gif, png or apng (audio: wav, mp3, m4a, opus, flac). |
+| `E_FX_STAGE` | 1 | …: effect "…" has no audio stage (it works on pictures only), so it would do nothing to this sound. | …. |
 | `E_HISTORY_CONFLICT` | 1 | … "…" was changed since that step (by hand or by another command), so it can't be undone/redone safely. | make the change with a new command instead (mgl edit <file> ...), or revert your hand edit of that line first. |
 | `E_HISTORY_EMPTY` | 1 | nothing to …. | no recorded edits for this file (hand edits are not recorded). |
 | `E_IN_USE` | 1 | asset "…" is used by … clip(s): …. | remove those clips first, or pass clips=true to remove them too. |
@@ -47,9 +48,10 @@ exception is `E_INTERNAL` (exit 1). Below: each code with one example message an
 | `E_NO_AUDIO` | 1 | … has no audio stream. | analyse a file with sound, or render the project audio first. |
 | `E_NO_BEATS` | 1 | found … beat(s) in clip "…" (…–…)…. | lower every= or min=, or lengthen the clip. |
 | `E_NO_CATALOG` | 1 | no template catalog is available here. | run through the SDK or CLI (they load the built-in plugins), or pass services.catalog. |
-| `E_NO_CUES` | 1 | comp "…" has no caption cues to export. | add captions first: mgl edit <project> captions.import file=<srt> (or captions.add). |
+| `E_NO_CHAPTERS` | 1 | comp "…" has no markers with a note…, so there are no chapters. | add one per chapter: mgl edit <file> marker.add at=0 note="Intro" (the note is the chapter title). |
+| `E_NO_CUES` | 1 | comp "…" has no caption cues to export. | add captions first: mgl edit <project> captions.import file=<srt> (or captions.from-text text="...", or cue.add). |
 | `E_NO_FILE` | 1 | … does not exist. | give the path of a .json (array of commands) or .jsonl (one command per line) file. |
-| `E_NO_FX` | 1 | clip "…" has no effect …. | effects: … |
+| `E_NO_FX` | 1 | bus "…" has no effects. | add one with: mgl edit <file> fx.add bus=… type=<audio effect> |
 | `E_NO_KEY` | 1 | … has no keyframe at frame …. | keyframes are at frames … (clip-local). |
 | `E_NO_MASK` | 1 | clip "…" has no mask …. | masks are 0..…. |
 | `E_NO_NEIGHBOUR` | 1 | "…" has no clip right after it on …; roll moves a cut between two adjacent clips. | use clip.trim to change one clip. |
@@ -90,7 +92,7 @@ exception is `E_INTERNAL` (exit 1). Below: each code with one example message an
 | `E_TRACK_KIND` | 1 | track "…" is … track. | move to a track of the same kind. |
 | `E_TRUST_STORE` | 1 | the trust store … is not valid JSON. | fix or delete …, then re-run "mgl plugin trust <path>" for each plugin. |
 | `E_UNKNOWN_ANIMATION` | 1 | text animation "…" does not exist. | did you mean "…"? (presets: …) |
-| `E_UNKNOWN_EFFECT` | 1 | clip "…": effect "…" does not exist. | did you mean "…"? |
+| `E_UNKNOWN_EFFECT` | 1 | …: effect "…" does not exist. | did you mean "…"? |
 | `E_UNKNOWN_GENERATOR` | 1 | clip "…": generator "…" does not exist. | did you mean "…"? |
 | `E_UNKNOWN_KEY` | 1 | …: "…" is not a known property. | did you mean "…"? |
 | `E_UNKNOWN_OP` | 1 | "…" is not a command. | did you mean "…"? (list: mgl docs commands) |

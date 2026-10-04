@@ -6,7 +6,7 @@ import type { Problem } from '../core/load.js';
 import type { Command } from '../core/commands/registry.js';
 import type { TableName } from '../core/schema/index.js';
 import { Project, type EditResult } from '../sdk/project.js';
-import { open, qaModule, withPluginProblems } from '../sdk/index.js';
+import { open, parsePlatforms, qaModule, withPluginProblems } from '../sdk/index.js';
 import { MAX_LINES, bool, clip, str, type Args, type Out } from './io.js';
 import { jsonCommands, kvCommand } from './kv.js';
 
@@ -98,7 +98,8 @@ export async function check(a: Args, o: Out) {
     o.set({ file, issues: problems.length, errors: problems.length, problems: problems.map((x) => ({ severity: 'error', ...x })) });
     return;
   }
-  const rep = await p.check();
+  const platform = str(a, 'platform');
+  const rep = await p.check({ displayFile: file, ...(platform ? { platforms: parsePlatforms(platform) } : {}), ...(bool(a, 'alpha') ? { alpha: true } : {}) });
   const strict = bool(a, 'strict');
   const lines: string[] = [];
   const errs = rep.problems.filter((x) => x.severity === 'error');
@@ -110,7 +111,8 @@ export async function check(a: Args, o: Out) {
     else for (const f of rep.findings) lines.push(`${f.severity === 'error' ? 'error' : f.severity === 'warning' ? 'warn' : 'info'} ${f.rule}: ${clip(f.message, 180)}${f.fix ? `  fix: ${f.fix.replace(/<file>/g, file)}` : ''}`);
   }
   const issues = rep.problems.length + rep.findings.length;
-  const head = issues ? `${file}: ${errs.length} error${errs.length === 1 ? '' : 's'}, ${warns.length} warning${warns.length === 1 ? '' : 's'}, ${rep.findings.length} QA finding${rep.findings.length === 1 ? '' : 's'}` : `${file}: ok (no problems${qa ? ', no QA findings' : ''})`;
+  const pfNote = platform ? ` [platforms: ${parsePlatforms(platform).join(', ')}]` : '';
+  const head = (issues ? `${file}: ${errs.length} error${errs.length === 1 ? '' : 's'}, ${warns.length} warning${warns.length === 1 ? '' : 's'}, ${rep.findings.length} QA finding${rep.findings.length === 1 ? '' : 's'}` : `${file}: ok (no problems${qa ? ', no QA findings' : ''})`) + pfNote;
   o.line(head, ...lines.slice(0, MAX_LINES - 2));
   if (lines.length > MAX_LINES - 2) o.line(`… ${lines.length - (MAX_LINES - 2)} more lines (use --json)`);
   if (strict && rep.errors > 0) o.exit = 1;

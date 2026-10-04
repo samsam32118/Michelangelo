@@ -30,8 +30,12 @@ export interface CommandServices {
   measureText?(text: string, style: Record<string, unknown>): { width: number; height: number };
 }
 
+/** Which stages an effect implements (API 1.1); absent = unknown (no stage checks). */
+export interface EffectStages { draw?: boolean; source?: boolean; audio?: boolean }
+
 export interface Catalog {
-  effects: Map<string, { params?: z.ZodType; describe?: string }>;
+  /** `stages` lets fx.add refuse an audio-only effect on a silent clip, or a video-only effect on an audio clip or a bus */
+  effects: Map<string, { params?: z.ZodType; describe?: string; stages?: EffectStages }>;
   transitions: Map<string, { params?: z.ZodType; describe?: string }>;
   generators: Map<string, { params?: z.ZodType; describe?: string }>;
   templates: Map<string, TemplateDef>;
@@ -161,6 +165,12 @@ export function entityEquals(a: unknown, b: unknown): boolean {
   return stable(a) === stable(b);
 }
 
+/**
+ * The change set between two projects. Entities are compared by content AND by position: a reordered entity (e.g.
+ * track.move) is recorded as a removal at its old index followed by an insertion at its new index, so the order is
+ * saved, recorded in history, and undone/redone exactly. Removals come first (descending old index), then in-place
+ * changes, then insertions (ascending new index); the inverse patch therefore re-inserts in ascending order too.
+ */
 export function diffProjects(before: ProjectFile, after: ProjectFile): Patch {
   const patch: Patch = [];
   if (!entityEquals(before.project ?? {}, after.project ?? {})) patch.push({ table: 'project', id: 'project', before: before.project, after: after.project });
@@ -168,15 +178,36 @@ export function diffProjects(before: ProjectFile, after: ProjectFile): Patch {
     const a = (before[t] as { id: string }[] | undefined) ?? [];
     const b = (after[t] as { id: string }[] | undefined) ?? [];
     const am = new Map(a.map((e, i) => [e.id, { e, i }]));
-    const bm = new Map(b.map((e) => [e.id, e]));
+    const bm = new Map(b.map((e, i) => [e.id, { e, i }]));
+    // common entities in their new order; those outside a longest run that keeps the old order have moved
+    const common = b.filter((e) => am.has(e.id)).map((e) => e.id);
+    const stay = longestIncreasing(common.map((id) => am.get(id)!.i)).map((k) => common[k]!);
+    const kept = new Set(stay);
+    const removals: EntityChange[] = [], changes: EntityChange[] = [], inserts: EntityChange[] = [];
     for (const [id, { e, i }] of am) {
       const n = bm.get(id);
-      if (!n) patch.push({ table: t, id, before: e, index: i });
-      else if (!entityEquals(e, n)) patch.push({ table: t, id, before: e, after: n });
+      if (!n || !kept.has(id)) removals.push({ table: t, id, before: e, index: i });
+      else if (!entityEquals(e, n.e)) changes.push({ table: t, id, before: e, after: n.e });
     }
-    b.forEach((e) => { if (!am.has(e.id)) patch.push({ table: t, id: e.id, after: e }); });
+    b.forEach((e, i) => { if (!kept.has(e.id)) inserts.push({ table: t, id: e.id, after: e, index: i }); });
+    removals.sort((x, y) => y.index! - x.index!);
+    patch.push(...removals, ...changes, ...inserts);
   }
   return patch;
+}
+
+/** Indices (into xs) of a longest strictly increasing subsequence. */
+function longestIncreasing(xs: number[]): number[] {
+  const tails: number[] = [], prev: number[] = new Array(xs.length).fill(-1);
+  for (let i = 0; i < xs.length; i++) {
+    let lo = 0, hi = tails.length;
+    while (lo < hi) { const m = (lo + hi) >> 1; if (xs[tails[m]!]! < xs[i]!) lo = m + 1; else hi = m; }
+    if (lo > 0) prev[i] = tails[lo - 1]!;
+    tails[lo] = i;
+  }
+  const out: number[] = [];
+  for (let k = tails.length ? tails[tails.length - 1]! : -1; k >= 0; k = prev[k]!) out.push(k);
+  return out.reverse();
 }
 
 export function invertPatch(p: Patch): Patch {
@@ -238,7 +269,11 @@ export function makeContext(project: ProjectFile, services: CommandServices): { 
     },
     track(id) {
       const t = (project.tracks ?? []).find((x) => x.id === id);
-      if (!t) { const all = (project.tracks ?? []).map((x) => x.id); const d = suggest(id, all); fail('E_REF', `track "${id}" does not exist.`, d.length ? `did you mean "${d[0]}"?` : `tracks: ${all.join(', ') || '(none; add one with track.add)'}`); }
+      if (!t) {
+        const all = (project.tracks ?? []).map((x) => x.id); const d = suggest(id, all);
+        // creating the named track comes first: a near-miss existing track would put the clip somewhere else
+        fail('E_REF', `track "${id}" does not exist.`, `add it: mgl edit <file> track.add id=${id}${/^A\d/.test(id) ? ' audio=true' : ''} (or omit track= to pick a free track)${d.length ? `; or did you mean "${d[0]}"?` : all.length ? `; tracks: ${all.join(', ')}` : ''}`, d.length ? { didYouMean: d } : {});
+      }
       return t;
     },
     clip(id) {
@@ -289,19 +324,40 @@ export async function runCommand(project: ProjectFile, cmd: Command, services: C
       fail('E_ARG', `${def.op}: "${k}" is not a field of this command.`, dym.length ? `did you mean "${dym[0]}"? fields: ${allowed.join(', ')}` : `fields: ${allowed.join(', ')} (mgl docs ${def.op})`, { didYouMean: dym });
     }
     const field = issue.path.join('.');
+    // clip-shaped commands (clip.add, ...) explain a nested field's format instead of showing the generic example
+    const hint = 'shape' in def.schema.shape ? fieldHint(issue.path) : undefined;
+    const fix = hint ?? `example: ${exampleLine(def)}`;
     if (issue.code === 'invalid_type' || issue.code === 'invalid_union') {
       const at = lookupPath(payload, issue.path);
-      if (!at.present) fail('E_ARG', `${def.op}: "${field}" is required.`, `example: ${exampleLine(def)}`);
+      if (!at.present) fail('E_ARG', `${def.op}: "${field}" is required.`, fix);
       const want = isTimeField(def, issue.path) ? 'frames (an integer) or a time like "2s"' : expectedText(issue);
-      if (want) fail('E_ARG', `${def.op}: "${field}" must be ${want}, found ${foundText(at.value)}.`, `example: ${exampleLine(def)}`);
+      if (want) fail('E_ARG', `${def.op}: "${field}" must be ${want}, found ${foundText(at.value)}.`, fix);
     }
-    fail('E_ARG', `${def.op}: ${field ? `"${field}" ` : ''}${issue.message}.`, `example: ${exampleLine(def)}`);
+    fail('E_ARG', `${def.op}: ${field ? `"${field}" ` : ''}${issue.message}.`, fix);
   }
   const draft = clone(project);
   const { ctx, notes, summaries } = makeContext(draft, services);
   await def.apply(ctx, parsed.data as never);
   const patch = diffProjects(project, ctx.project);
   return { project: ctx.project, patch, notes, summaries, out: ctx.out };
+}
+
+/** Keyframeable numbers inside a clip (a nested field's error names its own format, not the command's generic example). */
+const ANIM_FIELDS: Record<string, true> = { x: true, y: true, rotate: true, opacity: true, gain: true, remap: true, 'shape.trim': true, 'shape.trimStart': true, 'shape.trimOffset': true };
+
+/** A fix line for a nested or animatable field, or undefined to use the command's example. */
+export function fieldHint(path: PropertyKey[]): string | undefined {
+  const key = path.filter((p) => typeof p === 'string').join('.');
+  for (const k of Object.keys(ANIM_FIELDS)) if (key === k || key.startsWith(k + '.')) {
+    if (k.startsWith('shape.trim')) {
+      return `${k} is a number${k === 'shape.trimOffset' ? ' (a fraction of the outline; 1 = once around)' : ' (a fraction 0..1 of the outline)'} or keyframes [[frame, value, easing?], ...], e.g. ${k}=[[0,0],[30,1,"outCubic"]]. One value per key: animate the start with shape.trimStart and the end with shape.trim.`;
+    }
+    return `${k} is a number or keyframes [[frame, value, easing?], ...], e.g. ${k}=[[0,0],[15,1,"outCubic"]].`;
+  }
+  if (key === 'scale' || key.startsWith('scale.')) return 'scale is a number, [sx, sy], or keyframes [[frame, value, easing?], ...], e.g. scale=[[0,1],[30,1.2,"inOutCubic"]].';
+  if (key.startsWith('masks')) return 'a mask is {shape: rect|ellipse|path, box: [x, y, w, h] or keyframes [[frame, [x, y, w, h], easing?], ...], ...} (mgl docs mask.add).';
+  if (key.startsWith('shape.')) return 'see the shape fields: mgl docs format (type, size, radius, sides, d, points, fill, stroke, strokeWidth, trim, trimStart, trimOffset, lineCap, lineJoin, gradient).';
+  return undefined;
 }
 
 /** Whether a top-level command field is a TimeArg (optional or not). */

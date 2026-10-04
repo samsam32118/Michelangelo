@@ -3,10 +3,10 @@ import { basename, dirname, extname, join, relative } from 'node:path';
 import { fail } from '../core/errors.js';
 import { parseRate, parseTime } from '../core/time.js';
 import type { RenderResult } from '../render/pipeline.js';
-import { assertRenderable, open, qaModule, type MglProject } from '../sdk/index.js';
+import { assertRenderable, open, parsePlatforms, qaModule, DELIVERY_FIELDS, type MglProject, type RenderOpts } from '../sdk/index.js';
 import { bool, bytesText, int, secondsText, str, type Args, type Out } from './io.js';
 
-const CODEC: Record<string, string> = { h264: 'H.264', hevc: 'HEVC', vp9: 'VP9', vp8: 'VP8', av1: 'AV1', prores: 'ProRes', aac: 'AAC', opus: 'Opus', mp3: 'MP3', vorbis: 'Vorbis', flac: 'FLAC', png: 'PNG', gif: 'GIF', apng: 'APNG', pcm_s16le: 'PCM', pcm_s24le: 'PCM', subrip: 'SRT', webvtt: 'WebVTT' };
+const CODEC: Record<string, string> = { h264: 'H.264', hevc: 'HEVC', vp9: 'VP9', vp8: 'VP8', av1: 'AV1', prores: 'ProRes', aac: 'AAC', opus: 'Opus', mp3: 'MP3', vorbis: 'Vorbis', flac: 'FLAC', png: 'PNG', gif: 'GIF', apng: 'APNG', pcm_s16le: 'PCM 16-bit', pcm_s24le: 'PCM 24-bit', subrip: 'SRT', webvtt: 'WebVTT', 'webvtt-chapters': 'WebVTT chapters', chapters: 'YouTube chapters' };
 const codecName = (c?: string) => (c ? CODEC[c] ?? c : '');
 
 const shown = (f: string) => { const r = relative(process.cwd(), f); return r && !r.startsWith('..') ? r : f; };
@@ -29,6 +29,45 @@ function parseRange(s: string): [string, string] {
   return [m[1]!, m[2]!];
 }
 
+const PRORES = ['proxy', 'lt', '422', 'hq', '4444', '4444xq'] as const;
+
+/** Stem and delivery flags (--bus, --crf, --bitrate, --audio-bitrate, --pcm, --prores, --timecode, --color-range) as RenderOpts. */
+export function deliveryFlags(a: Args): Pick<RenderOpts, 'bus' | 'crf' | 'bitrate' | 'audioBitrate' | 'pcmDepth' | 'prores' | 'timecode' | 'colorRange'> {
+  const d: ReturnType<typeof deliveryFlags> = {};
+  const bus = str(a, 'bus');
+  if (bus !== undefined) d.bus = bus;
+  const crf = int(a, 'crf');
+  if (crf !== undefined) d.crf = crf;
+  const rate = (k: string) => {
+    const v = str(a, k);
+    if (v !== undefined && !/^\d+(\.\d+)?[kKmM]?$/.test(v)) fail('E_ARG', `--${k} "${v}" is not a bitrate.`, `write it like ${k === 'bitrate' ? '8M or 2500k' : '320k'}.`);
+    return v;
+  };
+  const br = rate('bitrate'), abr = rate('audio-bitrate');
+  if (br !== undefined) d.bitrate = br;
+  if (abr !== undefined) d.audioBitrate = abr;
+  const pcm = str(a, 'pcm');
+  if (pcm !== undefined) {
+    if (pcm !== '16' && pcm !== '24') fail('E_ARG', `--pcm ${pcm} is not a PCM bit depth.`, 'use --pcm 16 or --pcm 24 (for .wav, .flac and .mov audio).');
+    d.pcmDepth = pcm === '24' ? 24 : 16;
+  }
+  const pr = str(a, 'prores');
+  if (pr !== undefined) {
+    const v = pr.toLowerCase().replace(/^prores[-_ ]?/, '').replace(/^422[-_ ]?(hq|lt|proxy)$/, '$1');
+    if (!(PRORES as readonly string[]).includes(v)) fail('E_ARG', `--prores ${pr} is not a ProRes profile.`, `use one of ${PRORES.join(', ')} (render to .mov).`);
+    d.prores = v as (typeof PRORES)[number];
+  }
+  const tc = str(a, 'timecode');
+  if (tc !== undefined) d.timecode = tc;
+  const cr = str(a, 'color-range');
+  if (cr !== undefined) {
+    const v = ({ tv: 'tv', limited: 'tv', mpeg: 'tv', pc: 'pc', full: 'pc', jpeg: 'pc' } as Record<string, 'tv' | 'pc'>)[cr.toLowerCase()];
+    if (!v) fail('E_ARG', `--color-range ${cr} is not a colour range.`, 'use tv (limited, the default) or pc (full).');
+    d.colorRange = v;
+  }
+  return d;
+}
+
 export async function render(a: Args, o: Out) {
   const file = a.pos[0];
   if (!file) fail('E_USAGE', 'render needs a file.', 'mgl render video.mgl.json out/video.mp4 --draft');
@@ -47,6 +86,7 @@ export async function render(a: Args, o: Out) {
   if (bool(a, 'alpha')) opts.alpha = true;
   const segs = int(a, 'segments');
   if (segs) opts.segments = segs;
+  Object.assign(opts, deliveryFlags(a));
   const ext = extname(out).toLowerCase();
   const isVideo = ['.mp4', '.webm', '.mov', '.gif'].includes(ext);
 
@@ -60,7 +100,7 @@ export async function render(a: Args, o: Out) {
     o.set({ estimate: { seconds, note } });
     o.flush();
   };
-  if (!isVideo) estLine(`est. <1 s (${ext === '.png' ? 'still' : ext.slice(1)})`, 0.5);
+  if (!isVideo) estLine(`est. <1 s (${ext === '.png' ? 'still' : /\.chapters\.(txt|vtt)$/i.test(out) ? 'chapters' : ext.slice(1)})`, 0.5);
   opts.onEstimate = (e) => estLine(e.note, e.seconds);
   const tty = !o.json && !o.quiet && process.stderr.isTTY;
   if (tty) opts.onProgress = (pr) => process.stderr.write(`\rrendering ${Math.round((pr.frame / pr.total) * 100)}% ${pr.frame}/${pr.total} frames, ${pr.fps.toFixed(0)} fps, eta ${secondsText(pr.etaSec)}   `);
@@ -79,11 +119,11 @@ async function detach(p: MglProject, file: string, out: string, opts: Parameters
   const range = opts.range ? [parseTime(opts.range[0], rate, 'range start'), parseTime(opts.range[1], rate, 'range end')] as [number, number] : undefined;
   assertRenderable(p);
   if (isVideo) {
-    const e = await pipeline.estimate(p.data, { baseDir: p.dir, registry: p.registry, comp: comp.id, quality: opts.quality ?? 'final', out, ...(range ? { range } : {}), ...(opts.segments ? { segments: opts.segments } : {}) });
+    const e = await pipeline.estimate(p.data, { baseDir: p.dir, registry: p.registry, comp: comp.id, quality: opts.quality ?? 'final', out, ...(range ? { range } : {}), ...(opts.segments ? { segments: opts.segments } : {}), ...(opts.alpha ? { alpha: true } : {}), ...(opts.prores ? { prores: opts.prores } : {}) });
     o.line(e.note);
     o.set({ estimate: { seconds: e.seconds, note: e.note } });
   } else o.line(`est. <1 s (${extname(out).slice(1)})`);
-  const s = await pipeline.renderDetached(file, out, { comp: comp.id, quality: opts.quality ?? 'final', ...(range ? { range } : {}), ...(opts.alpha ? { alpha: true } : {}), ...(opts.segments ? { segments: opts.segments } : {}), ...(opts.still !== undefined ? { still: parseTime(opts.still, rate, 'still') } : {}) });
+  const s = await pipeline.renderDetached(file, out, { comp: comp.id, quality: opts.quality ?? 'final', ...(range ? { range } : {}), ...(opts.alpha ? { alpha: true } : {}), ...(opts.segments ? { segments: opts.segments } : {}), ...(opts.still !== undefined ? { still: parseTime(opts.still, rate, 'still') } : {}), ...Object.fromEntries(DELIVERY_FIELDS.filter((k) => opts[k] !== undefined).map((k) => [k, opts[k]])) });
   o.line(`rendering ${shown(s.out)} in the background (pid ${s.pid})`);
   o.hint(`check: mgl render ${file} --status`);
   o.set({ detached: true, pid: s.pid, out: s.out, statusFile: s.statusFile });
@@ -112,6 +152,9 @@ export async function look(a: Args, o: Out) {
   if (str(a, 'comp')) opts.comp = str(a, 'comp')!;
   if (bool(a, 'cuts')) opts.cuts = true;
   if (bool(a, 'no-audio')) opts.audio = false;
+  if (str(a, 'platform')) opts.platforms = parsePlatforms(str(a, 'platform')!);
+  if (bool(a, 'alpha')) opts.alpha = true;
+  opts.displayFile = file;
   await lookEstimate(p, opts, o);
   const qa = await qaModule();
   const report = await p.look(opts);
@@ -123,14 +166,8 @@ export async function look(a: Args, o: Out) {
 
 /** Print an estimate first when a look may take over 2 minutes (long comps or many video layers). */
 async function lookEstimate(p: MglProject, opts: { frames?: number; at?: unknown[]; cuts?: boolean; comp?: string; audio?: boolean }, o: Out) {
-  const pipeline = await import('../render/pipeline.js');
-  const comp = pipeline.resolveComp(p.data, opts.comp);
-  const { compLength } = await import('../render/evaluate.js');
-  const seconds = (compLength(p.data, comp.id) * parseRate(comp.fps).den) / parseRate(comp.fps).num;
-  const videos = p.clips({ comp: comp.id }).filter((c) => c.asset !== undefined).length;
-  if (seconds < 300 && videos < 8) return; // a look of a typical project takes seconds
-  const e = await pipeline.estimate(p.data, { baseDir: p.dir, registry: p.registry, comp: comp.id, quality: 'draft', range: [0, Math.min(compLength(p.data, comp.id), 3)] });
-  const n = opts.at?.length ?? (opts.cuts ? 24 : opts.frames ?? 12);
-  const est = (n * (e.perFrameMs + e.decodeMs * 4)) / 1000 + (opts.audio === false ? 0 : seconds * 0.05);
-  if (est > 120) { o.line(`est. ${Math.round(est)} s (look: ${n} frames + sound analysis of ${Math.round(seconds)} s)`); o.flush(); }
+  const qa = await qaModule();
+  if (!qa?.estimateLook) return;
+  const e = await qa.estimateLook(p.data, { baseDir: p.dir, registry: p.registry, ...(opts.comp ? { comp: opts.comp } : {}), ...(opts.at?.length ? { n: opts.at.length } : opts.frames !== undefined ? { n: opts.frames } : {}), ...(opts.cuts ? { cuts: true } : {}), ...(opts.audio === false ? { audio: false } : {}) });
+  if (e.slow) { o.line(e.note); o.flush(); }
 }

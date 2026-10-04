@@ -2,6 +2,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { existsSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { scaffoldPlugin, SCAFFOLD_KINDS } from '../../src/plugin/scaffold.js';
+import { PLUGIN_API_VERSION } from '../../src/plugin/api.js';
 import { runPluginTests, type PluginTestResult } from '../../src/plugin/test-runner.js';
 import { trustPlugin } from '../../src/plugin/trust.js';
 import { loadRegistry } from '../../src/plugin/loader.js';
@@ -27,7 +28,7 @@ describe('scaffoldPlugin', () => {
     const root = join(dir, 'plugins', 'my-effect');
     for (const f of ['package.json', 'src/index.ts', 'test/my-effect.test.ts', 'evals/my-effect-basic/task.md', 'evals/my-effect-basic/meta.json', 'README.md']) expect(existsSync(join(root, f)), f).toBe(true);
     const pkg = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8'));
-    expect(pkg).toMatchObject({ name: 'my-effect', type: 'module', main: 'src/index.ts', michelangelo: { api: '^1.0.0', kinds: ['effect'] } });
+    expect(pkg).toMatchObject({ name: 'my-effect', type: 'module', main: 'src/index.ts', michelangelo: { api: `^${PLUGIN_API_VERSION}`, kinds: ['effect'] } });
     expect(readFileSync(join(root, 'src/index.ts'), 'utf8')).toMatch(/from 'michelangelo\/plugin'/);
     expect(JSON.parse(readFileSync(join(root, 'evals/my-effect-basic/meta.json'), 'utf8'))).toMatchObject({ tags: ['plugins', 'effect'], timeout_min: 15 });
   });

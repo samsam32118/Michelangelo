@@ -107,6 +107,8 @@ export interface Finding {
   box?: [number, number, number, number];
   /** a ready-to-run fix: "mgl edit <file> clip.set logo y=120" (use <file> literally) */
   fix?: string;
+  /** set by multi-platform runs (--platforms) on findings that only one platform raises */
+  platform?: string;
 }
 
 export interface CheckContext {
@@ -118,6 +120,12 @@ export interface CheckContext {
   /** per-frame layer boxes (comp px, axis-aligned) and alpha masks from the renderer */
   layers?: Map<number, { clipId: string; kind: string; box: [number, number, number, number]; text?: string; fontPx?: number }[]>;
   audio?: import('../media/types.js').AudioAnalysisReport;
+  /** layer boxes at sample frames across every visual clip (project stage too; since 1.1) */
+  sampled?: Map<number, { clipId: string; kind: string; box: [number, number, number, number]; text?: string; fontPx?: number }[]>;
+  /** probed source duration (s) of a media asset, when known (since 1.1) */
+  sourceDuration?(assetId: string): number | undefined;
+  /** the render will use --alpha (since 1.1) */
+  alpha?: boolean;
   safeArea(platform?: string): { x: number; y: number; w: number; h: number };
 }
 

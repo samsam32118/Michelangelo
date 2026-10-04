@@ -43,7 +43,7 @@ export class PluginRegistry {
 
   catalog(): Catalog {
     return {
-      effects: new Map([...this.effects].map(([k, v]) => [k, { params: v.params, describe: v.describe }])),
+      effects: new Map([...this.effects].map(([k, v]) => [k, { params: v.params, describe: v.describe, stages: { draw: typeof v.draw === 'function', source: typeof v.source === 'function', audio: typeof v.audio === 'function' } }])),
       transitions: new Map([...this.transitions].map(([k, v]) => [k, { params: v.params, describe: v.describe }])),
       generators: new Map([...this.generators].map(([k, v]) => [k, { params: v.params, describe: v.describe }])),
       templates: this.templates,

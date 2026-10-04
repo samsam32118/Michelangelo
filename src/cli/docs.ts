@@ -128,6 +128,43 @@ export function catalogDoc(reg: PluginRegistry, kind: string | undefined, id: st
   return undefined;
 }
 
+const md = (s: string) => s.replace(/\|/g, '\\|');
+const fieldText = (f: FieldDoc) => `\`${f.name}${f.required ? '' : '?'}\` ${md(f.type)}${f.default !== undefined ? ` = \`${JSON.stringify(f.default)}\`` : ''}${f.describe ? ` · ${md(f.describe)}` : ''}`;
+
+/** The catalog page (effects.md without its header) from a live registry: effects, transitions, generators, templates, styles, text animations. */
+export function catalogPage(reg: PluginRegistry): string[] {
+  const params = (p?: z.ZodType) => (p && 'shape' in (p as object) ? fieldsOf(p as z.ZodObject).map(fieldText).join('; ') : '');
+  const out = ['# Effects, transitions, generators, templates, styles', '',
+    'The built-in catalog (every entry is a plugin-API definition in `src/builtin/`; plugins add more). `mgl docs <name>` prints one.', '',
+    '## Effects', '', '`fx` on a clip is an ordered list: `mgl edit video.mgl.json fx.add shot1 type=blur radius=8`; address a parameter as',
+    '`fx.blur.radius` (first of that type) or `fx.0.radius`. Numeric parameters accept keyframes. Stage `source` runs in ffmpeg while',
+    'decoding (media clips only; video only); `layer` runs in Skia on the rendered layer; `audio` runs in ffmpeg on the clip\'s sound, or on a',
+    'bus mix when added to a bus (`fx.add bus=dialogue type=...`). An effect with only `audio` is an audio effect.', ''];
+  for (const [id, e] of reg.effects) out.push(`- **${id}** (${[e.source ? 'source' : '', e.draw ? 'layer' : '', e.audio ? 'audio' : ''].filter(Boolean).join(' + ')}): ${md(e.describe)}${params(e.params) ? `  \n  ${params(e.params)}` : ''}`);
+  out.push('', '## Transitions', '', 'A transition is the incoming clip\'s `in` (centred on the cut): `mgl edit video.mgl.json transition.set shot2 type=wipe len=0.5s`.', '');
+  for (const [id, t] of reg.transitions) out.push(`- **${id}**: ${md(t.describe)}${params(t.params) ? `  \n  ${params(t.params)}` : ''}`);
+  out.push('', '## Generators', '', 'Clips that draw: `{"gen": {"type": "gradient", "colors": ["#000", "#333"]}}`.', '');
+  for (const [id, g] of reg.generators) out.push(`- **${id}**: ${md(g.describe)}${params(g.params) ? `  \n  ${params(g.params)}` : ''}`);
+  out.push('', '## Templates', '', '`mgl edit video.mgl.json template.apply <id> at=1s params=\'{...}\'` (see templates.md).', '');
+  for (const [id, t] of reg.templates) out.push(`- **${id}**: ${md(t.describe)}${params(t.params) ? `  \n  ${params(t.params)}` : ''}`);
+  out.push('', '## Styles', '', 'Built-in text styles, usable as `"style": "<id>"` or as `base` of your own style.', '');
+  for (const [id, s] of reg.styles) out.push(`- **${id}**: ${md(s.describe)} \`${md(JSON.stringify(s.style))}\``);
+  out.push('', '## Text animations', '', '`text.animate <clip> in=<id> by=word` (char, word, line, all).', '');
+  out.push(`${[...reg.textAnimations].map(([id, a]) => `**${id}** (${md(a.describe)})`).join(' · ')}`, '');
+  return out;
+}
+
+
+/** Topics printed from the registry: the whole catalog, or one "## " section of it. */
+const CATALOG_TOPICS: Record<string, string> = { effects: '', transitions: 'Transitions', generators: 'Generators', styles: 'Styles', animations: 'Text animations' };
+
+function catalogSection(page: string[], heading: string): string[] {
+  const i = page.indexOf(`## ${heading}`);
+  if (i < 0) return page;
+  const j = page.findIndex((l, k) => k > i && l.startsWith('## '));
+  return page.slice(i, j < 0 ? undefined : j);
+}
+
 export async function docs(a: Args, o: Out) {
   const [topic, sub] = a.pos;
   if (a.flags.all) o.unbounded = true;
@@ -149,6 +186,15 @@ export async function docs(a: Args, o: Out) {
     o.set({ topic, file: SCHEMA_FILE });
     return;
   }
+  const section = CATALOG_TOPICS[topic];
+  if (section !== undefined) {
+    // from the live registry, never a stale file: the same text as docs/reference/effects.md
+    o.unbounded = true;
+    const page = catalogPage(builtinRegistry());
+    o.line(...(section ? catalogSection(page, section) : page));
+    o.set({ topic, source: 'registry' });
+    return;
+  }
   const file = join(REFERENCE_DIR, `${topic}.md`);
   if (/^[a-z-]+$/.test(topic) && existsSync(file)) {
     // a guide asked for by name is printed whole (SKILL.md points agents at them): the 40-line cap is for command output
@@ -159,6 +205,7 @@ export async function docs(a: Args, o: Out) {
   }
   const cmd = listCommands().find((c) => c.op === topic);
   if (cmd) {
+    o.unbounded = true; // one command's doc is printed whole (fields + example), like a guide
     o.line(...commandDoc(cmd));
     o.set({ topic, command: { op: cmd.op, group: cmd.group, doc: cmd.doc, primary: cmd.primary, fields: fieldsOf(cmd.schema), example: cmd.example } });
     return;

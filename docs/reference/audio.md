@@ -2,8 +2,10 @@
 
 Audio clips live on audio tracks (`"audio": true`); each audio track sends to a **bus**. The buses
 `dialogue`, `music`, `sfx` and `master` exist without an entry; add a line to `buses` only to change one
-(`gain`, `muted`, `duck`, `loudness`, `to`). Video clips play their own sound into their track's bus unless
-`"muted": true` (`clip.detach-audio` moves it to its own linked clip). The whole mix is rendered once at
+(`gain`, `muted`, `duck`, `loudness`, `to`, `fx`). Video clips play their own sound into their track's bus
+unless `"muted": true` (`clip.detach-audio` moves it to its own linked clip). A track with no `bus` (the
+preset's video track V1) sends straight to `master`, so a dialogue bus setting does not reach it until you run
+`track.set V1 bus=dialogue` (or detach the audio onto A1). The whole mix is rendered once at
 48 kHz, sample-exact to the frame.
 
 ```sh
@@ -28,6 +30,21 @@ mgl edit mix.mgl.json audio.gain music-bed db=-4
 mgl edit mix.mgl.json audio.fade music-bed in=0.5s out=1s
 ```
 
+## Audio effects (per clip or per bus)
+
+Effects with an audio stage process sound: `highpass`, `lowpass`, `eq`, `dehum`, `denoise-audio`, `compressor`,
+`limiter`, `gate`, `deesser`, `reverb`, and `voice` (one-step dialogue clean-up: high-pass, compression,
+de-ess). Put them on a clip with sound (`fx.add <clip> type=...`) or on a bus mix (`fx.add bus=<id> type=...`,
+stored as the bus line's `fx`), in order; `fx.set` / `fx.remove` / `fx.move` take `bus=` too. Audio-only effects
+on a silent clip and picture effects on an audio clip or a bus are errors. Picture effects with a source stage
+(`denoise`, `sharpen`, `color`, `lut`) never touch the sound. `mgl docs effects` lists their parameters.
+
+```sh
+mgl edit mix.mgl.json fx.add bus=dialogue type=highpass freq=90
+mgl edit mix.mgl.json fx.add voice type=deesser
+mgl show mix.mgl.json
+```
+
 ## Ducking
 
 `audio.duck bus=music by=dialogue db=9` lowers the music bus by 9 dB while the dialogue bus has signal
@@ -42,7 +59,9 @@ mgl edit mix.mgl.json audio.duck bus=music by=dialogue db=9
 
 `audio.normalize` sets the target of the master bus, applied when rendering: `lufs` (default from the
 platform: −14 for shorts, tiktok, reels, youtube; −16 otherwise) and a true-peak ceiling (`peak`, default
-−1 dBTP).
+−1 dBTP). Only master's `loudness` is applied (on another bus it is ignored). The whole mix is measured on
+every render, partial ranges included; a stem (`render --bus`) gets the full mix's gain instead of its own
+normalisation, so stems still sum to the mix.
 
 ```sh
 mgl edit mix.mgl.json audio.normalize lufs=-14
@@ -68,6 +87,18 @@ count and `min` is the fewest allowed, else `E_NO_BEATS`). Running it again repl
 clip's beats (`on=beats clip=<id>`): for example `mgl edit v.mgl.json marker.beats bed every=2`, then
 `mgl edit v.mgl.json clip.sequence srcs='["a.mp4","b.mp4","c.mp4"]' on=markers fit=cover`.
 `mgl docs marker.beats` and `mgl docs clip.sequence` list every field.
+
+## Stems
+
+`mgl render <file> out/dialogue.wav --bus dialogue` renders one bus's contribution to the mix (other buses
+muted, ducking kept); `--bus all` writes one stereo pair per bus into a multichannel WAV (the result names the
+channel map); `--pcm 24` for 24-bit.
+
+## Seeing the sound: audiograms
+
+The `waveform` (bars, mirrored bars or a line, around the current moment) and `spectrum` (low → high bars)
+generators draw the sound of an asset: `clip.add gen='{"type": "waveform", "asset": "vo-wav", "color": "#7fdcff"}' len=10s`.
+See recipes.md for a podcast audiogram.
 
 ## Hearing it as text
 

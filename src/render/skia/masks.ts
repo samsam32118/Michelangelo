@@ -36,9 +36,12 @@ export function applyMasks(target: Surface, masks: ResolvedMask[], compT: Matrix
     if (m.invert) { c.fillStyle = `rgba(255,255,255,${alpha})`; c.fillRect(0, 0, piece.width, piece.height); c.globalCompositeOperation = 'destination-out'; c.fillStyle = '#fff'; }
     else c.fillStyle = `rgba(255,255,255,${alpha})`;
     if (feather > 0) c.filter = `blur(${feather / 2}px)`;
-    c.setTransform(t[0], t[1], t[2], t[3], t[4], t[5]);
-    c.fill(maskPath(m, k));
+    // the path is mapped to surface px and filled with an identity transform: Skia sizes a filter's layer in user
+    // space, so a blurred fill under a scaling transform was clipped to the surface size in comp px (draft, look)
+    const devPath = new Path2D();
+    devPath.addPath(maskPath(m, k), { a: t[0], b: t[1], c: t[2], d: t[3], e: t[4], f: t[5] });
     c.setTransform(1, 0, 0, 1, 0, 0);
+    c.fill(devPath);
     c.filter = 'none';
     const mode = m.mode ?? 'add';
     acc.ctx.globalCompositeOperation = mode === 'subtract' ? 'destination-out' : mode === 'intersect' ? 'destination-in' : 'source-over';

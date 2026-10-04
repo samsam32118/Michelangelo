@@ -1,8 +1,10 @@
-/** Effect and transition commands: fx.add, fx.set, fx.remove, fx.move, transition.set. */
+/** Effect and transition commands: fx.add, fx.set, fx.remove, fx.move (on a clip, or bus= for a bus mix), transition.set. */
 import { z } from 'zod';
 import { fail } from '../errors.js';
 import { defineCommand, TimeArg, type CommandContext } from './registry.js';
-import { Id, type Clip, type EffectInstance, type TransitionInstance } from '../schema/index.js';
+import { Id, clipKind, type Clip, type EffectInstance, type TransitionInstance } from '../schema/index.js';
+import { kindFromExtension } from './structure.js';
+import { busEntry } from './audio.js';
 import { isKeyframes } from '../load.js';
 import { checkParam, checkType, fxIndex, paramShape } from './keys.js';
 
@@ -17,67 +19,127 @@ function checkEffectParams(ctx: CommandContext, type: string, params: Record<str
   }
 }
 
+/**
+ * Effects live on a clip (id=) or on a bus (bus=: audio effects on the bus mix). The target's `fx` array is the
+ * same shape in both places; a built-in bus without an entry gets one.
+ */
+interface FxTarget { id: string; fx?: EffectInstance[]; label: string; bus: boolean; clip?: Clip }
+
+function target(ctx: CommandContext, op: string, p: { id?: string; bus?: string }, create = false): FxTarget {
+  if ((p.id === undefined) === (p.bus === undefined)) fail('E_ARG', `${op} needs id=<clip> or bus=<bus> (one of them).`, `example: mgl edit <file> ${op} shot1 ... (a clip), or ${op} bus=music ... (a bus)`);
+  if (p.bus !== undefined) {
+    const b = create ? busEntry(ctx, p.bus) : (ctx.project.buses ?? []).find((x) => x.id === p.bus);
+    if (!b) fail('E_NO_FX', `bus "${p.bus}" has no effects.`, `add one with: mgl edit <file> fx.add bus=${p.bus} type=<audio effect>`);
+    return { id: b.id, get fx() { return b.fx; }, set fx(v) { if (v === undefined || !v.length) delete b.fx; else b.fx = v; }, label: `bus "${b.id}"`, bus: true };
+  }
+  const c = ctx.clip(p.id!);
+  return { id: c.id, get fx() { return c.fx; }, set fx(v) { if (v === undefined || !v.length) delete c.fx; else c.fx = v; }, label: `clip "${c.id}"`, bus: false, clip: c };
+}
+
+/** Whether a clip plays sound: an audio asset, or a video asset (unless the probe says it has no audio stream). */
+async function clipSound(ctx: CommandContext, c: Clip): Promise<{ sound: boolean; why: string; audioClip: boolean }> {
+  const onAudioTrack = !!(ctx.project.tracks ?? []).find((t) => t.id === c.track)?.audio;
+  if (c.asset === undefined) return { sound: false, why: `it is a ${clipKind(c)} clip (no media)`, audioClip: false };
+  const a = (ctx.project.assets ?? []).find((x) => x.id === c.asset);
+  const kind = a ? a.kind ?? kindFromExtension(a.src) : undefined;
+  if (kind === 'audio' || onAudioTrack) return { sound: true, why: '', audioClip: true };
+  if (kind !== 'video') return { sound: false, why: `its asset "${c.asset}" is ${kind === 'image' ? 'an image' : kind ? `a ${kind} file` : 'not audio or video'}`, audioClip: false };
+  if (a && ctx.services.probe && !a.src.startsWith('lavfi:')) {
+    try { if ((await ctx.services.probe(a.src)).hasAudio === false) return { sound: false, why: `"${a.src}" has no audio stream`, audioClip: false }; } catch { /* unknown: allow */ }
+  }
+  return { sound: true, why: '', audioClip: false };
+}
+
+/** Refuse an effect whose stages cannot act on the target (when the catalog says which stages it has). */
+async function checkStages(ctx: CommandContext, type: string, t: FxTarget) {
+  const st = ctx.services.catalog?.effects.get(type)?.stages;
+  if (!st) return;
+  const visual = !!(st.draw || st.source), audio = !!st.audio;
+  if (t.bus) {
+    if (!audio) fail('E_ARG', `effect "${type}" has no audio stage, so it can't process bus "${t.id}".`, `a bus takes audio effects (mgl docs effects lists them); put "${type}" on a visual clip: fx.add <clip> type=${type}`);
+    return;
+  }
+  const c = t.clip!;
+  const s = await clipSound(ctx, c);
+  if (audio && !visual && !s.sound) {
+    const bus = (ctx.project.tracks ?? []).find((x) => x.id === c.track)?.bus;
+    fail('E_ARG', `effect "${type}" only processes sound, and clip "${c.id}" has none (${s.why}).`,
+      `add it to a clip with sound (an audio clip, or a video with an audio track), or to a bus: mgl edit <file> fx.add bus=${bus ?? 'dialogue'} type=${type}`);
+  }
+  if (visual && !audio && s.audioClip) {
+    fail('E_ARG', `effect "${type}" only changes pictures, and clip "${c.id}" is an audio clip.`, `put it on a visual clip (fx.add <clip> type=${type}); for sound use an audio effect (mgl docs effects).`);
+  }
+}
+
+const TargetFields = { id: Id.optional(), bus: Id.optional() };
+
 defineCommand({
-  op: 'fx.add', group: 'effects', doc: 'Add an effect to a clip (at= its position in the stack, default last) with its parameters inline.',
-  schema: z.looseObject({ id: Id, type: z.string().min(1), at: z.number().int().min(0).optional() }),
+  op: 'fx.add', group: 'effects', doc: 'Add an effect to a clip (id=), or an audio effect to a bus mix (bus=), at= its position in the stack (default last), with its parameters inline. Audio-only effects need a clip with sound; picture-only effects need a visual clip.',
+  schema: z.looseObject({ ...TargetFields, type: z.string().min(1), at: z.number().int().min(0).optional() }),
   primary: 'id', example: { id: 'shot1', type: 'blur', radius: 8 },
-  apply(ctx, p) {
-    const { id, type, at, ...params } = p as { id: string; type: string; at?: number } & Record<string, unknown>;
-    const c = ctx.clip(id);
+  async apply(ctx, p) {
+    const { id, bus, type, at, ...params } = p as { id?: string; bus?: string; type: string; at?: number } & Record<string, unknown>;
+    if ((id === undefined) === (bus === undefined)) target(ctx, 'fx.add', { id, bus });
     checkType(ctx, 'effects', type);
     for (const [k, v] of Object.entries(params)) if (v === null) delete params[k];
     checkEffectParams(ctx, type, params);
-    const fx = (c.fx ??= []);
+    await checkStages(ctx, type, bus === undefined ? target(ctx, 'fx.add', { id }) : { id: bus, label: `bus "${bus}"`, bus: true });
+    const t = target(ctx, 'fx.add', { id, bus }, true);
+    const fx = [...(t.fx ?? [])];
     const idx = Math.min(at ?? fx.length, fx.length);
     fx.splice(idx, 0, { type, ...params } as EffectInstance);
+    t.fx = fx;
     ctx.out.index = idx;
-    ctx.summary(`clip "${c.id}": added effect ${type} at fx.${idx}.`);
+    ctx.summary(`${t.label}: added effect ${type} at fx.${idx}.`);
   },
 });
 
 defineCommand({
-  op: 'fx.set', group: 'effects', doc: 'Change parameters of a clip\'s effect, chosen by index or type (fx=0 or fx=blur); null removes a parameter (back to its default).',
-  schema: z.looseObject({ id: Id, fx: FxSel }),
+  op: 'fx.set', group: 'effects', doc: 'Change parameters of a clip\'s (id=) or bus\'s (bus=) effect, chosen by index or type (fx=0 or fx=blur); null removes a parameter (back to its default).',
+  schema: z.looseObject({ ...TargetFields, fx: FxSel }),
   primary: 'id', example: { id: 'shot1', fx: 'blur', radius: 12 },
   apply(ctx, p) {
-    const { id, fx: sel, ...params } = p as { id: string; fx: string | number } & Record<string, unknown>;
-    const c = ctx.clip(id);
-    const f = c.fx?.[fxIndex(c, sel)] as EffectInstance;
-    if (!Object.keys(params).length) fail('E_ARG', 'fx.set needs at least one parameter.', `example: mgl edit <file> fx.set ${id} fx=${String(sel)} <param>=<value>`);
-    if ('type' in params) fail('E_ARG', 'fx.set cannot change the effect type.', `remove it (fx.remove ${id} fx=${String(sel)}) and add the new one with fx.add.`);
+    const { id, bus, fx: sel, ...params } = p as { id?: string; bus?: string; fx: string | number } & Record<string, unknown>;
+    const t = target(ctx, 'fx.set', { id, bus });
+    const f = t.fx?.[fxIndex(t, sel)] as EffectInstance;
+    const who = bus !== undefined ? `bus=${bus}` : id;
+    if (!Object.keys(params).length) fail('E_ARG', 'fx.set needs at least one parameter.', `example: mgl edit <file> fx.set ${who} fx=${String(sel)} <param>=<value>`);
+    if ('type' in params) fail('E_ARG', 'fx.set cannot change the effect type.', `remove it (fx.remove ${who} fx=${String(sel)}) and add the new one with fx.add.`);
     checkEffectParams(ctx, f.type, params);
     for (const [k, v] of Object.entries(params)) {
       if (v !== null && isKeyframes(f[k]) && !isKeyframes(v)) fail('E_KEYFRAMED', `effect "${f.type}" ${k} is animated by keyframes; a constant would discard them.`, `clear them first: mgl edit <file> key.clear ${id} prop=fx.${String(sel)}.${k} value=${JSON.stringify(v)}`);
       if (v === null) delete f[k]; else f[k] = v;
     }
-    ctx.summary(`clip "${c.id}": effect ${f.type} set ${Object.keys(params).join(', ')}.`);
+    ctx.summary(`${t.label}: effect ${f.type} set ${Object.keys(params).join(', ')}.`);
   },
 });
 
 defineCommand({
-  op: 'fx.remove', group: 'effects', doc: 'Remove an effect from a clip, by index or type.',
-  schema: z.strictObject({ id: Id, fx: FxSel }),
+  op: 'fx.remove', group: 'effects', doc: 'Remove an effect from a clip (id=) or a bus (bus=), by index or type.',
+  schema: z.strictObject({ ...TargetFields, fx: FxSel }),
   primary: 'id', example: { id: 'shot1', fx: 'blur' },
   apply(ctx, p) {
-    const c = ctx.clip(p.id);
-    const [f] = c.fx!.splice(fxIndex(c, p.fx), 1);
-    if (!c.fx!.length) delete c.fx;
-    ctx.summary(`clip "${c.id}": removed effect ${f!.type}.`);
+    const t = target(ctx, 'fx.remove', p);
+    const fx = [...(t.fx ?? [])];
+    const [f] = fx.splice(fxIndex(t, p.fx), 1);
+    t.fx = fx;
+    ctx.summary(`${t.label}: removed effect ${f!.type}.`);
   },
 });
 
 defineCommand({
-  op: 'fx.move', group: 'effects', doc: 'Move an effect to another position in the clip\'s effect stack (0 = applied first).',
-  schema: z.strictObject({ id: Id, fx: FxSel, to: z.number().int().min(0) }),
+  op: 'fx.move', group: 'effects', doc: 'Move an effect to another position in a clip\'s (id=) or bus\'s (bus=) effect stack (0 = applied first).',
+  schema: z.strictObject({ ...TargetFields, fx: FxSel, to: z.number().int().min(0) }),
   primary: 'id', example: { id: 'shot1', fx: 'blur', to: 0 },
   apply(ctx, p) {
-    const c = ctx.clip(p.id);
-    const fx = c.fx!;
-    const i = fxIndex(c, p.fx);
+    const t = target(ctx, 'fx.move', p);
+    const fx = [...(t.fx ?? [])];
+    const i = fxIndex(t, p.fx);
     if (p.to >= fx.length) fail('E_RANGE', `position ${p.to} is past the end of the effect stack (${fx.length} effects).`, `use to=0..${fx.length - 1}.`);
     const [f] = fx.splice(i, 1);
     fx.splice(p.to, 0, f!);
-    ctx.summary(`clip "${c.id}": moved effect ${f!.type} from ${i} to ${p.to}.`);
+    t.fx = fx;
+    ctx.summary(`${t.label}: moved effect ${f!.type} from ${i} to ${p.to}.`);
   },
 });
 

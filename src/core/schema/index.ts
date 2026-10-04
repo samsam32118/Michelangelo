@@ -141,8 +141,16 @@ export function makeSchemas<T extends TimeSchema>(Time: T) {
     fill: z.union([Color, z.literal('none')]).optional(),
     stroke: Color.optional(),
     strokeWidth: z.number().min(0).optional(),
-    /** draw only part of the outline, 0..1 (animatable via clip keys "shape.trim") */
+    /** draw only part of the outline, 0..1 (animatable via clip keys "shape.trim"): the END of the drawn part */
     trim: Num.optional(),
+    /** the START of the drawn part, 0..1 (default 0; animatable, "shape.trimStart"); with trim it draws [trimStart, trim] */
+    trimStart: Num.optional(),
+    /** shifts the drawn part along the outline, in outline fractions (1 = once around; wraps; animatable, "shape.trimOffset") */
+    trimOffset: Num.optional(),
+    /** stroke ends: butt (default), round or square */
+    lineCap: z.enum(['butt', 'round', 'square']).optional(),
+    /** stroke corners: miter (default), round or bevel */
+    lineJoin: z.enum(['miter', 'round', 'bevel']).optional(),
     gradient: z.strictObject({ type: z.enum(['linear', 'radial']), stops: z.array(z.tuple([z.number(), Color])).min(2), angle: z.number().optional() }).optional(),
   });
 
@@ -153,8 +161,11 @@ export function makeSchemas<T extends TimeSchema>(Time: T) {
 
   const Mask = z.strictObject({
     shape: z.enum(['rect', 'ellipse', 'path']),
-    /** rect/ellipse box in comp px [x, y, w, h] (x, y = top-left), or in clip-box fractions with space "clip" */
-    box: z.tuple([z.number(), z.number(), z.number(), z.number()]).optional(),
+    /**
+     * rect/ellipse box in comp px [x, y, w, h] (x, y = top-left), or in clip-box fractions with space "clip".
+     * Animatable: keyframes [[frame, [x, y, w, h], easing?], ...] (clip-local frames), e.g. a redaction box that follows a zoom.
+     */
+    box: animatable(z.tuple([z.number(), z.number(), z.number(), z.number()])).optional(),
     d: z.string().optional(),
     space: z.enum(['comp', 'clip']).optional(),
     feather: z.number().min(0).optional(),
@@ -172,7 +183,7 @@ export function makeSchemas<T extends TimeSchema>(Time: T) {
     /** length on the timeline (frames) */
     len: Time,
 
-    // --- source: exactly one of these ---
+    // --- source: exactly one of these (a `gen` may name an asset in gen.asset: the sound an audio-reactive generator follows) ---
     asset: Id.optional(),
     text: z.string().optional(),
     shape: ShapeSpec.optional(),
@@ -225,6 +236,10 @@ export function makeSchemas<T extends TimeSchema>(Time: T) {
     clock: z.optional(Time),
     hidden: z.boolean().optional(),
     locked: z.boolean().optional(),
+    /**
+     * free-form labels. Convention: "qa-ignore:<rule>" tells QA (check/look) to skip that rule for this clip
+     * (e.g. "qa-ignore:covered", "qa-ignore:safe-zone"); "qa-ignore:*" skips every rule.
+     */
     tags: z.array(z.string()).optional(),
     note: z.string().optional(),
   });

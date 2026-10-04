@@ -8,15 +8,27 @@ import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { isAbsolute, join, resolve } from 'node:path';
 import { fail } from '../core/errors.js';
-import type { AudioPlan, AudioSegment } from '../render/types.js';
+import type { AudioPlan, AudioSegment, FilterSpec } from '../render/types.js';
 import { getFfmpeg } from './ffmpeg.js';
-import { escapeValue } from './filters.js';
+import { escapeValue, filtersToString } from './filters.js';
 import { probe, type MediaInfoExt } from './probe.js';
 import { run } from './proc.js';
 
 const SR = 48000;
 
-export interface RenderAudioOptions { baseDir?: string; cacheDir?: string; /** keep the generated filter script (debugging) */ keepScript?: string }
+export interface RenderAudioOptions {
+  baseDir?: string;
+  cacheDir?: string;
+  /** keep the generated filter script (debugging) */
+  keepScript?: string;
+  /** render only this bus's contribution to master (see MediaBackend.renderAudio); 'all' = stems in one multichannel WAV */
+  bus?: string;
+  /** PCM bit depth of the WAV (default 16) */
+  pcmDepth?: 16 | 24;
+}
+
+/** graph-level solo: only `bus` (and the buses that feed it) reach master; every bus is still built (ducking sidechains) */
+interface GraphOptions extends RenderAudioOptions { solo?: string }
 
 /**
  * sidechaincompress settings that lower the ducked bus by ≈ db while the sidechain has signal.
@@ -62,10 +74,17 @@ export function volumeFilter(gain: [number, number][]): string | null {
   return `asetnsamples=n=256,volume=${escapeValue(`pow(10,(${expr})/20)`)}:eval=frame`;
 }
 
+/** Audio-stage effect filters as filtergraph text (allowlisted and escaped), or '' for none. */
+function audioStage(filters: FilterSpec[] | undefined, baseDir?: string): string {
+  return filters?.length ? filtersToString(filters, { stage: 'audio', ...(baseDir ? { baseDir } : {}) }) : '';
+}
+/** back to the mix format after effects (a pan to mono or a resample must not change the bus layout) */
+const AFTER_FX = `aresample=${SR},aformat=sample_fmts=fltp:sample_rates=${SR}:channel_layouts=stereo`;
+
 interface Src { path: string; label: string; info: MediaInfoExt; segs: AudioSegment[] }
 
 /** The filter script for the mix up to (and including) master, with `[out]` of exactly plan.length samples. */
-export async function buildMixGraph(plan: AudioPlan, opts: RenderAudioOptions = {}): Promise<{ inputs: string[]; script: string; dropped: string[] }> {
+export async function buildMixGraph(plan: AudioPlan, opts: GraphOptions = {}): Promise<{ inputs: string[]; script: string; dropped: string[] }> {
   const L = plan.length;
   const srcs = new Map<string, Src>();
   const dropped: string[] = [];
@@ -99,6 +118,9 @@ export async function buildMixGraph(plan: AudioPlan, opts: RenderAudioOptions = 
       const s0 = Math.max(0, zero + Math.floor((s.sourceFrame * SR * s.rate.den) / s.rate.num + 1e-6));
       const need = Math.ceil(N * sp) + (Math.abs(sp - 1) > 1e-9 ? 8192 : 0);
       const chain = [`atrim=start_sample=${s0}:end_sample=${s0 + need}`, 'asetpts=PTS-STARTPTS', ...atempoChain(sp), `apad=whole_len=${N}`, `atrim=end_sample=${N}`];
+      // audio-stage effects (escaped, allowlisted), then back to exactly N stereo float samples
+      const fx = audioStage(s.filters, opts.baseDir);
+      if (fx) chain.push(fx, AFTER_FX, `apad=whole_len=${N}`, `atrim=end_sample=${N}`);
       const vol = volumeFilter(s.gain);
       if (vol) chain.push(vol);
       if (s.fadeIn > 0) chain.push(`afade=t=in:start_sample=0:nb_samples=${Math.min(s.fadeIn, N)}`);
@@ -155,13 +177,30 @@ export async function buildMixGraph(plan: AudioPlan, opts: RenderAudioOptions = 
   for (const id of buses.keys()) dfs(id);
   if (order[order.length - 1] !== 'master') { order.splice(order.indexOf('master'), 1); order.push('master'); }
 
+  // solo: `under` = the soloed bus and the buses feeding it (master alone = its own lanes); `path` = its route to master
+  let under: Set<string> | null = null, path: Set<string> | null = null;
+  if (opts.solo !== undefined) {
+    if (!buses.has(opts.solo)) fail('E_REF', `bus "${opts.solo}" does not exist.`, `use one of: ${[...buses.keys()].join(', ')} (or all).`);
+    under = new Set([opts.solo]);
+    if (opts.solo !== 'master') for (let grew = true; grew;) { grew = false; for (const b of buses.keys()) if (!under.has(b) && under.has(parentOf(b))) { under.add(b); grew = true; } }
+    path = new Set();
+    for (let id = opts.solo; id; id = parentOf(id)) path.add(id);
+  }
   const outLabel = new Map<string, string>();
   const consumers = new Map<string, string[]>();
+  const usedLanes = new Set<string>();
   for (const id of order) {
     const b = buses.get(id)!;
-    const ins = [...(busInputs.get(id) ?? [])];
-    for (const c of order) if (c !== id && parentOf(c) === id && outLabel.has(c)) ins.push(takeOut(c));
+    const onPath = !!path?.has(id) && !under!.has(id);
+    const ins = onPath ? [] : [...(busInputs.get(id) ?? [])];
+    for (const c of order) {
+      if (c === id || parentOf(c) !== id || !outLabel.has(c)) continue;
+      if (onPath && !path!.has(c)) continue; // a sibling of the soloed route: muted
+      if (under?.has(id) && !under.has(c)) continue; // master soloed alone: its child buses are muted
+      ins.push(takeOut(c));
+    }
     if (!ins.length) continue;
+    for (const x of ins) usedLanes.add(x);
     let cur = `bus_${id}_mix`;
     lines.push(ins.length === 1
       ? `[${ins[0]}]apad=whole_len=${L},atrim=end_sample=${L}[${cur}]`
@@ -172,6 +211,12 @@ export async function buildMixGraph(plan: AudioPlan, opts: RenderAudioOptions = 
       const nxt = `bus_${id}_duck`;
       lines.push(`[${sc}]${SIDECHAIN_DRIVE}[${sc}_d]`);
       lines.push(`[${cur}][${sc}_d]sidechaincompress=threshold=${p.threshold.toFixed(6)}:ratio=${p.ratio.toFixed(4)}:attack=${p.attack}:release=${p.release}:makeup=1:knee=1:detection=rms:link=maximum[${nxt}]`);
+      cur = nxt;
+    }
+    const bfx = audioStage(b.filters, opts.baseDir);
+    if (bfx) {
+      const nxt = `bus_${id}_fx`;
+      lines.push(`[${cur}]${bfx},${AFTER_FX},apad=whole_len=${L},atrim=end_sample=${L}[${nxt}]`);
       cur = nxt;
     }
     const post: string[] = [];
@@ -197,6 +242,8 @@ export async function buildMixGraph(plan: AudioPlan, opts: RenderAudioOptions = 
     } else if (us.length > 1) final.push(`[${label}]asplit=${us.length}${us.map((u) => `[${u}]`).join('')}`);
     else final.push(`[${label}]anullsink`);
   }
+  // lanes of buses muted by a solo (or with nowhere to go) still need a sink, or ffmpeg refuses the graph
+  for (const ls of busInputs.values()) for (const l of ls) if (!usedLanes.has(l)) final.push(`[${l}]anullsink`);
   if (!outLabel.has('master')) final.push(`anullsrc=r=${SR}:cl=stereo:nb_samples=1024,atrim=end_sample=${L}[out]`);
   return { inputs, script: [...lines, ...final].join(';\n') + '\n', dropped };
 }
@@ -220,36 +267,96 @@ export async function measureLoudnorm(ffmpeg: string, file: string, lufs: number
   return JSON.parse(m[0]) as LoudnormMeasure;
 }
 
-/** Render the plan to a 48 kHz stereo 16-bit WAV of exactly plan.length samples. */
-export async function renderAudio(plan: AudioPlan, out: string, opts: RenderAudioOptions = {}): Promise<{ dropped: string[] }> {
+/** Render the plan to a 48 kHz stereo WAV (16-bit unless pcmDepth: 24) of exactly plan.length samples. */
+export async function renderAudio(plan: AudioPlan, out: string, opts: RenderAudioOptions = {}): Promise<{ dropped: string[]; notes: string[] }> {
   const ff = await getFfmpeg();
   const L = Math.max(0, Math.floor(plan.length));
+  const pcm = opts.pcmDepth === 24 ? 'pcm_s24le' : 'pcm_s16le';
+  const notes: string[] = [];
   const dir = await mkdtemp(join(tmpdir(), 'mgl-audio-'));
   try {
     if (L === 0) fail('E_RANGE', 'the audio plan is empty (0 samples).', 'render a comp or range with a positive length.');
+    const stems = opts.bus === 'all' ? stemBuses(plan) : opts.bus !== undefined ? [opts.bus] : null;
     const live = plan.segments.filter((s) => s.end > s.start && s.speed.num > 0);
     if (!live.length) {
-      await run(ff.ffmpeg, ['-hide_banner', '-nostdin', '-v', 'error', '-y', '-f', 'lavfi', '-i', `anullsrc=r=${SR}:cl=stereo`, '-af', `atrim=end_sample=${L}`, '-c:a', 'pcm_s16le', '-f', 'wav', out], { what: 'writing silence' });
-      return { dropped: [] };
+      const ch = stems ? 2 * stems.length : 2;
+      await run(ff.ffmpeg, ['-hide_banner', '-nostdin', '-v', 'error', '-y', '-f', 'lavfi', '-i', `anullsrc=r=${SR}:cl=stereo`, '-af', `atrim=end_sample=${L}`, ...(ch > 2 ? ['-ac', String(ch)] : []), '-c:a', pcm, '-f', 'wav', out], { what: 'writing silence' });
+      return { dropped: [], notes };
     }
-    const g = await buildMixGraph({ ...plan, length: L }, opts);
+    const full = { ...plan, length: L };
     const master = plan.buses.find((b) => b.id === 'master');
-    if (!master?.loudness || master.muted) {
-      await runGraph(ff.ffmpeg, g.inputs, g.script, out, 'pcm_s16le', dir, opts.keepScript);
-      return { dropped: g.dropped };
+    const target = master?.loudness && !master.muted ? master.loudness : undefined;
+    // master loudness: measured on the full mix; a stem gets the same gain so the stems sum to the mix
+    let gainDb: number | null = null, limited = false, dropped: string[] = [];
+    let mixAf = 'anull';
+    if (target) {
+      const g = await buildMixGraph(full, opts);
+      dropped = g.dropped;
+      const pre = join(dir, 'pre.wav');
+      await runGraph(ff.ffmpeg, g.inputs, g.script, pre, 'pcm_f32le', dir, stems ? undefined : opts.keepScript);
+      const m = await measureLoudnorm(ff.ffmpeg, pre, target.lufs, target.peak);
+      const I = Number(m.input_i), TP = Number(m.input_tp);
+      if (!Number.isFinite(I) || I < -70) { gainDb = 0; mixAf = 'anull'; } // silence: nothing to normalise
+      else {
+        gainDb = target.lufs - I;
+        limited = TP + gainDb > target.peak;
+        mixAf = limited
+          ? `loudnorm=I=${target.lufs}:TP=${target.peak}:LRA=11:measured_I=${m.input_i}:measured_TP=${m.input_tp}:measured_LRA=${m.input_lra}:measured_thresh=${m.input_thresh}:offset=${m.target_offset}:linear=true,aresample=${SR}`
+          : `volume=${gainDb.toFixed(3)}dB`;
+      }
+      if (!stems) {
+        await run(ff.ffmpeg, ['-hide_banner', '-nostdin', '-v', 'error', '-y', '-i', pre, '-af', `${mixAf},apad=whole_len=${L},atrim=end_sample=${L}`, '-ar', String(SR), '-c:a', pcm, '-f', 'wav', out], { what: 'normalising loudness' });
+        return { dropped, notes };
+      }
     }
-    const { lufs, peak } = master.loudness;
-    const pre = join(dir, 'pre.wav');
-    await runGraph(ff.ffmpeg, g.inputs, g.script, pre, 'pcm_f32le', dir, opts.keepScript);
-    const m = await measureLoudnorm(ff.ffmpeg, pre, lufs, peak);
-    const I = Number(m.input_i), TP = Number(m.input_tp);
-    let af: string;
-    if (!Number.isFinite(I) || I < -70) af = 'anull'; // silence: nothing to normalise
-    else if (TP + (lufs - I) <= peak) af = `volume=${(lufs - I).toFixed(3)}dB`;
-    else af = `loudnorm=I=${lufs}:TP=${peak}:LRA=11:measured_I=${m.input_i}:measured_TP=${m.input_tp}:measured_LRA=${m.input_lra}:measured_thresh=${m.input_thresh}:offset=${m.target_offset}:linear=true,aresample=${SR}`;
-    await run(ff.ffmpeg, ['-hide_banner', '-nostdin', '-v', 'error', '-y', '-i', pre, '-af', `${af},apad=whole_len=${L},atrim=end_sample=${L}`, '-ar', String(SR), '-c:a', 'pcm_s16le', '-f', 'wav', out], { what: 'normalising loudness' });
-    return { dropped: g.dropped };
+    if (!stems) {
+      const g = await buildMixGraph(full, opts);
+      await runGraph(ff.ffmpeg, g.inputs, g.script, out, pcm, dir, opts.keepScript);
+      return { dropped: g.dropped, notes };
+    }
+    // stems: each bus's contribution to master, with the mix's loudness gain (never normalised on its own)
+    const files: string[] = [];
+    for (const [k, bus] of stems.entries()) {
+      const g = await buildMixGraph(full, { ...opts, solo: bus });
+      if (!dropped.length) dropped = g.dropped;
+      const raw = join(dir, `stem${k}.wav`);
+      await runGraph(ff.ffmpeg, g.inputs, g.script, raw, gainDb ? 'pcm_f32le' : pcm, dir, undefined);
+      if (gainDb) {
+        const fin = join(dir, `stem${k}-g.wav`);
+        await run(ff.ffmpeg, ['-hide_banner', '-nostdin', '-v', 'error', '-y', '-i', raw, '-af', `volume=${gainDb.toFixed(3)}dB,apad=whole_len=${L},atrim=end_sample=${L}`, '-c:a', pcm, '-f', 'wav', fin], { what: `applying the master gain to stem ${bus}` });
+        files.push(fin);
+      } else files.push(raw);
+    }
+    if (target) {
+      notes.push(`stem${stems.length > 1 ? 's' : ''} not loudness-normalised on ${stems.length > 1 ? 'their' : 'its'} own: the full mix's master gain (${gainDb! >= 0 ? '+' : ''}${gainDb!.toFixed(1)} dB, to ${target.lufs} LUFS) is applied so stems sum to the mix`);
+      if (limited) notes.push(`the full mix is also peak-limited to ${target.peak} dBTP; stems carry the gain without the limiter, so their sum can peak higher than the mix`);
+    } else notes.push(`stem${stems.length > 1 ? 's' : ''}: bus contribution${stems.length > 1 ? 's' : ''} to master (other buses muted)`);
+    const nonlinear = plan.buses.find((b) => b.id === 'master')?.filters?.length;
+    if (nonlinear) notes.push('master has audio effects; they run on each stem separately, so non-linear ones (compressors, limiters) make the stems differ from the mix');
+    const parent = (id: string) => (id === 'master' ? '' : plan.buses.find((b) => b.id === id)?.to || 'master');
+    const feeds = (from: string, bus: string) => { if (bus === 'master') return from === 'master'; for (let id = from; id; id = parent(id)) if (id === bus) return true; return false; };
+    const empty = stems.filter((b) => !live.some((sg) => feeds(sg.bus, b)));
+    if (empty.length) notes.push(`bus${empty.length > 1 ? 'es' : ''} ${empty.join(', ')} ${empty.length > 1 ? 'have' : 'has'} no sound in this range, so ${empty.length > 1 ? 'their stems are' : 'its stem is'} silent (a track with no bus sends to master)`);
+    const mutedStems = stems.filter((b) => plan.buses.find((x) => x.id === b)?.muted);
+    if (mutedStems.length) notes.push(`bus${mutedStems.length > 1 ? 'es' : ''} ${mutedStems.join(', ')} ${mutedStems.length > 1 ? 'are' : 'is'} muted, so ${mutedStems.length > 1 ? 'their stems are' : 'its stem is'} silent`);
+    if (files.length === 1) { await run(ff.ffmpeg, ['-hide_banner', '-nostdin', '-v', 'error', '-y', '-i', files[0]!, '-c:a', pcm, '-f', 'wav', out], { what: 'writing the stem' }); return { dropped, notes }; }
+    const args = ['-hide_banner', '-nostdin', '-v', 'error', '-y'];
+    for (const f of files) args.push('-i', f);
+    args.push('-filter_complex', `${files.map((_, i) => `[${i}:a]`).join('')}amerge=inputs=${files.length}[out]`, '-map', '[out]', '-c:a', pcm, '-f', 'wav', out);
+    await run(ff.ffmpeg, args, { what: 'joining the stems into one multichannel WAV' });
+    notes.push(`${files.length * 2} channels: ${stems.map((b, i) => `${2 * i + 1}-${2 * i + 2} ${b === 'master' ? 'master (tracks sent straight to master)' : b}`).join(', ')}`);
+    return { dropped, notes };
   } finally {
     await rm(dir, { recursive: true, force: true });
   }
+}
+
+/** The stems of bus "all": every bus feeding master (sorted by id), plus master itself (last) when tracks send to it directly. */
+export function stemBuses(plan: AudioPlan): string[] {
+  const ids = new Set(plan.buses.map((b) => b.id));
+  for (const s of plan.segments) ids.add(s.bus);
+  const to = (id: string) => plan.buses.find((b) => b.id === id)?.to || 'master';
+  const out = [...ids].filter((id) => id !== 'master' && to(id) === 'master').sort();
+  if (plan.segments.some((s) => s.bus === 'master')) out.push('master');
+  return out.length ? out : ['master'];
 }

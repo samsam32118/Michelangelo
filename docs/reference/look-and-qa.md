@@ -2,7 +2,9 @@
 
 ## mgl look
 
-`mgl look <file> [--at 1s,2.5s] [-n 12] [--cuts] [--comp id] [--no-audio] [--strict]`
+`mgl look <file> [--at 1s,2.5s] [-n 12] [--cuts] [--comp id] [--no-audio] [--strict] [--platforms a,b] [--alpha]`
+
+`--alpha` says the delivery will be rendered with transparency (enables the `alpha-with-bg` rule).
 
 1. Picks frames: `-n` evenly spaced (default 12), or `--at` times, plus the first frame of every cut with
    `--cuts` (at most 24 frames).
@@ -37,11 +39,13 @@ sound -21.3 LUFS, peak -18.1 dBTP, LRA 0.0 · no silences
 ```
 
 Run the fix commands (or edit the lines), then `look` again until there are no findings you cannot
-explain. `--json` returns every finding with its box, frame and fix; `issues` is the count.
+explain. `--json` returns every finding with its box, frame and fix; `issues` is the count. A finding's `box`
+([x, y, w, h] in comp px) is also a way to measure a laid-out text block; from a script,
+`p.services.measureText(text, style)` gives the width and height directly (sdk.md).
 
 ## mgl check
 
-`mgl check <file> [--strict]` validates the file and runs the QA that needs no pixels (text boxes are
+`mgl check <file> [--strict] [--platforms a,b] [--alpha]` validates the file and runs the QA that needs no pixels (text boxes are
 measured with the same fonts the renderer uses): every load error and warning with its line and fix,
 render-blocking issues (overlaps, cue word counts), safe zones, missing media, plugin problems. It is
 fast; run it after every few edits.
@@ -50,6 +54,35 @@ fast; run it after every few edits.
 mgl check qa.mgl.json
 mgl check qa.mgl.json --json > check.json
 node -e "const r = require('./check.json'); console.log('issues:', r.issues)"
+```
+
+Rules (each finding names its rule): `text-outside-safe`, `text-cut-off`, `tiny-text`, `caption-overlap`,
+`overlap-alpha`, `layer-hidden` (a layer fully covered by an opaque one above it), `media-off-frame`, `gaps`,
+`trailing-black`, `clip-past-end`, `clip-past-source` (a media clip longer than its source: the last frame holds
+or the sound stops; uses probed durations), `keyframes-outside`, `alpha-with-bg`, `music-over-voice`; in `look`
+also `black-frames`, `frozen` (only pixels you can see), `luma-range` (picture outside 16–235: use `legalize`),
+`clipping`, `loudness`, `long-silence`. Plugins add rules.
+
+## Several platforms at once
+
+`--platforms tiktok,reels,shorts` (`--platform` also works; or `p.check({ platforms })`) runs the checks once per platform and merges the
+findings: a finding all platforms share is printed once; a platform-specific one starts with `[tiktok]` and has
+`platform` in `--json`. Apply the strictest fix and check again. It does not change `project.platform`, which
+still sets the default loudness target.
+
+```sh
+mgl check qa.mgl.json --platform tiktok,reels,shorts
+```
+
+## Telling QA what is intentional
+
+Tag a clip `qa-ignore:<rule>` (or `qa-ignore:all`) and that rule skips it: credits that roll off the frame,
+burned-in timecode outside the safe zone, leader black. Short aliases: `safe-zone`, `cut-off`, `off-frame`,
+`overlap`, `covered`, `black`, `silence`, `frozen`, `levels`. Tags are a list: `clip.set tc tags='["qa-ignore:safe-zone"]'`.
+
+```sh
+mgl edit qa.mgl.json clip.set title tags='["qa-ignore:safe-zone"]'
+mgl check qa.mgl.json
 ```
 
 ## Exit codes
@@ -61,6 +94,6 @@ load. Like every verb, exit 2 means the environment is the problem (`mgl doctor`
 ## Safe zones
 
 Platforms cover parts of a vertical video with their UI. The project's `platform` (`project.set
-platform=shorts|tiktok|reels|youtube|none`, set by `mgl new <preset>`) chooses the zone; text should stay
+platform=<name>`, set by `mgl new <preset>`; names: `mgl docs project.set`) chooses the zone; text should stay
 inside it. The margins (left, top, right, bottom, as fractions of the frame): shorts 5/8/12/20 %,
 tiktok 5/9/14/21 %, reels 5/10/13/20 %, youtube and none 5 % all round (title safe).

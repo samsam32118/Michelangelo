@@ -41,7 +41,7 @@ describe('template.apply', () => {
           expect(c.at).toBeGreaterThanOrEqual(30);
           expect(trackOrder.indexOf(c.track)).toBeGreaterThan(trackOrder.indexOf('V1'));
           if (c.text !== undefined) expect(typeof c.style === 'object' && c.style.box, `${id} has a text box`).toBeTruthy();
-          if (c.color !== undefined) continue; // full-frame background
+          if (c.color !== undefined || c.gen !== undefined) continue; // full-frame background (a solid or a full-frame generator)
           const b = restBox(c);
           expect(b, `${id} has a known box`).toBeTruthy();
           const [x, y, w, h] = b!;

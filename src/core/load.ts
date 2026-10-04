@@ -44,6 +44,8 @@ function lineIndex(text: string) {
 
 /** Animatable clip properties whose keyframe times are normalised. */
 export const ANIMATABLE_CLIP_KEYS = ['x', 'y', 'scale', 'rotate', 'opacity', 'gain', 'remap'];
+/** Animatable shape fields (clip keys "shape.<field>"). */
+export const SHAPE_ANIMATABLE = ['trim', 'trimStart', 'trimOffset'] as const;
 
 export function isKeyframes(v: unknown): v is [unknown, unknown, unknown?][] {
   return Array.isArray(v) && v.length > 0 && Array.isArray(v[0]) && v.every((k) => Array.isArray(k) && (k.length === 2 || k.length === 3));
@@ -186,7 +188,10 @@ export function normaliseAndValidate(raw: Record<string, unknown>, lineOf: (p: P
           if (t && typeof t === 'object' && 'len' in t) t.len = conv(t.len, rate, [table, i, 'transition', side, 'len']);
         }
         const sh = e.shape as Record<string, unknown> | undefined;
-        if (sh && typeof sh === 'object' && 'trim' in sh) sh.trim = convKeys(sh.trim, rate, [table, i, 'shape', 'trim']);
+        if (sh && typeof sh === 'object') for (const f of SHAPE_ANIMATABLE) if (f in sh) sh[f] = convKeys(sh[f], rate, [table, i, 'shape', f]);
+        if (Array.isArray(e.masks)) e.masks.forEach((m: Record<string, unknown>, j: number) => {
+          if (m && typeof m === 'object' && 'box' in m) m.box = convKeys(m.box, rate, [table, i, 'masks', j, 'box']);
+        });
         if (Array.isArray(e.fx)) e.fx.forEach((fx: Record<string, unknown>, j: number) => {
           if (fx && typeof fx === 'object') for (const [k, v] of Object.entries(fx)) if (isKeyframes(v)) fx[k] = convKeys(v, rate, [table, i, 'fx', j, k]);
         });
@@ -301,9 +306,8 @@ function reportUnresolvedRef(raw: Record<string, unknown>, table: TableName, i: 
   const tracks = ((raw.tracks as { id?: unknown }[] | undefined) ?? []).map((t) => String(t?.id));
   const id = typeof e.id === 'string' ? e.id : `#${i + 1}`;
   if (table === 'clips') {
-    const d = suggest(String(e.track), tracks);
     err([table, i, 'track'], 'E_REF', `clip "${id}" refers to track "${String(e.track)}", which does not exist (so its times can't be converted to frames).`,
-      d.length ? `did you mean "${d[0]}"?` : tracks.length ? `use one of ${tracks.slice(0, 8).join(', ')}, or add {"id": "${String(e.track)}", "comp": "${comps[0] ?? 'main'}"} to "tracks".` : `add {"id": "${String(e.track)}", "comp": "${comps[0] ?? 'main'}"} to "tracks".`);
+      missingTrackFix(String(e.track), tracks, comps[0] ?? 'main'));
   } else if (table === 'cues') {
     err([table, i, 'clip'], 'E_REF', `cue "${id}" belongs to clip "${String(e.clip)}", which does not exist or is on a missing track (so its times can't be converted to frames).`, 'use the id of a captions clip.');
   } else if (table === 'markers') {
@@ -314,6 +318,13 @@ function reportUnresolvedRef(raw: Record<string, unknown>, table: TableName, i: 
   } else {
     err([table, i], 'E_REF', `${table.replace(/s$/, '')} "${id}": its comp does not exist, so its times can't be converted to frames.`, `use one of ${comps.join(', ')}.`);
   }
+}
+
+/** The fix for a clip on a missing track: create that track first; a near-miss existing track comes second. */
+function missingTrackFix(track: string, tracks: string[], comp: string): string {
+  const d = suggest(track, tracks);
+  const audio = /^A\d/.test(track) ? ', "audio": true' : '';
+  return `add the track: mgl edit <file> track.add id=${track}${audio ? ' audio=true' : ''} (or add {"id": "${track}", "comp": "${comp}"${audio}} to "tracks")${d.length ? `; or did you mean "${d[0]}"?` : tracks.length ? `; existing tracks: ${tracks.slice(0, 8).join(', ')}` : ''}.`;
 }
 
 function unionMessage(path: Path): string {
@@ -334,6 +345,17 @@ function fixFor(path: Path): string {
   if (key === 'size') return 'size is [width, height] in px, e.g. [1080, 1920].';
   if (['color', 'bg', 'fill', 'stroke'].includes(key)) return 'use "#rrggbb" (e.g. "#ffcc00").';
   return 'see "mgl docs format" for the field types.';
+}
+
+/** Asset kind from the file extension (the loader cannot import the commands' helper without a cycle). */
+function kindOfSrc(src: string): string | undefined {
+  if (src.startsWith('lavfi:')) return undefined; // a generated source: video or audio
+  const ext = src.toLowerCase().split('?')[0]!.split('.').pop() ?? '';
+  if (['mp4', 'mov', 'm4v', 'mkv', 'webm', 'avi', 'mxf', 'hevc', 'gif'].includes(ext)) return 'video';
+  if (['wav', 'mp3', 'aac', 'm4a', 'flac', 'ogg', 'opus', 'aif', 'aiff'].includes(ext)) return 'audio';
+  if (['png', 'jpg', 'jpeg', 'webp', 'svg', 'bmp', 'avif'].includes(ext)) return 'image';
+  if (['ttf', 'otf', 'woff', 'woff2'].includes(ext)) return 'font';
+  return undefined;
 }
 
 function semanticChecks(p: ProjectFile, err: Reporter, warn: Reporter, issue: Reporter) {
@@ -375,9 +397,7 @@ function semanticChecks(p: ProjectFile, err: Reporter, warn: Reporter, issue: Re
   (p.clips ?? []).forEach((c, i) => {
     const t = tracks.get(c.track);
     if (!t) {
-      const sameComp = [...tracks.keys()];
-      err(['clips', i, 'track'], 'E_REF', `clip "${c.id}" refers to track "${c.track}", which does not exist.`,
-        sameComp.length ? `use one of ${sameComp.slice(0, 8).join(', ')}, or add {"id": "${c.track}", "comp": "${p.comps[0]!.id}"} to "tracks".` : `add {"id": "${c.track}", "comp": "${p.comps[0]!.id}"} to "tracks".`);
+      err(['clips', i, 'track'], 'E_REF', `clip "${c.id}" refers to track "${c.track}", which does not exist.`, missingTrackFix(c.track, [...tracks.keys()], p.comps[0]!.id));
       return;
     }
     const sources = CLIP_SOURCES.filter((k) => (c as Record<string, unknown>)[k] !== undefined);
@@ -391,6 +411,19 @@ function semanticChecks(p: ProjectFile, err: Reporter, warn: Reporter, issue: Re
     if (c.asset !== undefined && !assets.has(c.asset)) {
       const dym = suggest(c.asset, assets.keys());
       err(['clips', i, 'asset'], 'E_REF', `clip "${c.id}" uses asset "${c.asset}", which does not exist.`, dym.length ? `did you mean "${dym[0]}"?` : `add it: mgl edit <file> asset.add src=<path> id=${c.asset}`);
+    }
+    const genAsset = (c.gen as Record<string, unknown> | undefined)?.asset;
+    if (genAsset !== undefined) {
+      // audio-reactive generators visualise an asset's sound (gen.asset)
+      if (typeof genAsset !== 'string') err(['clips', i, 'gen', 'asset'], 'E_SCHEMA', `clip "${c.id}" gen.asset must be an asset id (a string), found ${foundText(genAsset)}.`, 'e.g. "gen": {"type": "waveform", "asset": "voice"}.');
+      else if (!assets.has(genAsset)) {
+        const dym = suggest(genAsset, assets.keys());
+        err(['clips', i, 'gen', 'asset'], 'E_REF', `clip "${c.id}" generator follows asset "${genAsset}", which does not exist.`, dym.length ? `did you mean "${dym[0]}"?` : `add it: mgl edit <file> asset.add src=<path> id=${genAsset}`);
+      } else {
+        const a = assets.get(genAsset)!;
+        const kind = a.kind ?? kindOfSrc(a.src);
+        if (kind && kind !== 'audio' && kind !== 'video') err(['clips', i, 'gen', 'asset'], 'E_REF', `clip "${c.id}" generator follows asset "${genAsset}", which is ${kind === 'image' ? 'an' : 'a'} ${kind} and has no sound.`, 'use an audio asset, or a video asset with sound.');
+      }
     }
     if (c.comp !== undefined) {
       if (!comps.has(c.comp)) err(['clips', i, 'comp'], 'E_REF', `clip "${c.id}" nests comp "${c.comp}", which does not exist.`, `use one of ${[...comps.keys()].join(', ')}.`);

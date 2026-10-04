@@ -436,6 +436,254 @@
                   }
                 ]
               },
+              "trimStart": {
+                "anyOf": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "minItems": 1,
+                    "type": "array",
+                    "items": {
+                      "anyOf": [
+                        {
+                          "type": "array",
+                          "prefixItems": [
+                            {
+                              "anyOf": [
+                                {
+                                  "type": "integer",
+                                  "minimum": -9007199254740991,
+                                  "maximum": 9007199254740991
+                                },
+                                {
+                                  "type": "string"
+                                }
+                              ]
+                            },
+                            {
+                              "type": "number"
+                            }
+                          ],
+                          "items": false,
+                          "minItems": 2,
+                          "maxItems": 2
+                        },
+                        {
+                          "type": "array",
+                          "prefixItems": [
+                            {
+                              "anyOf": [
+                                {
+                                  "type": "integer",
+                                  "minimum": -9007199254740991,
+                                  "maximum": 9007199254740991
+                                },
+                                {
+                                  "type": "string"
+                                }
+                              ]
+                            },
+                            {
+                              "type": "number"
+                            },
+                            {
+                              "anyOf": [
+                                {
+                                  "type": "string",
+                                  "enum": [
+                                    "linear",
+                                    "hold",
+                                    "inSine",
+                                    "outSine",
+                                    "inOutSine",
+                                    "inQuad",
+                                    "outQuad",
+                                    "inOutQuad",
+                                    "inCubic",
+                                    "outCubic",
+                                    "inOutCubic",
+                                    "inQuart",
+                                    "outQuart",
+                                    "inOutQuart",
+                                    "inExpo",
+                                    "outExpo",
+                                    "inOutExpo",
+                                    "inBack",
+                                    "outBack",
+                                    "inOutBack",
+                                    "inElastic",
+                                    "outElastic",
+                                    "inOutElastic",
+                                    "inBounce",
+                                    "outBounce",
+                                    "inOutBounce"
+                                  ]
+                                },
+                                {
+                                  "type": "array",
+                                  "prefixItems": [
+                                    {
+                                      "type": "number"
+                                    },
+                                    {
+                                      "type": "number"
+                                    },
+                                    {
+                                      "type": "number"
+                                    },
+                                    {
+                                      "type": "number"
+                                    }
+                                  ],
+                                  "items": false,
+                                  "minItems": 4,
+                                  "maxItems": 4
+                                }
+                              ]
+                            }
+                          ],
+                          "items": false,
+                          "minItems": 3,
+                          "maxItems": 3
+                        }
+                      ]
+                    }
+                  }
+                ]
+              },
+              "trimOffset": {
+                "anyOf": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "minItems": 1,
+                    "type": "array",
+                    "items": {
+                      "anyOf": [
+                        {
+                          "type": "array",
+                          "prefixItems": [
+                            {
+                              "anyOf": [
+                                {
+                                  "type": "integer",
+                                  "minimum": -9007199254740991,
+                                  "maximum": 9007199254740991
+                                },
+                                {
+                                  "type": "string"
+                                }
+                              ]
+                            },
+                            {
+                              "type": "number"
+                            }
+                          ],
+                          "items": false,
+                          "minItems": 2,
+                          "maxItems": 2
+                        },
+                        {
+                          "type": "array",
+                          "prefixItems": [
+                            {
+                              "anyOf": [
+                                {
+                                  "type": "integer",
+                                  "minimum": -9007199254740991,
+                                  "maximum": 9007199254740991
+                                },
+                                {
+                                  "type": "string"
+                                }
+                              ]
+                            },
+                            {
+                              "type": "number"
+                            },
+                            {
+                              "anyOf": [
+                                {
+                                  "type": "string",
+                                  "enum": [
+                                    "linear",
+                                    "hold",
+                                    "inSine",
+                                    "outSine",
+                                    "inOutSine",
+                                    "inQuad",
+                                    "outQuad",
+                                    "inOutQuad",
+                                    "inCubic",
+                                    "outCubic",
+                                    "inOutCubic",
+                                    "inQuart",
+                                    "outQuart",
+                                    "inOutQuart",
+                                    "inExpo",
+                                    "outExpo",
+                                    "inOutExpo",
+                                    "inBack",
+                                    "outBack",
+                                    "inOutBack",
+                                    "inElastic",
+                                    "outElastic",
+                                    "inOutElastic",
+                                    "inBounce",
+                                    "outBounce",
+                                    "inOutBounce"
+                                  ]
+                                },
+                                {
+                                  "type": "array",
+                                  "prefixItems": [
+                                    {
+                                      "type": "number"
+                                    },
+                                    {
+                                      "type": "number"
+                                    },
+                                    {
+                                      "type": "number"
+                                    },
+                                    {
+                                      "type": "number"
+                                    }
+                                  ],
+                                  "items": false,
+                                  "minItems": 4,
+                                  "maxItems": 4
+                                }
+                              ]
+                            }
+                          ],
+                          "items": false,
+                          "minItems": 3,
+                          "maxItems": 3
+                        }
+                      ]
+                    }
+                  }
+                ]
+              },
+              "lineCap": {
+                "type": "string",
+                "enum": [
+                  "butt",
+                  "round",
+                  "square"
+                ]
+              },
+              "lineJoin": {
+                "type": "string",
+                "enum": [
+                  "miter",
+                  "round",
+                  "bevel"
+                ]
+              },
               "gradient": {
                 "type": "object",
                 "properties": {
@@ -1782,24 +2030,171 @@
                   ]
                 },
                 "box": {
-                  "type": "array",
-                  "prefixItems": [
+                  "anyOf": [
                     {
-                      "type": "number"
+                      "type": "array",
+                      "prefixItems": [
+                        {
+                          "type": "number"
+                        },
+                        {
+                          "type": "number"
+                        },
+                        {
+                          "type": "number"
+                        },
+                        {
+                          "type": "number"
+                        }
+                      ],
+                      "items": false,
+                      "minItems": 4,
+                      "maxItems": 4
                     },
                     {
-                      "type": "number"
-                    },
-                    {
-                      "type": "number"
-                    },
-                    {
-                      "type": "number"
+                      "minItems": 1,
+                      "type": "array",
+                      "items": {
+                        "anyOf": [
+                          {
+                            "type": "array",
+                            "prefixItems": [
+                              {
+                                "anyOf": [
+                                  {
+                                    "type": "integer",
+                                    "minimum": -9007199254740991,
+                                    "maximum": 9007199254740991
+                                  },
+                                  {
+                                    "type": "string"
+                                  }
+                                ]
+                              },
+                              {
+                                "type": "array",
+                                "prefixItems": [
+                                  {
+                                    "type": "number"
+                                  },
+                                  {
+                                    "type": "number"
+                                  },
+                                  {
+                                    "type": "number"
+                                  },
+                                  {
+                                    "type": "number"
+                                  }
+                                ],
+                                "items": false,
+                                "minItems": 4,
+                                "maxItems": 4
+                              }
+                            ],
+                            "items": false,
+                            "minItems": 2,
+                            "maxItems": 2
+                          },
+                          {
+                            "type": "array",
+                            "prefixItems": [
+                              {
+                                "anyOf": [
+                                  {
+                                    "type": "integer",
+                                    "minimum": -9007199254740991,
+                                    "maximum": 9007199254740991
+                                  },
+                                  {
+                                    "type": "string"
+                                  }
+                                ]
+                              },
+                              {
+                                "type": "array",
+                                "prefixItems": [
+                                  {
+                                    "type": "number"
+                                  },
+                                  {
+                                    "type": "number"
+                                  },
+                                  {
+                                    "type": "number"
+                                  },
+                                  {
+                                    "type": "number"
+                                  }
+                                ],
+                                "items": false,
+                                "minItems": 4,
+                                "maxItems": 4
+                              },
+                              {
+                                "anyOf": [
+                                  {
+                                    "type": "string",
+                                    "enum": [
+                                      "linear",
+                                      "hold",
+                                      "inSine",
+                                      "outSine",
+                                      "inOutSine",
+                                      "inQuad",
+                                      "outQuad",
+                                      "inOutQuad",
+                                      "inCubic",
+                                      "outCubic",
+                                      "inOutCubic",
+                                      "inQuart",
+                                      "outQuart",
+                                      "inOutQuart",
+                                      "inExpo",
+                                      "outExpo",
+                                      "inOutExpo",
+                                      "inBack",
+                                      "outBack",
+                                      "inOutBack",
+                                      "inElastic",
+                                      "outElastic",
+                                      "inOutElastic",
+                                      "inBounce",
+                                      "outBounce",
+                                      "inOutBounce"
+                                    ]
+                                  },
+                                  {
+                                    "type": "array",
+                                    "prefixItems": [
+                                      {
+                                        "type": "number"
+                                      },
+                                      {
+                                        "type": "number"
+                                      },
+                                      {
+                                        "type": "number"
+                                      },
+                                      {
+                                        "type": "number"
+                                      }
+                                    ],
+                                    "items": false,
+                                    "minItems": 4,
+                                    "maxItems": 4
+                                  }
+                                ]
+                              }
+                            ],
+                            "items": false,
+                            "minItems": 3,
+                            "maxItems": 3
+                          }
+                        ]
+                      }
                     }
-                  ],
-                  "items": false,
-                  "minItems": 4,
-                  "maxItems": 4
+                  ]
                 },
                 "d": {
                   "type": "string"
@@ -2242,6 +2637,29 @@
           "to": {
             "type": "string",
             "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]*$"
+          },
+          "fx": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "type": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "id": {
+                  "type": "string",
+                  "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]*$"
+                },
+                "enabled": {
+                  "type": "boolean"
+                }
+              },
+              "required": [
+                "type"
+              ],
+              "additionalProperties": {}
+            }
           }
         },
         "required": [

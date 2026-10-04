@@ -235,4 +235,55 @@ const listicleItem = defineTemplate({
   },
 });
 
-export const templates: TemplateDef[] = [intro, lowerThird, cta, title, endCard, progressBar, quote, listicleItem];
+const barsAndTone = defineTemplate({
+  id: 'bars-and-tone',
+  describe: 'Head-leader colour bars (SMPTE or EBU, from the smpte-bars generator) with an optional ident line (10 s). Picture only: add the 1 kHz tone as an audio asset (e.g. ffmpeg -f lavfi -i sine=f=1000:d=10 tone.wav) on an audio track.',
+  params: z.object({ ident: z.string().default('').describe('optional ident text over the bars, e.g. the programme title'), standard: z.enum(['smpte', 'ebu']).default('smpte'), level: z.union([z.literal(75), z.literal(100)]).default(75) }),
+  build(a) {
+    const p = a.params as { ident: string; standard: 'smpte' | 'ebu'; level: 75 | 100 };
+    const { len, S, u, r, ts, at } = setup(a, 10);
+    const clips: Clip[] = [{ id: 'bars', track: 'bars', at, len, gen: { type: 'smpte-bars', standard: p.standard, level: p.level } }];
+    if (p.ident) {
+      const size = ts(44), h = Math.ceil(size * 1.6);
+      clips.push({ id: 'ident', track: 'ident', at, len, text: p.ident, style: { base: 'label', size, box: [r(S.w * 0.9), h], maxLines: 1 }, x: r(S.cx), y: r(S.y0 + 20 * u + h / 2) });
+    }
+    return { clips, summary: `${p.standard.toUpperCase()} bars${p.ident ? ` "${p.ident}"` : ''} (picture only; add tone as an audio asset)` };
+  },
+});
+
+const slate = defineTemplate({
+  id: 'slate',
+  describe: 'Programme slate: title, then version, date and duration lines on a dark card (5 s). Empty fields are left out.',
+  params: z.object({
+    title: z.string().default('Untitled'), version: z.string().default('v1'), date: z.string().default(''), duration: z.string().default(''),
+    client: z.string().default(''), bg: color.default('#111111'), accent: color.default('#ffd400'),
+  }),
+  build(a) {
+    const p = a.params as { title: string; version: string; date: string; duration: string; client: string; bg: string; accent: string };
+    const { len, S, u, r, ts, at } = setup(a, 5);
+    const lines = ([['Client', p.client], ['Version', p.version], ['Date', p.date], ['Duration', p.duration]] as const).filter(([, v]) => v).map(([k, v]) => `${k}: ${v}`);
+    const tSize = ts(96), tH = r(tSize * 1.1 * 2), dSize = ts(48), dH = Math.ceil(dSize * 1.35 * Math.max(1, lines.length));
+    const gap = r(40 * u), total = tH + gap + (lines.length ? dH : 0), top = S.cy - total / 2;
+    const x0 = r(S.x0 + S.w * 0.06), w = r(S.w * 0.88);
+    const clips: Clip[] = [
+      { id: 'bg', track: 'bg', at, len, color: p.bg },
+      { id: 'rule', track: 'rule', at, len, shape: { type: 'rect', size: [w, Math.max(2, r(6 * u))], fill: p.accent }, anchor: [0, 0.5], x: x0, y: r(top + tH + gap / 2) },
+      { id: 'title', track: 'title', at, len, text: p.title, style: { base: 'title', size: tSize, strokeWidth: 0, align: 'left', box: [w, tH], maxLines: 2 }, anchor: [0, 0.5], x: x0, y: r(top + tH / 2) },
+    ];
+    if (lines.length) clips.push({ id: 'details', track: 'details', at, len, text: lines.join('\n'), style: { base: 'body', size: dSize, align: 'left', color: '#dddddd', lineHeight: 1.3, box: [w, dH], maxLines: lines.length }, anchor: [0, 0.5], x: x0, y: r(top + tH + gap + dH / 2) });
+    return { clips, summary: `slate "${p.title}"` };
+  },
+});
+
+const countdown = defineTemplate({
+  id: 'countdown',
+  describe: 'Countdown leader: a number per second from `from` down to 1 with a sweeping hand (countdown-leader generator); the clip is `from` seconds long unless len is given.',
+  params: z.object({ from: z.number().int().min(1).max(99).default(5), color: color.default('#ffffff'), bg: color.default('#202020') }),
+  build(a) {
+    const p = a.params as { from: number; color: string; bg: string };
+    const { len, at } = setup(a, p.from);
+    return { clips: [{ id: 'leader', track: 'leader', at, len, gen: { type: 'countdown-leader', from: p.from, color: p.color, bg: p.bg } }], summary: `countdown from ${p.from}` };
+  },
+});
+
+export const templates: TemplateDef[] = [intro, lowerThird, cta, title, endCard, progressBar, quote, listicleItem, barsAndTone, slate, countdown];

@@ -15,6 +15,9 @@ import stroke from './fx/stroke.js';
 import mirror from './fx/mirror.js';
 import invert from './fx/invert.js';
 import rgbSplit from './fx/rgb-split.js';
+import letterbox from './fx/letterbox.js';
+import legalize from './fx/legalize.js';
+import { audioEffects } from './fx/audio.js';
 import crossfade from './transitions/crossfade.js';
 import dip from './transitions/dip.js';
 import wipe from './transitions/wipe.js';
@@ -30,9 +33,11 @@ import particles from './generators/particles.js';
 import progressBar from './generators/progress-bar.js';
 import counter from './generators/counter.js';
 import { checker, pattern } from './generators/pattern.js';
+import { waveform, spectrum } from './generators/audio.js';
+import { timecode, smpteBars, countdownLeader } from './generators/timecode.js';
 
-export const effects = [blur, glow, shadow, vignette, chromaKey, color, lut, denoise, sharpen, grain, pixelate, stroke, mirror, invert, rgbSplit];
+export const effects = [blur, glow, shadow, vignette, chromaKey, color, lut, denoise, sharpen, grain, pixelate, stroke, mirror, invert, rgbSplit, letterbox, legalize, ...audioEffects];
 export const transitions = [crossfade, dip, wipe, slide, push, zoom, blurT, spin, flash];
-export const generators = [gradient, noise, particles, progressBar, counter, checker, pattern];
+export const generators = [gradient, noise, particles, progressBar, counter, checker, pattern, waveform, spectrum, timecode, smpteBars, countdownLeader];
 
 export default definePlugin({ name: 'builtin-effects', version: '1.0.0', effects, transitions, generators });

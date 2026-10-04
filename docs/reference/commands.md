@@ -6,7 +6,7 @@ Every change to a project is a command `{"op": ..., fields}`, run with `mgl edit
 (`mgl edit <file> '{"op": ...}'`, `--batch f.jsonl`) or from the SDK (`p.edit({op, ...})`). Times accept frames (75),
 "2.5s", "1:02.5" and "00:01:02:15". `k=v` values are JSON when they parse, else strings. `mgl docs <op>` prints one entry.
 
-78 commands: [asset](#asset) · [audio](#audio) · [captions](#captions) · [clip](#clip) · [comp](#comp) · [effects](#effects) · [project](#project) · [keyframes](#keyframes) · [layout](#layout) · [marker](#marker) · [masks](#masks) · [motion](#motion) · [recipes](#recipes) · [text](#text) · [templates](#templates) · [track](#track)
+81 commands: [asset](#asset) · [audio](#audio) · [captions](#captions) · [clip](#clip) · [comp](#comp) · [effects](#effects) · [project](#project) · [keyframes](#keyframes) · [layout](#layout) · [marker](#marker) · [masks](#masks) · [media](#media) · [motion](#motion) · [recipes](#recipes) · [text](#text) · [templates](#templates) · [track](#track)
 
 ## asset
 
@@ -596,9 +596,9 @@ mgl edit video.mgl.json id.rename clip3 to=hook
 
 ### project.set
 
-Set project settings: name, platform (safe zones, loudness), main comp, plugins.
+Set project settings: name, platform (safe zones, loudness), main comp, plugins, commercial (true: non-commercial media is an error).
 
-fields: `name?` string; `platform?` "shorts"\|"tiktok"\|"reels"\|"youtube"\|"none"; `main?` string; `plugins?` object
+fields: `name?` string; `platform?` "shorts"\|"tiktok"\|"reels"\|"youtube"\|"none"; `main?` string; `plugins?` object; `commercial?` boolean
 
 ```text
 mgl edit video.mgl.json project.set name='Focus tips' platform=shorts
@@ -743,6 +743,41 @@ fields: `id` string (bare word); `clip` string\|null; `mode?` "alpha"\|"luma"\|"
 ```text
 mgl edit video.mgl.json matte.set shot1 clip=title mode=alpha
 {"op":"matte.set","id":"shot1","clip":"title","mode":"alpha"}
+```
+
+## media
+
+### media.credits
+
+Write attribution lines (title, author, source, licence) for every open-media asset in use: to a text file (out=, default credits.txt, e.g. for the video description) and with card=true as a credits card appended after the end of the comp (a dark card with the lines, len default 3 s; the comp is extended when its length is a number). Records what was credited in project.credits, which the stock-credits QA rule reads.
+
+fields: `out?` string; `card?` boolean; `len?` time; `comp?` string
+
+```text
+mgl edit video.mgl.json media.credits card=true
+{"op":"media.credits","card":true}
+```
+
+### media.fetch
+
+Download one media.search result into media/stock/<kind>/ (reused when already there) with a licence sidecar (<file>.json), add it as an asset with its licence and credit line, and with at= also a clip: music on a music-bus track, sfx on an sfx-bus track, images and video on a new top visual track (len: images 3 s, video up to 10 s, sounds their length). Sounds are described as text (loudness, peak, where it starts and peaks, tonal/noisy, dark/bright, tempo); align=onset starts the clip so the sound's first audible moment lands on at=. Refuses licences media.search would hide (licences=[...] allows share-alike or non-commercial). Credit attribution licences with media.credits.
+
+fields: `id` string (bare word); `as?` string; `at?` time; `len?` time; `track?` string; `comp?` string; `clip?` string; `gain?` number; `align?` "start"\|"onset" = `"start"`; `licences?` ("free"\|"attribution"\|"share-alike"\|"non-commercial"\|"no-derivatives"\|"unknown")[]
+
+```text
+mgl edit video.mgl.json media.fetch open-media:openverse-audio:6f1c2b0e-0000-4000-8000-000000000000 at=2s align=onset
+{"op":"media.fetch","id":"open-media:openverse-audio:6f1c2b0e-0000-4000-8000-000000000000","at":"2s","align":"onset"}
+```
+
+### media.search
+
+Search openly licensed media through the project's stock providers (a plugin, e.g. open-media): kind image|video|music|sfx, query; optional provider, source (one archive of a provider), orientation, minSeconds/maxSeconds, minWidth (default for image/video: half the comp's long side), limit (default 8), page. Changes nothing. Only CC0, public domain and CC BY results are shown unless licences=[...] allows share-alike or non-commercial; no-derivatives and unknown licences are never shown. Prints numbered results (id, title, length or size, licence, author, source); the full list goes to .mgl/<name>/search.json and, for images and video, a numbered preview sheet to .mgl/<name>/search.png. Then: media.fetch id=<id>.
+
+fields: `kind` "image"\|"video"\|"music"\|"sfx"; `query` string (bare word); `provider?` string; `source?` string; `orientation?` "portrait"\|"landscape"\|"square"; `minSeconds?` number; `maxSeconds?` number; `minWidth?` int; `limit?` int = `8`; `page?` int; `licences?` ("free"\|"attribution"\|"share-alike"\|"non-commercial"\|"no-derivatives"\|"unknown")[]
+
+```text
+mgl edit video.mgl.json media.search kind=sfx whoosh maxSeconds=2
+{"op":"media.search","kind":"sfx","query":"whoosh","maxSeconds":2}
 ```
 
 ## motion

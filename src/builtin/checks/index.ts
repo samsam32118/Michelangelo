@@ -7,7 +7,7 @@
  * Layers in a frame are in draw order: a later layer is stacked above an earlier one.
  * Clips tagged "qa-ignore:<rule>" (or "qa-ignore:all") are skipped by that rule (see IGNORE_ALIASES).
  */
-import { definePlugin, defineCheck, type CheckContext, type CheckDef, type Finding } from '../../plugin/api.js';
+import { definePlugin, defineCheck, licenceClass, licenceName, type CheckContext, type CheckDef, type Finding } from '../../plugin/api.js';
 import { retentionChecks } from './retention.js';
 
 type Project = CheckContext['project'];
@@ -87,6 +87,7 @@ export const IGNORE_ALIASES: Record<string, string[]> = {
   'cut-off': ['text-cut-off'], 'off-frame': ['media-off-frame', 'text-cut-off'],
   black: ['black-frames', 'trailing-black'], silence: ['long-silence'],
   frozen: ['frozen', 'clip-past-source'], levels: ['luma-range'], broadcast: ['luma-range'],
+  credits: ['stock-credits'], licence: ['stock-licence'],
   static: ['static-visuals'], motion: ['static-visuals'], contrast: ['low-contrast'], legibility: ['low-contrast'], gap: ['edge-gap'], edge: ['edge-gap'],
 };
 
@@ -1202,6 +1203,45 @@ const lumaRange = defineCheck({
   },
 });
 
+// ------------------------------------------------------------------------------------------- open media licences
+
+/** Assets with an open-media licence that a clip of any comp uses, with their first user. */
+function licensedInUse(p: Project): { a: NonNullable<Project['assets']>[number]; user: Clip }[] {
+  const first = new Map<string, Clip>();
+  for (const c of p.clips ?? []) if (c.asset && !c.hidden && !first.has(c.asset)) first.set(c.asset, c);
+  return (p.assets ?? []).filter((a) => a.licence && first.has(a.id)).map((a) => ({ a, user: first.get(a.id)! }));
+}
+
+const stockCredits = defineCheck({
+  id: 'stock-credits', stage: 'project', describe: 'open media under an attribution licence (CC BY ...) used without credits (media.credits)',
+  run(ctx) {
+    const credited = new Set(ctx.project.project?.credits?.assets ?? []);
+    const missing = licensedInUse(ctx.project).filter(({ a, user }) => ['attribution', 'share-alike', 'non-commercial'].includes(licenceClass(a.licence)) && !credited.has(a.id) && !ignores(user, 'stock-credits'));
+    if (!missing.length) return [];
+    const card = (ctx.project.clips ?? []).some((c) => c.tags?.includes('credits'));
+    const fix = `mgl edit <file> media.credits${card || !ctx.project.project?.credits?.file ? ' card=true' : ''}${ctx.project.project?.credits?.file ? ` out=${ctx.project.project.credits.file}` : ''}`;
+    return missing.map(({ a, user }): Finding => ({ rule: 'stock-credits', severity: 'warning', clip: user.id, frame: user.at,
+      message: `asset "${a.id}" (${licenceName(a.licence!)}) is used by "${user.id}" but not credited${a.credit ? `: ${a.credit}` : ''}`, fix }));
+  },
+});
+
+const stockLicence = defineCheck({
+  id: 'stock-licence', stage: 'project', describe: 'open media whose licence the video cannot meet: no-derivatives always, non-commercial in a commercial project, share-alike (the video inherits it)',
+  run(ctx) {
+    const out: Finding[] = [];
+    for (const { a, user } of licensedInUse(ctx.project)) {
+      if (ignores(user, 'stock-licence')) continue;
+      const cls = licenceClass(a.licence), name = licenceName(a.licence!);
+      const replace = `mgl edit <file> media.search kind=${a.kind === 'audio' ? 'sfx' : a.kind ?? 'image'} query="<what it shows>"`;
+      if (cls === 'no-derivatives') out.push({ rule: 'stock-licence', severity: 'error', clip: user.id, frame: user.at, message: `asset "${a.id}" is ${name}: no-derivatives forbids putting it in an edit`, fix: replace });
+      else if (cls === 'non-commercial' && ctx.project.project?.commercial) out.push({ rule: 'stock-licence', severity: 'error', clip: user.id, frame: user.at, message: `asset "${a.id}" is ${name} (non-commercial) and the project is commercial`, fix: replace });
+      else if (cls === 'share-alike') out.push({ rule: 'stock-licence', severity: 'info', clip: user.id, frame: user.at, message: `asset "${a.id}" is ${name}: the finished video must be released under the same licence`, fix: replace });
+      else if (cls === 'unknown') out.push({ rule: 'stock-licence', severity: 'warning', clip: user.id, frame: user.at, message: `asset "${a.id}" has an unrecognised licence "${a.licence}"`, fix: replace });
+    }
+    return out;
+  },
+});
+
 // ------------------------------------------------------------------------------------------- audio stage
 
 const PLATFORM_LUFS: Record<string, number> = { shorts: -14, tiktok: -14, reels: -14, youtube: -14 };
@@ -1247,6 +1287,6 @@ const longSilence = defineCheck({
 
 export const builtinChecks: CheckDef[] = [gaps, textOutsideSafe, uiOverlap, tinyText, captionOverlap, clipPastEnd, keyframesOutside,
   layerHidden, mediaOffFrame, trailingBlack, clipPastSource, alphaWithBg, textCutOff, musicOverVoice,
-  blackFrames, frozen, overlapAlpha, lumaRange, clipping, loudness, longSilence, ...retentionChecks];
+  stockCredits, stockLicence, blackFrames, frozen, overlapAlpha, lumaRange, clipping, loudness, longSilence, ...retentionChecks];
 
 export default definePlugin({ name: 'builtin-checks', version: '1.2.0', checks: builtinChecks });

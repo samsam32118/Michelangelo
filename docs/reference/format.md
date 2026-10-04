@@ -62,8 +62,8 @@ by hand, and removed on the next save). The JSON Schema is `schema/v1.json` (`mg
 
 | Table | Fields |
 |---|---|
-| `project` | `name`, `platform` (safe zones and loudness target; names: `mgl docs project.set`), `main` (default comp), `plugins` (name → semver range) |
-| `assets` | `id`, `src` (path relative to the project file), `kind` (override), `note` |
+| `project` | `name`, `platform` (safe zones and loudness target; names: `mgl docs project.set`), `main` (default comp), `plugins` (name → semver range), `commercial` (true: non-commercial media is an error), `credits` (written by `media.credits`) |
+| `assets` | `id`, `src` (path relative to the project file), `kind` (override), `licence` and `credit` (open media; set by `media.fetch`), `note` |
 | `styles` | `id`, `base` (inherit another style), and any text style field (below) |
 | `comps` | `id`, `size` [w, h], `fps`, `length` (frames or `"auto"` = end of the last clip), `bg` |
 | `tracks` | `id`, `comp`, `audio`, `bus`, `hidden`, `muted`, `locked` |

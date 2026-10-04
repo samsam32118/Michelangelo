@@ -40,6 +40,28 @@
         "main": {
           "type": "string",
           "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]*$"
+        },
+        "commercial": {
+          "type": "boolean"
+        },
+        "credits": {
+          "type": "object",
+          "properties": {
+            "file": {
+              "type": "string"
+            },
+            "assets": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]*$"
+              }
+            }
+          },
+          "required": [
+            "assets"
+          ],
+          "additionalProperties": false
         }
       },
       "additionalProperties": false
@@ -68,6 +90,12 @@
               "subtitles",
               "data"
             ]
+          },
+          "licence": {
+            "type": "string"
+          },
+          "credit": {
+            "type": "string"
           },
           "note": {
             "type": "string"

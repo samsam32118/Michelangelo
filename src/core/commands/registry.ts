@@ -32,6 +32,55 @@ export interface CommandServices {
   speak?: SpeakService;
   /** (API 1.3) speech-to-text: the first 'transcribe' provider of the plugin registry; `file` is relative to the project folder */
   transcribe?: TranscribeService;
+  /** (API 1.4) open media: every 'stock' provider of the plugin registry, bound to the project folder (media/stock/) */
+  stock?: StockService;
+  /** (API 1.4) write a report file into the project's work folder .mgl/<name>/; returns its path relative to the cwd */
+  writeWork?(name: string, data: Uint8Array): Promise<string>;
+  /** (API 1.4) write a .txt or .md file inside the project folder (credits); returns the absolute path */
+  writeProjectText?(rel: string, text: string): Promise<string>;
+  /** (API 1.4) a sound described as text for an agent that cannot listen (`src` relative to the project folder) */
+  describeSound?(src: string): Promise<SoundFacts>;
+}
+
+/** (API 1.4) What an agent needs to judge a sound without hearing it. */
+export interface SoundFacts {
+  duration: number;
+  /** integrated loudness (LUFS) and true peak (dBTP) */
+  lufs: number;
+  peak: number;
+  /** first audible moment (s): where a hit or whoosh really starts */
+  onset: number;
+  /** where the sound is loudest (s) */
+  peakAt: number;
+  /** spectral flatness 0 (pure tone) .. 1 (white noise), and the label */
+  flatness: number;
+  texture: 'tonal' | 'mixed' | 'noisy';
+  /** energy-weighted mean band 0..1 (low → high), and the label */
+  brightness: number;
+  tone: 'dark' | 'balanced' | 'bright';
+  /** music: estimated tempo */
+  bpm?: number;
+  /** silences inside (s) */
+  silences: { start: number; end: number }[];
+}
+
+/** (API 1.4) A stock search as commands see it. */
+export interface StockService {
+  providers: { id: string; describe: string; media: string[]; sources?: string[] }[];
+  /** search every provider serving `kind` (or one), in parallel; providers that fail are reported, not fatal */
+  search(q: import('../../plugin/api.js').StockQuery & { provider?: string }): Promise<{ items: import('../../plugin/api.js').StockItem[]; failed: { provider: string; error: string }[] }>;
+  /** an item from a recent search (cached for 30 days), else from its provider's item() */
+  item(id: string): Promise<import('../../plugin/api.js').StockItem | undefined>;
+  /** download an item to `rel` (media/stock/<kind>/<name>); refuses HTML error pages; returns bytes and sha256 */
+  download(item: import('../../plugin/api.js').StockItem, rel: string): Promise<{ bytes: number; sha256: string }>;
+  exists(rel: string): Promise<boolean>;
+  /** remove a downloaded file that turned out to be unusable */
+  remove(rel: string): Promise<void>;
+  /** write the sidecar JSON next to a downloaded file (`rel` ends in .json, inside media/stock/) */
+  writeSidecar(rel: string, data: unknown): Promise<void>;
+  readSidecar(rel: string): Promise<Record<string, unknown> | undefined>;
+  /** a numbered contact sheet (PNG) of the items' previews */
+  sheet?(items: import('../../plugin/api.js').StockItem[]): Promise<Uint8Array | undefined>;
 }
 
 /** A word with times in seconds (from a speak or transcribe provider). */

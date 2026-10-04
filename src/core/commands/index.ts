@@ -16,3 +16,4 @@ import './recipe.js';
 import './motion.js';
 import './audio-gen.js';
 import './ai.js';
+import './media.js';

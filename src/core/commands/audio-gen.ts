@@ -27,12 +27,12 @@ const MOOD_ALIASES: Record<string, Mood> = { energetic: 'upbeat', driving: 'epic
 const MoodArg = z.enum([...MOODS, ...Object.keys(MOOD_ALIASES)] as [string, ...string[]]);
 const SfxArg = z.enum(SFX_TYPES);
 
-function mainComp(ctx: CommandContext): Comp {
+export function mainComp(ctx: CommandContext): Comp {
   const id = ctx.project.project?.main ?? (ctx.project.comps.find((c) => c.id === 'main') ?? ctx.project.comps[0]!).id;
   return ctx.comp(id);
 }
 
-function compFor(ctx: CommandContext, p: { comp?: string; track?: string }): Comp {
+export function compFor(ctx: CommandContext, p: { comp?: string; track?: string }): Comp {
   if (p.comp) return ctx.comp(p.comp);
   if (p.track && (ctx.project.tracks ?? []).some((t) => t.id === p.track)) return ctx.compOfTrack(p.track);
   return mainComp(ctx);
@@ -66,7 +66,7 @@ function ensureAsset(ctx: CommandContext, src: string, base: string, note: strin
 const overlaps = (c: Clip, at: number, end: number) => c.at < end && at < clipEnd(c);
 
 /** An audio track of `comp` on `bus` that is free over [at, end); created (id `<stem>`, `<stem>2`, ...) when none is. */
-function busTrack(ctx: CommandContext, comp: Comp, bus: string, at: number, end: number, stem: string, want?: string, ignore?: Set<string>): string {
+export function busTrack(ctx: CommandContext, comp: Comp, bus: string, at: number, end: number, stem: string, want?: string, ignore?: Set<string>): string {
   const tracks = (ctx.project.tracks ??= []);
   const clips = (ctx.project.clips ?? []).filter((c) => !ignore?.has(c.id));
   if (want) {
@@ -90,7 +90,7 @@ function busTrack(ctx: CommandContext, comp: Comp, bus: string, at: number, end:
   return id;
 }
 
-function compLength(ctx: CommandContext, comp: Comp): number | undefined {
+export function compLength(ctx: CommandContext, comp: Comp): number | undefined {
   if (typeof comp.length === 'number') return comp.length;
   if (typeof comp.length === 'string' && comp.length !== 'auto') return ctx.time(comp.length, comp, 'length');
   const tracks = new Set((ctx.project.tracks ?? []).filter((t) => t.comp === comp.id).map((t) => t.id));

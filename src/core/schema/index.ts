@@ -53,6 +53,10 @@ export function makeSchemas<T extends TimeSchema>(Time: T) {
     platform: z.enum(PLATFORMS).optional(),
     /** the comp `render` and `look` use when none is given (default: "main", else the first comp) */
     main: Id.optional(),
+    /** the video is commercial: non-commercial (NC) media in it is an error (QA rule stock-licence) */
+    commercial: z.boolean().optional(),
+    /** what media.credits last wrote: the credits file (if any) and the asset ids it credits */
+    credits: z.strictObject({ file: z.string().optional(), assets: z.array(Id) }).optional(),
   });
 
   const Asset = z.strictObject({
@@ -61,6 +65,10 @@ export function makeSchemas<T extends TimeSchema>(Time: T) {
     src: z.string().min(1),
     /** override of the kind inferred from the file */
     kind: z.enum(['video', 'audio', 'image', 'font', 'lut', 'subtitles', 'data']).optional(),
+    /** canonical licence id of open media ("cc0", "cc-by-4.0", ...; media.fetch sets it) */
+    licence: z.string().optional(),
+    /** the attribution line media.credits writes ("“Title” by Author (Source), CC BY 4.0") */
+    credit: z.string().optional(),
     note: z.string().optional(),
   });
 
@@ -354,7 +362,7 @@ export const TIME_FIELDS: Record<TableName, string[]> = {
 
 /** Key order per table when writing (keys not listed follow in schema order, then alphabetically). */
 export const KEY_ORDER: Record<TableName, string[]> = {
-  assets: ['id', 'src', 'kind', 'note'],
+  assets: ['id', 'src', 'kind', 'licence', 'credit', 'note'],
   styles: ['id', 'base', 'font', 'size', 'weight', 'italic', 'color', 'align', 'lineHeight', 'letterSpacing', 'stroke', 'strokeWidth', 'shadow', 'shadowBlur', 'shadowOffset', 'bg', 'bgPadding', 'bgRadius', 'maxWidth', 'maxLines', 'box', 'uppercase', 'highlight', 'emphasisColor', 'maxWords'],
   comps: ['id', 'size', 'fps', 'length', 'bg', 'note'],
   tracks: ['id', 'comp', 'audio', 'bus', 'hidden', 'muted', 'locked', 'note'],

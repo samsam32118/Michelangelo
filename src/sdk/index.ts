@@ -11,7 +11,7 @@ import { PLATFORMS, type ProjectFile } from '../core/schema/index.js';
 import { parseRate, parseTime } from '../core/time.js';
 import type { PluginRegistry } from '../plugin/registry.js';
 import type { Command } from '../core/commands/registry.js';
-import { Project, emptyProject, type EditResult } from './project.js';
+import { Project, emptyProject, workDir, type EditResult } from './project.js';
 import { makeServices, type MglServices } from './services.js';
 import '../core/commands/index.js';
 
@@ -155,7 +155,7 @@ async function attach(p: Project): Promise<MglProject> {
     if (self.registry && want === loaded) return;
     const reg = await loadRegistry(p.data, p.dir);
     loaded = want;
-    p.services = makeServices(p.dir, reg);
+    p.services = makeServices(p.dir, reg, { workDir: workDir(p.file) });
     self.registry = reg;
     self.pluginProblems = reg.problems;
   };

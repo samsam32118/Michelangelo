@@ -145,7 +145,8 @@ function copyForBaseline(dir) {
 
 /** What an eval agent may use: file tools, and the shell for the library, Node, ffmpeg and plain file commands. */
 export const AGENT_TOOLS = ['Read', 'Write', 'Edit', 'Glob', 'Grep', 'TodoWrite',
-  ...['npx', 'mgl', 'node', 'npm', 'ffmpeg', 'ffprobe', 'ls', 'cat', 'head', 'tail', 'wc', 'mkdir', 'cp', 'mv', 'grep', 'find', 'echo', 'pwd', 'sort', 'diff', 'file', 'stat', 'du', 'python3'].map((c) => `Bash(${c}:*)`)];
+  ...['npx', 'mgl', 'node', 'npm', 'ffmpeg', 'ffprobe', 'ls', 'cat', 'head', 'tail', 'wc', 'mkdir', 'cp', 'mv', 'grep', 'find', 'echo', 'pwd', 'sort', 'diff', 'file', 'stat', 'du', 'python3',
+    'cd', 'sed', 'awk', 'cut', 'tr', 'uniq', 'xargs', 'tee', 'touch', 'printf', 'test', 'which', 'sleep', 'basename', 'dirname', 'cmp', 'sha256sum', 'md5sum', 'jq', 'rm', 'ln', 'date', 'seq', 'env'].map((c) => `Bash(${c}:*)`)];
 
 /** Stable anonymous alias of a held-out task id: h<n> by the order of sha256(id). */
 export function aliasOf(task) {

@@ -23,6 +23,28 @@ environment is wrong); `mgl --version` prints the version and plugin API. The SD
 - Design: [DESIGN.md](DESIGN.md); lessons from FrameCraft: [LESSONS.md](LESSONS.md); evals: [evals/tasks](evals/tasks/README.md).
 - Requirements: Node ≥ 22, ffmpeg ≥ 6 with libx264 and aac (`mgl doctor` checks; `mgl doctor --fetch` downloads a pinned build).
 
+## Status (2026-10-04)
+
+Measured on a 4-vCPU, no-GPU cloud container (details: [bench/results](bench/results), [evals/HISTORY.md](evals/HISTORY.md)):
+
+| Benchmark (30 s projects) | look, 12 frames | draft 540x960 | final 1080x1920 | target |
+|---|---|---|---|---|
+| typical Short (2 video layers, captions, text, shapes, music + voice) | 3.1 s | 0.76× real time | 1.76× real time | < 10 s · ≤ 1× · ≤ 3× |
+| text-only motion graphics | 0.1 s | 0.30× | 1.08× | |
+| 4K HEVC + 1080p PiP | 6.1 s | 0.83× | 1.57× | |
+
+FrameCraft (the browser-based predecessor) rendered the final at 6.4× real time on the same machine.
+
+Agent evals (Claude Code `claude -p`, fresh directory and HOME, only the packed library and its docs):
+
+| Set | M1 | M2 | M3 |
+|---|---|---|---|
+| main (30 tasks) | 25/30 | 27/30 | 29/30 |
+| held-out v1 (10; names exposed, now a regression set) | not run | 5/10 | 8/10 |
+| held-out v2 (10; unseen by the builder) | – | 8/10 | 8/10 |
+
+What remains for the v1 bar: [REMAINING.md](REMAINING.md).
+
 ## Development
 
 ```text

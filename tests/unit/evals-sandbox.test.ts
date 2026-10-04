@@ -52,9 +52,9 @@ describe('violations (review finding 43) and the violation policy', () => {
       ['Glob', { pattern: '/home/user/Michelangelo/evals/**/grade.mjs' }],
       ['Grep', { pattern: 'x', path: '../../home/user' }],
       ['Grep', { pattern: 'grade', glob: '../../**/*.mjs' }],
-      ['Bash', { command: 'cd ~ && cd ../user/Michelangelo/evals/heldout && cat */grade.mjs' }],
       ['Bash', { command: 'find / -name grade.mjs | xargs cat' }],
       ['Bash', { command: 'cd .. && ls' }],
+      ['Bash', { command: 'cd ~ && cd ../user/Michelangelo/evals/heldout && cat */grade.mjs' }],
       ['Read', { file_path: '/tmp/mgl-eval-gif-export-xyz/out/clip.gif' }],
       ['Read', { file_path: '/home/mgleval/runs/l/main/pip/out/pip.mp4' }],
       ['Read', { file_path: '/tmp/claude-0/-tmp-mgl-eval-pip-zzz/s/scratchpad/x' }],
@@ -118,7 +118,7 @@ describe('baseline and delta scores (review finding 50)', () => {
 describe('held-out summary.json (review finding 51)', () => {
   it('holds no violation strings, failure reasons, run dirs or HOME', () => {
     const d = mkdtempSync(join(tmp, 'ho-'));
-    const res = [{ task: 'secret-task', pass: false, score: 0, gradedPass: true, gradedScore: 1, violationFail: true, failReason: 'sandbox violation: 1 access(es) (first: Read: /home/user/Michelangelo/evals/heldout/x/grade.mjs)',
+    const res = [{ task: 'h-1a2b3c', pass: false, score: 0, gradedPass: true, gradedScore: 1, violationFail: true, failReason: 'sandbox violation: 1 access(es) (first: Read: /home/user/Michelangelo/evals/heldout/x/grade.mjs)',
       dir: '/tmp/mgl-eval-secret-task-abc', agentHome: '/tmp/mgl-eval-home-q', checks: [{ name: 'hidden', pass: false, detail: 'y' }],
       metrics: { violations: ['Read: /home/user/Michelangelo/evals/heldout/x/grade.mjs', 'Bash: cat /root/z'], fatalViolations: ['Read: /home/user/Michelangelo/evals/heldout/x/grade.mjs'] } }];
     const s = summary.summarise(res, { label: 'l', set: 'heldout', model: 'm', date: '2026-10-04T00:00:00Z', agentHome: '/tmp/mgl-eval-home-q' });
@@ -126,7 +126,7 @@ describe('held-out summary.json (review finding 51)', () => {
     const text = readFileSync(join(d, 'summary.json'), 'utf8') + readFileSync(join(d, 'summary.md'), 'utf8');
     expect(text).not.toMatch(/Michelangelo|\/root|mgl-eval-|hidden|grade\.mjs/);
     const j = JSON.parse(readFileSync(join(d, 'summary.json'), 'utf8'));
-    expect(j.results[0]).toMatchObject({ task: 'secret-task', violationFail: true, checks: 1, metrics: { violations: 2, fatalViolations: 1 } });
+    expect(j.results[0]).toMatchObject({ task: 'h-1a2b3c', violationFail: true, checks: 1, metrics: { violations: 2, fatalViolations: 1 } });
   });
 });
 

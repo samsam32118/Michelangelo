@@ -82,7 +82,7 @@
  ],
  "results": [
   {
-   "task": "h-5aeddf",
+   "task": "h-388eb6",
    "pass": true,
    "score": 1,
    "wallSec": 96.693,
@@ -94,8 +94,8 @@
    "outputs": 2,
    "dirRemoved": true,
    "deltaScore": 1,
-   "checks": 5,
    "harnessError": false,
+   "checks": 5,
    "metrics": {
     "turns": 19,
     "inputTokens": 34,
@@ -129,7 +129,7 @@
    }
   },
   {
-   "task": "h-f588b5",
+   "task": "h-c1b94c",
    "pass": true,
    "score": 1,
    "wallSec": 89.655,
@@ -141,8 +141,8 @@
    "outputs": 2,
    "dirRemoved": true,
    "deltaScore": 1,
-   "checks": 7,
    "harnessError": false,
+   "checks": 7,
    "metrics": {
     "turns": 21,
     "inputTokens": 38,
@@ -179,7 +179,7 @@
    }
   },
   {
-   "task": "h-bc55ae",
+   "task": "h-3f561a",
    "pass": true,
    "score": 1,
    "wallSec": 88.069,
@@ -191,8 +191,8 @@
    "outputs": 3,
    "dirRemoved": true,
    "deltaScore": 1,
-   "checks": 5,
    "harnessError": false,
+   "checks": 5,
    "metrics": {
     "turns": 15,
     "inputTokens": 26,
@@ -224,7 +224,7 @@
    }
   },
   {
-   "task": "h-2e8455",
+   "task": "h-5f5ba2",
    "pass": false,
    "score": 0.8333,
    "wallSec": 362.767,
@@ -236,8 +236,8 @@
    "outputs": 4,
    "dirRemoved": true,
    "deltaScore": 0.8333,
-   "checks": 6,
    "harnessError": false,
+   "checks": 6,
    "metrics": {
     "turns": 64,
     "inputTokens": 86,
@@ -276,7 +276,7 @@
    }
   },
   {
-   "task": "h-5448fc",
+   "task": "h-426a7a",
    "pass": true,
    "score": 1,
    "wallSec": 108.086,
@@ -288,8 +288,8 @@
    "outputs": 3,
    "dirRemoved": true,
    "deltaScore": 1,
-   "checks": 7,
    "harnessError": false,
+   "checks": 7,
    "metrics": {
     "turns": 22,
     "inputTokens": 42,
@@ -328,7 +328,7 @@
    }
   },
   {
-   "task": "h-bc0685",
+   "task": "h-b618bd",
    "pass": false,
    "score": 0.8333,
    "wallSec": 81.976,
@@ -340,8 +340,8 @@
    "outputs": 2,
    "dirRemoved": true,
    "deltaScore": 0.8333,
-   "checks": 6,
    "harnessError": false,
+   "checks": 6,
    "metrics": {
     "turns": 18,
     "inputTokens": 32,
@@ -377,7 +377,7 @@
    }
   },
   {
-   "task": "h-8a9ace",
+   "task": "h-d81eb4",
    "pass": true,
    "score": 1,
    "wallSec": 102.802,
@@ -389,8 +389,8 @@
    "outputs": 2,
    "dirRemoved": true,
    "deltaScore": 1,
-   "checks": 6,
    "harnessError": false,
+   "checks": 6,
    "metrics": {
     "turns": 19,
     "inputTokens": 32,
@@ -426,7 +426,7 @@
    }
   },
   {
-   "task": "h-3eb317",
+   "task": "h-20111d",
    "pass": true,
    "score": 1,
    "wallSec": 84.783,
@@ -438,8 +438,8 @@
    "outputs": 2,
    "dirRemoved": true,
    "deltaScore": 1,
-   "checks": 6,
    "harnessError": false,
+   "checks": 6,
    "metrics": {
     "turns": 18,
     "inputTokens": 32,
@@ -473,7 +473,7 @@
    }
   },
   {
-   "task": "h-57705e",
+   "task": "h-204129",
    "pass": true,
    "score": 1,
    "wallSec": 66.717,
@@ -485,8 +485,8 @@
    "outputs": 2,
    "dirRemoved": true,
    "deltaScore": 1,
-   "checks": 6,
    "harnessError": false,
+   "checks": 6,
    "metrics": {
     "turns": 11,
     "inputTokens": 18,
@@ -521,7 +521,7 @@
    }
   },
   {
-   "task": "h-f918af",
+   "task": "h-ef12d8",
    "pass": true,
    "score": 1,
    "wallSec": 171.484,
@@ -533,8 +533,8 @@
    "outputs": 3,
    "dirRemoved": true,
    "deltaScore": 1,
-   "checks": 6,
    "harnessError": false,
+   "checks": 6,
    "metrics": {
     "turns": 26,
     "inputTokens": 44,

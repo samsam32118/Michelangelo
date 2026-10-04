@@ -9,12 +9,14 @@ import { join, resolve } from 'node:path';
 import { fail } from '../core/errors.js';
 import type { Rate } from '../core/time.js';
 import { cacheRoot, getFfmpeg } from './ffmpeg.js';
+import { probe } from './probe.js';
 import { run } from './proc.js';
 
 export const LEVELS_RATE = 22050;
 export const LEVEL_BANDS = 16;
 const FFT_N = 2048;
-const LEVELS_VERSION = 1;
+/** 2: levels start at the mix's zero (the first video frame, or the first audio sample), as the audio mix does */
+const LEVELS_VERSION = 2;
 /** dB range mapped to 0..1 (RMS: -60 dBFS..0; bands: 60 dB below the loudest band of the file) */
 const RANGE_DB = 60;
 
@@ -104,6 +106,19 @@ async function cacheKey(file: string, rate: Rate, bands: number): Promise<string
   return createHash('sha1').update(`levels${LEVELS_VERSION}\0${abs}\0${st.size}\0${st.mtimeMs}\0${rate.num}/${rate.den}\0${bands}`).digest('hex');
 }
 
+/**
+ * The decode filter that puts sample 0 where the audio mix (renderAudio) puts source time 0: audio is laid on the
+ * container clock (aresample async, first_pts=0, so a late audio start is padded with silence), then the offset of
+ * the first video frame (or, without video, of the first audio sample) from the container start is trimmed off.
+ */
+export function levelsAlignFilter(info: { hasVideo?: boolean; startTime?: number; audioStart?: number; formatStart?: number }): string {
+  const zero = Math.max(0, Math.round(((info.hasVideo ? info.startTime ?? 0 : info.audioStart ?? 0) - (info.formatStart ?? 0)) * LEVELS_RATE));
+  return `aresample=${LEVELS_RATE}:async=1:first_pts=0${zero > 0 ? `,atrim=start_sample=${zero},asetpts=PTS-STARTPTS` : ''}`;
+}
+async function levelsAlign(file: string, opts: LevelsOptions): Promise<string> {
+  try { return levelsAlignFilter(await probe(file, opts.cacheDir ? { cacheDir: join(opts.cacheDir, 'probe') } : {})); } catch { return levelsAlignFilter({}); }
+}
+
 /** Per-frame RMS and spectrum of a file's audio at `rate` frames/s (cached under the media cache, `levels/`). */
 export async function analyzeLevels(file: string, rate: Rate, opts: LevelsOptions = {}): Promise<AudioLevelsData> {
   const dir = join(opts.cacheDir ?? cacheRoot(), 'levels');
@@ -115,7 +130,7 @@ export async function analyzeLevels(file: string, rate: Rate, opts: LevelsOption
     } catch { /* not cached */ }
   }
   const ff = await getFfmpeg();
-  const r = await run(ff.ffmpeg, ['-hide_banner', '-nostdin', '-v', 'error', '-i', file, '-map', '0:a:0', '-ac', '1', '-ar', String(LEVELS_RATE), '-f', 'f32le', '-'], {
+  const r = await run(ff.ffmpeg, ['-hide_banner', '-nostdin', '-v', 'error', '-i', file, '-map', '0:a:0', '-af', await levelsAlign(file, opts), '-ac', '1', '-f', 'f32le', '-'], {
     what: `measuring the sound levels of ${file}`, allowFail: true,
   });
   if (r.code !== 0) {

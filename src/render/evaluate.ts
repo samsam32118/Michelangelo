@@ -493,7 +493,8 @@ function clipNode(cx: Ctx, c: Clip, frame: number, matteSeen: Set<string>): Laye
       const follows = cx.opts.registry.generators.get(c.gen!.type)?.audioSource?.(params as never);
       if (follows) {
         const sp = parseSpeed(c.speed ?? 1);
-        gen.audio = { assetId: follows, frame: Math.max(0, (c.in ?? 0) + (sp.num === 0 ? 0 : floorRatio([t, sp.num], [sp.den]))) };
+        // the clip's own clock (lf = t + clock: set by split/head trim) so a later piece continues the sound
+        gen.audio = { assetId: follows, frame: Math.max(0, (c.in ?? 0) + (sp.num === 0 ? 0 : floorRatio([lf, sp.num], [sp.den]))) };
       }
       source = gen;
       break;

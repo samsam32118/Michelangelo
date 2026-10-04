@@ -1,6 +1,7 @@
 // Summaries of a results dir (summary.json + summary.md) and the HISTORY.md row.
 import { appendFileSync, existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { isAlias } from './alias.mjs';
 
 const mean = (xs) => (xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : 0);
 const r = (v, d = 2) => (Number.isFinite(v) ? Math.round(v * 10 ** d) / 10 ** d : v);
@@ -64,7 +65,7 @@ export function summaryMarkdown(s, { hideChecks = false } = {}) {
     lines.push('', '## Failed checks', '');
     for (const x of s.results) {
       if (x.failReason) lines.push(`- **${x.task}**: ${x.failReason} (graded ${x.gradedPass ? 'pass' : 'fail'}, score ${x.gradedScore})`);
-      for (const c of (x.checks ?? []).filter((c) => !c.pass)) lines.push(`- **${x.task}**: ${c.name} (${c.detail})`);
+      for (const c of (Array.isArray(x.checks) ? x.checks : []).filter((c) => !c?.pass)) lines.push(`- **${x.task}**: ${c.name} (${c.detail})`);
     }
     const viol = s.results.filter((x) => Array.isArray(x.metrics?.violations) && x.metrics.violations.length);
     if (viol.length) {
@@ -82,11 +83,13 @@ export function summaryMarkdown(s, { hideChecks = false } = {}) {
 export function publicResult(x) {
   const { checks, error, dir, agentHome, failReason, cleanupError, metrics, ...rest } = x;
   const m = metrics ?? {};
-  return { ...rest, ...(cleanupError ? { cleanupError: true } : {}), checks: (checks ?? []).length, harnessError: !!error, metrics: { ...m, violations: count(m.violations), fatalViolations: count(m.fatalViolations) } };
+  return { ...rest, ...(cleanupError ? { cleanupError: true } : {}), checks: count(checks), harnessError: !!error || !!rest.harnessError, metrics: { ...m, violations: count(m.violations), fatalViolations: count(m.fatalViolations) } };
 }
 
 export function writeSummary(dir, s, opts) {
   const { agentHome, ...pub } = s;
+  // a public held-out summary names tasks by alias only: refuse to write anything else (DESIGN §16.1)
+  if (opts?.hideChecks) { const bad = s.results.filter((x) => !isAlias(x.task)).length; if (bad) throw new Error(`refusing to write a held-out summary to ${dir}: ${bad} result(s) not named by an h-<alias>.`); }
   writeFileSync(join(dir, 'summary.json'), JSON.stringify(opts?.hideChecks ? { ...pub, results: s.results.map(publicResult) } : s, null, 1));
   writeFileSync(join(dir, 'summary.md'), summaryMarkdown(s, opts));
 }

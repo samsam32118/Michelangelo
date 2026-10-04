@@ -690,4 +690,10 @@ instead ("audit" isolation, `evals/run.mjs --no-sandbox`):
 Fresh cloud sessions (separate containers) remain the stronger option for the held-out set when available.
 - **Held-out hygiene.** The first held-out run printed task ids in its public summary, which the builder read;
   the set (`evals/heldout`) is now an exposed regression set. Held-out set v2 (`evals/heldout2`) replaces it,
-  and the runner aliases held-out ids (`h-<hash>`) in every public log, directory and summary.
+  and the runner aliases held-out ids (`h-<6 hex>` of an HMAC keyed by a secret in the private dir) in every public
+  log, directory and summary. The alias key, public versus private results, the allowlist and the audit rules are
+  described in [evals/README.md](evals/README.md).
+- **Eval agent rules (M3 review).** The allowlist has no commands that run arbitrary programs (`env`, `xargs`,
+  shells); `rm`/`ln`/`cp`/`mv` operands are resolved against the agent's directory; reading the repository, `evals/`,
+  the grader stash or another sandbox is a fatal violation (the run fails). Public held-out results carry only
+  aliases; earlier committed public summaries were rewritten, but git history still holds them.

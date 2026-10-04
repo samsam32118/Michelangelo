@@ -93,8 +93,14 @@ describe('frame stage', () => {
     const layers = new Map([[30, [bgLayer]], [60, [bgLayer]], [90, [bgLayer]]]);
     const f = runCheck('black-frames', p, { frames, layers });
     expect(f).toHaveLength(1);
-    expect(f[0]).toMatchObject({ clip: 'bg', frame: 30, fix: 'mgl edit <file> clip.slip bg by=1s' });
+    // no known source length: a slip could run past the source, so an info with an ignore tag
+    expect(f[0]).toMatchObject({ severity: 'info', clip: 'bg', frame: 30, fix: 'mgl edit <file> clip.set bg \'tags=["qa-ignore:black-frames"]\'' });
     expect(f[0]!.message).toContain('1.00s–2.00s');
+    // a probed source with a handle: slip past the dark run at the head of the clip (frames 30-60 → by 90)
+    const g = runCheck('black-frames', p, { frames, layers, sourceDuration: () => 20 });
+    expect(g[0]).toMatchObject({ severity: 'warning', clip: 'bg', fix: 'mgl edit <file> clip.slip bg by=90' });
+    // a source with no handle (10 s source, 10 s clip): no slip
+    expect(runCheck('black-frames', p, { frames, layers, sourceDuration: () => 10 })[0]).toMatchObject({ severity: 'info' });
     const faded = shortsProject({ clips: [{ id: 'bg', track: 'V1', at: 0, len: 300, asset: 'bgv', fade: [45, 0] }] } as Partial<ProjectFile>);
     expect(runCheck('black-frames', faded, { frames: new Map([[30, img([0, 0, 0])]]), layers })).toEqual([]);
   });

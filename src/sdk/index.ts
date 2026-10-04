@@ -264,13 +264,13 @@ async function lookProject(p: MglProject, o: LookOptions) {
   return qa.look(p.data, opts) as Promise<LookResult>;
 }
 
-/** A probe for QA (absolute paths): media sizes and durations for exact boxes and the clip-past-source rule. */
-async function qaProbe(p: MglProject): Promise<(abs: string) => Promise<{ duration?: number; width?: number; height?: number }>> {
+/** A probe for QA (absolute paths): media sizes, durations and pixel formats for exact boxes, the clip-past-source rule and source alpha. */
+async function qaProbe(p: MglProject): Promise<(abs: string) => Promise<{ duration?: number; width?: number; height?: number; pixFmt?: string }>> {
   const { getMediaBackend } = await import('../media/index.js');
   const backend = getMediaBackend({ baseDir: p.dir });
   return async (abs) => {
     const info = await backend.probe(abs);
-    return { ...(info.duration ? { duration: info.duration } : {}), ...(info.width ? { width: info.width, height: info.height } : {}) };
+    return { ...(info.duration ? { duration: info.duration } : {}), ...(info.width ? { width: info.width, height: info.height } : {}), ...(info.pixFmt ? { pixFmt: info.pixFmt } : {}) };
   };
 }
 

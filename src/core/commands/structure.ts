@@ -256,8 +256,14 @@ defineCommand({
     const rest = tracks.filter((x) => x.id !== p.id);
     let idx = rest.length;
     if (p.to === 'bottom') idx = 0;
-    else if (p.below) { ctx.track(p.below); idx = rest.findIndex((x) => x.id === p.below); }
-    else if (p.above) { ctx.track(p.above); idx = rest.findIndex((x) => x.id === p.above) + 1; }
+    const ref = p.below ?? p.above;
+    if (ref !== undefined) {
+      if (ref === p.id) fail('E_ARG', `track.move cannot place "${p.id}" ${p.below ? 'below' : 'above'} itself.`, `name another track, e.g. mgl edit <file> track.move ${p.id} to=top`);
+      const rc = ctx.compOfTrack(ref).id, tc = ctx.compOfTrack(p.id).id;
+      if (rc !== tc) fail('E_ARG', `track "${ref}" is in comp "${rc}", but "${p.id}" is in comp "${tc}".`, 'tracks stack only within their own comp; name a track in the same comp.');
+    }
+    if (p.below) idx = rest.findIndex((x) => x.id === p.below);
+    else if (p.above) idx = rest.findIndex((x) => x.id === p.above) + 1;
     rest.splice(idx, 0, t);
     ctx.project.tracks = rest;
     ctx.summary(`moved track "${p.id}".`);

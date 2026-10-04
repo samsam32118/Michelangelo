@@ -8,6 +8,7 @@ import { parseSpeed, secondsToNearestFrame } from '../time.js';
 import { isKeyframes, ANIMATABLE_CLIP_KEYS } from '../load.js';
 import { keyLists } from '../keylists.js';
 import { interpolate } from '../../render/keyframes.js';
+import { defaultY } from '../../render/evaluate.js';
 
 // ---------------------------------------------------------------------------
 // helpers
@@ -921,7 +922,7 @@ defineCommand({
     const ease = p.ease ?? 'inOutCubic';
     const s0 = constScale(c, 'clip.punch-in');
     const x0 = constNum(c, 'x', W / 2, 'clip.punch-in');
-    const y0 = constNum(c, 'y', c.captions ? H / 2 : H / 2, 'clip.punch-in');
+    const y0 = constNum(c, 'y', defaultY(c, W, H), 'clip.punch-in');
     if (constNum(c, 'rotate', 0, 'clip.punch-in') !== 0) fail('E_ARG', `clip "${c.id}" is rotated; punch-in boxes are axis-aligned.`, `remove the rotation first: mgl edit <file> clip.set ${c.id} rotate=null`);
     const [bx, by, bw, bh] = p.box;
     const k = Math.min(W / bw, H / bh);

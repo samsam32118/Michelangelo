@@ -78,7 +78,8 @@ describe('look with fakes', () => {
             for (let i = 0; i < w * h; i++) data.set(black ? [0, 0, 0, 255] : [frame % 255, 90, 120, 255], i * 4);
             return { frame, image: { width: w, height: h, data }, layers: [
               { clipId: frame < 150 ? 'a' : 'b', kind: 'solid', box: [0, 0, 1080, 1920] },
-              { clipId: 'cap', kind: 'text', box: [240, 1720, 600, 90], text: 'Follow for more tips', fontPx: 72 },
+              // a frame with a caption on screen is never black (black-frames skips it): the black one has none
+              ...(black ? [] : [{ clipId: 'cap', kind: 'text', box: [240, 1720, 600, 90] as [number, number, number, number], text: 'Follow for more tips', fontPx: 72 }]),
             ] };
           });
         },

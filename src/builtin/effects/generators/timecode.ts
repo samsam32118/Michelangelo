@@ -44,8 +44,10 @@ export function timecodeText(p: TcParams, frame: number, fps: number): string {
   let body: string;
   if (p.format === 'smpte') body = formatTimecode(total, fps, drop);
   else {
-    // real elapsed time: start (at the nominal rate) + frame / actual rate
-    const sec = parseTimecode(p.start, fps, drop) / nominalFps(fps) + frame / fps;
+    // real elapsed time: the start label's time + frame / actual rate. A drop-frame label counts real frames, so it
+    // is converted at the actual rate (01:00:00;00 at 29.97 is 3600.0 s); a non-drop label reads at its nominal rate
+    const start = parseTimecode(p.start, fps, drop);
+    const sec = (drop ? start / fps : start / nominalFps(fps)) + frame / fps;
     if (p.format === 'clock') body = `${pad(sec / 3600)}:${pad((sec / 60) % 60)}:${pad(sec % 60)}`;
     else if (p.format === 'seconds') body = `${sec.toFixed(2)}s`;
     else body = String(total);

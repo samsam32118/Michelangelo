@@ -1,10 +1,11 @@
 #!/usr/bin/env node
-import { createHash } from 'node:crypto';
 // The eval runner (DESIGN §11.4, §16 #1). Usage:
 //   node evals/run.mjs [--set main|heldout] [--tasks a,b] [--parallel 2] [--model claude-opus-5-5] [--label m1]
 //                      [--timeout-scale 1] [--max-turns 200] [--dry-run] [--no-sandbox] [--no-build] [--pass-env A,B]
 //                      [--no-history] [--note text] [--restore] [--claude <cmd>] [--no-template] [--no-credentials]
-//                      [--keep-dirs] [--no-baseline]
+//                      [--keep-dirs] [--no-baseline] [--private-dir <dir>] [--results-dir <dir>] [--sets-dir <dir>]
+// --private-dir: held-out transcripts, results and the alias key (default $MGL_EVAL_PRIVATE_DIR or /root/mgl-eval-private);
+//   a held-out set's private results go to <private-dir>/<label>/<set>. --sets-dir: where the task sets live (tests).
 // --dry-run: no agent; setup + grade on the untouched sandboxes (must all fail), to test the harness.
 // --no-sandbox (dry runs only): temp dirs as the current user, no eval user, no repository lock.
 // --restore: put back the repository mode after a crashed run, then exit.
@@ -20,15 +21,24 @@ import { run } from './lib/util.mjs';
 import * as S from './sandbox/sandbox.mjs';
 import { readTranscript, metricsFrom, applyViolationPolicy } from './sandbox/metrics.mjs';
 import { summarise, writeSummary, appendHistory, publicResult } from './sandbox/summary.mjs';
+import { aliasOf, loadAliasKey, isHiddenSet } from './sandbox/alias.mjs';
+
+export { aliasOf };
 
 const EVALS = dirname(fileURLToPath(import.meta.url));
 const REPO = resolve(EVALS, '..');
 /** Paths whose access is a violation; the repository and evals/ (and other sandboxes) are fatal. */
 export const FORBIDDEN = [REPO, '/root', '/home/user', '/home/claude', '/tmp/claude-0/-home-user', EVALS];
+export const DEFAULT_PRIVATE_DIR = process.env.MGL_EVAL_PRIVATE_DIR || '/root/mgl-eval-private';
+/**
+ * Paths whose access fails the run: the repository, evals/, the private results dir (held-out transcripts and the
+ * grader-only stash of every task) and the results dir. Other sandboxes are fatal in metricsFrom itself.
+ */
+export const fatalPaths = ({ privateDir = DEFAULT_PRIVATE_DIR, resultsDir, setsDir } = {}) => [...new Set([REPO, EVALS, privateDir, resultsDir, setsDir].filter(Boolean).map((p) => resolve(p)))];
 
 export function parseArgs(argv) {
   const o = { set: 'main', tasks: null, parallel: 2, model: 'claude-opus-5-5', label: null, timeoutScale: 1, maxTurns: 200, dryRun: false, sandbox: true, build: true, passEnv: [], history: true, note: '', restore: false,
-    privateDir: process.env.MGL_EVAL_PRIVATE_DIR || '/root/mgl-eval-private', resultsDir: join(EVALS, 'results'), claude: 'claude', template: true, credentials: true, keepDirs: false, baseline: true };
+    privateDir: DEFAULT_PRIVATE_DIR, resultsDir: join(EVALS, 'results'), setsDir: EVALS, claude: 'claude', template: true, credentials: true, keepDirs: false, baseline: true };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i], next = () => { const v = argv[++i]; if (v === undefined) throw new Error(`${a} needs a value. fix: e.g. ${a} 2`); return v; };
     switch (a) {
@@ -46,8 +56,9 @@ export function parseArgs(argv) {
       case '--no-history': o.history = false; break;
       case '--note': o.note = next(); break;
       case '--restore': o.restore = true; break;
-      case '--private-dir': o.privateDir = next(); break;
+      case '--private-dir': o.privateDir = resolve(next()); break;
       case '--results-dir': o.resultsDir = resolve(next()); break;
+      case '--sets-dir': o.setsDir = resolve(next()); break;
       case '--claude': o.claude = next(); break;
       case '--no-template': o.template = false; break;
       case '--no-credentials': o.credentials = false; break;
@@ -143,15 +154,17 @@ function copyForBaseline(dir) {
   return b;
 }
 
-/** What an eval agent may use: file tools, and the shell for the library, Node, ffmpeg and plain file commands. */
+/**
+ * What an eval agent may use: file tools, and the shell for the library, Node, ffmpeg and plain file commands.
+ * No command that runs another command line given as its arguments (env, xargs, find -exec, sh/bash -c, nohup,
+ * timeout, sudo ...): such a wrapper would let any command through without a permission prompt. `find` is left out
+ * for that reason (the Glob tool covers it). node/python3/npx run code by design; the sandbox user and the
+ * transcript audit are the barrier there.
+ */
+export const COMMAND_RUNNERS = ['env', 'xargs', 'find', 'sh', 'bash', 'zsh', 'dash', 'nohup', 'timeout', 'sudo', 'su', 'runuser', 'exec', 'eval', 'command', 'nice', 'stdbuf', 'setsid', 'watch', 'parallel', 'script', 'time', 'busybox', 'chroot', 'unshare', 'nsenter'];
 export const AGENT_TOOLS = ['Read', 'Write', 'Edit', 'Glob', 'Grep', 'TodoWrite',
-  ...['npx', 'mgl', 'node', 'npm', 'ffmpeg', 'ffprobe', 'ls', 'cat', 'head', 'tail', 'wc', 'mkdir', 'cp', 'mv', 'grep', 'find', 'echo', 'pwd', 'sort', 'diff', 'file', 'stat', 'du', 'python3',
-    'cd', 'sed', 'awk', 'cut', 'tr', 'uniq', 'xargs', 'tee', 'touch', 'printf', 'test', 'which', 'sleep', 'basename', 'dirname', 'cmp', 'sha256sum', 'md5sum', 'jq', 'rm', 'ln', 'date', 'seq', 'env'].map((c) => `Bash(${c}:*)`)];
-
-/** Stable anonymous alias of a held-out task id: h<n> by the order of sha256(id). */
-export function aliasOf(task) {
-  return 'h-' + createHash('sha256').update(task).digest('hex').slice(0, 6);
-}
+  ...['npx', 'mgl', 'node', 'npm', 'ffmpeg', 'ffprobe', 'ls', 'cat', 'head', 'tail', 'wc', 'mkdir', 'cp', 'mv', 'grep', 'echo', 'pwd', 'sort', 'diff', 'file', 'stat', 'du', 'python3',
+    'cd', 'sed', 'awk', 'cut', 'tr', 'uniq', 'tee', 'touch', 'printf', 'test', 'which', 'sleep', 'basename', 'dirname', 'cmp', 'sha256sum', 'md5sum', 'jq', 'rm', 'ln', 'date', 'seq'].map((c) => `Bash(${c}:*)`)];
 
 const children = new Set();
 function runAgent({ dir, prompt, env, model, maxTurns, timeoutMs, transcript, stderrFile, sandbox, claude = 'claude' }) {
@@ -204,12 +217,15 @@ export async function main(argv = process.argv.slice(2)) {
   if (stale) { log(`restored ${stale.path} to mode ${stale.mode.toString(8)} (left by an interrupted run at ${stale.at})`); await S.killUserProcs(); }
   if (o.restore) { if (!stale) log('nothing to restore'); return { restored: stale }; }
 
-  const setRoot = join(EVALS, o.set === 'main' ? 'tasks' : o.set);
-  const hidden = o.set !== 'main';
+  const setRoot = join(o.setsDir, o.set === 'main' ? 'tasks' : o.set);
+  const hidden = isHiddenSet(o.set);
+  // held-out aliases are keyed by a secret in the private dir (DESIGN §16.1): a guessed id cannot be confirmed
+  const aliasKey = hidden ? loadAliasKey(o.privateDir) : null;
+  const fatal = fatalPaths(o);
   const all = readdirSync(setRoot).filter((d) => existsSync(join(setRoot, d, 'task.md'))).sort();
   const tasks = o.tasks ? o.tasks.filter((t) => { if (!all.includes(t)) throw new Error(`unknown task "${t}" in the ${o.set} set. fix: one of ${hidden ? '(see evals/heldout)' : all.join(', ')}.`); return true; }) : all;
   const outRoot = join(o.resultsDir, o.label, o.set);
-  const privRoot = hidden ? join(o.privateDir, o.label) : outRoot;
+  const privRoot = hidden ? join(o.privateDir, o.label, o.set) : outRoot;
   mkdirSync(outRoot, { recursive: true });
   mkdirSync(privRoot, { recursive: true });
   log(`${o.set}: ${tasks.length} task(s), label ${o.label}, ${o.dryRun ? 'DRY RUN' : `model ${o.model}`}, parallel ${o.parallel}${o.sandbox ? `, sandbox user ${S.USER}` : ', no sandbox'}`);
@@ -237,7 +253,7 @@ export async function main(argv = process.argv.slice(2)) {
       const tdir = join(setRoot, task);
       const meta = JSON.parse(readFileSync(join(tdir, 'meta.json'), 'utf8'));
       // held-out task ids never appear in public output (dirs, logs, summaries): stable anonymous aliases instead
-      const shown = hidden ? aliasOf(task) : task;
+      const shown = hidden ? aliasOf(task, aliasKey) : task;
       const resDir = join(outRoot, shown), privDir = join(privRoot, task);
       rmSync(resDir, { recursive: true, force: true }); mkdirSync(resDir, { recursive: true }); mkdirSync(privDir, { recursive: true });
       const dir = o.sandbox ? join(S.HOME, 'runs', o.label, o.set, task) : mkdtempSync(join(tmpdir(), `mgl-eval-${task}-`));
@@ -262,7 +278,7 @@ export async function main(argv = process.argv.slice(2)) {
           const a = await runAgent({ dir, prompt, env: agentEnv, model: o.model, maxTurns: o.maxTurns, timeoutMs: (meta.timeout_min ?? 15) * 60_000 * o.timeoutScale,
             transcript: join(privDir, 'transcript.jsonl'), stderrFile: join(privDir, 'agent.stderr.log'), sandbox: o.sandbox, claude: o.claude });
           Object.assign(r, { timedOut: a.timedOut, wallSec: a.wallSec, exitCode: a.code });
-          r.metrics = metricsFrom(readTranscript(join(privDir, 'transcript.jsonl')), { runDir: dir, home: agentEnv.HOME, forbidden: FORBIDDEN, fatal: [REPO, EVALS] });
+          r.metrics = metricsFrom(readTranscript(join(privDir, 'transcript.jsonl')), { runDir: dir, home: agentEnv.HOME, forbidden: FORBIDDEN, fatal });
           await settleProcs(dir); // nothing of the agent's may still write outputs while grading
         }
         S.unstash(dir, join(privDir, 'stash'));
@@ -283,8 +299,8 @@ export async function main(argv = process.argv.slice(2)) {
       } catch (e) { r.cleanupError = String(e?.message ?? e).slice(0, 300); }
       writeFileSync(join(privDir, 'result.json'), JSON.stringify(r, null, 1));
       if (hidden) {
-        const { checks, harnessError, ...pub } = publicResult(r);
-        writeFileSync(join(resDir, 'result.json'), JSON.stringify({ ...pub, checks, harnessError }, null, 1));
+        // the public copy names the task only by its alias (counts only, no check names, paths or reasons)
+        writeFileSync(join(resDir, 'result.json'), JSON.stringify({ ...publicResult(r), task: shown }, null, 1));
       }
       log(`${shown}: ${r.pass ? 'PASS' : 'fail'} score ${r.score}${o.dryRun ? '' : ` turns ${r.metrics.turns ?? 0} ${Math.round(r.wallSec)} s${r.timedOut ? ' TIMEOUT' : ''}`}${r.error ? ' (harness error)' : ''}${r.violationFail ? ' (failed: sandbox violation)' : ''}`);
       return r;
@@ -296,7 +312,7 @@ export async function main(argv = process.argv.slice(2)) {
     if (o.sandbox && !o.dryRun) await S.killUserProcs();
     if (o.sandbox) log('repository unlocked');
   }
-  const pubResults = hidden ? results.map((r) => ({ ...r, task: aliasOf(r.task) })) : results;
+  const pubResults = hidden ? results.map((r) => ({ ...r, task: aliasOf(r.task, aliasKey) })) : results;
   const meta = {
     label: o.label, set: o.set, model: o.dryRun ? 'none' : o.model, date: new Date().toISOString(), dryRun: o.dryRun, sandbox: o.sandbox, isolation: o.sandbox ? 'user' : 'audit', packageVersion: template?.version, timeoutScale: o.timeoutScale, agentHome: agentEnv.HOME,
   };

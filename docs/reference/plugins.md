@@ -40,7 +40,7 @@ mgl plugin test plugins/voice-chain
 
 ```text
 plugins/film-tint/
-  package.json        "type": "module", "main": "src/index.ts", "michelangelo": {"api": "^1.1.0", "kinds": ["effect"]}
+  package.json        "type": "module", "main": "src/index.ts", "michelangelo": {"api": "^1.2.0", "kinds": ["effect"]}
   src/index.ts        export default definePlugin({ name: 'film-tint', effects: [...] })
   test/film-tint.test.ts   uses michelangelo/testing
   evals/film-tint-basic/   task.md + meta.json
@@ -74,6 +74,9 @@ defineExporter({ id, describe, extensions, export({ out, project, compId, render
   (`fx.add bus=dialogue type=x`); adding it to a silent clip is an error. Annotate the list you build
   (`const chain: FilterSpec[] = [...]`) so mixed argument types type-check. Scaffold one with
   `mgl plugin new audio-effect <name>`.
+- A `FilterSpec` may carry an optional `latency` (output delay in samples at 48 kHz) for a filter that delays its
+  output; the mixer compensates it so the sound stays in sync. Known lookahead filters are compensated without it.
+  The field is an additive change (API 1.x).
 - **Audio-reactive generators** (API 1.1) return an asset id from `audioSource(params)`; `draw` then gets
   `audio: { rms, spectrum, bands, frame }` (per-frame RMS 0..1 and `bands` spectrum values per frame of that
   asset; read `rms[audio.frame]`). The built-in `waveform` and `spectrum` generators work this way.
@@ -102,7 +105,7 @@ plus `test` and `assert` (node:test).
   is refused.
 - Plugin code imports `michelangelo/plugin` and `michelangelo/testing`; they resolve to the Michelangelo that
   is running (global install, npx or a project dependency), so a plugin folder needs no `node_modules`.
-- The manifest's `api` range must include this Michelangelo's plugin API (1.1.0; `mgl --version` prints it), and the version must
+- The manifest's `api` range must include this Michelangelo's plugin API (1.2.0; `mgl --version` prints it), and the version must
   satisfy the project's range; otherwise the plugin is refused with the reason and a fix.
 - **Plugins are code that runs on your machine with no sandbox.** Read a plugin before trusting it.
 - `mgl plugin list [file]` shows what is loaded, versions and sources, and every plugin problem.

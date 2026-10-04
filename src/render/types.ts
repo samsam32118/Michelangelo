@@ -101,7 +101,16 @@ export interface ResolvedEffect { type: string; params: Record<string, unknown>;
 export type ResolvedMask = Mask & { box?: [number, number, number, number] };
 
 /** An ffmpeg filter as data; the core escapes args and checks the allowlist. */
-export interface FilterSpec { filter: string; args?: Record<string, string | number | boolean> }
+export interface FilterSpec {
+  filter: string;
+  args?: Record<string, string | number | boolean>;
+  /**
+   * Audio stage only: samples (at 48 kHz) by which this filter delays its output (lookahead). The mixer pads the
+   * input and drops that many samples from the output, so the sound stays in sync. Known ffmpeg filters (afftdn,
+   * anlmdn, superequalizer) are compensated without it; alimiter always runs with latency compensation on.
+   */
+  latency?: number;
+}
 
 /** Lays out text with the renderer's fonts; injected into evaluate so it stays pure. */
 export interface TextLayouter {
@@ -143,7 +152,10 @@ export interface AudioSegment {
   /** fade in/out lengths in samples */
   fadeIn: number;
   fadeOut: number;
-  /** audio-stage effect filters of the clip, in order (applied after trim/speed, before gain) */
+  /**
+   * audio-stage effect filters of the clip, in order: they run once over the clip's continuous sound (all of its
+   * segments laid end to end), after the clip gain (pre-insert) and before the fades
+   */
   filters?: FilterSpec[];
 }
 

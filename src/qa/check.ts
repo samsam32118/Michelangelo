@@ -10,14 +10,15 @@ import type { Problem } from '../core/load.js';
 import type { ProjectFile } from '../core/schema/index.js';
 import type { TextLayouter } from '../render/types.js';
 import { safeArea } from './safezones.js';
-import { ignores } from '../builtin/checks/index.js';
+import { ALPHA_PIX_FMT, ignores, ignoresExplicitly } from '../builtin/checks/index.js';
 
 export type { Finding };
 /** A finding from a multi-platform run: `platform` is set when it applies to that platform only. */
 export type PlatformFinding = Finding & { platform?: string };
 /** Probed facts of a media file (MediaBackend.probe is one). */
-export type ProbeFn = (absPath: string) => Promise<{ duration?: number; width?: number; height?: number }>;
-export type MediaFacts = { duration?: number; width?: number; height?: number };
+export type ProbeFn = (absPath: string) => Promise<{ duration?: number; width?: number; height?: number; pixFmt?: string }>;
+/** `alpha`: the probed pixel format has an alpha channel (undefined when the probe gave no pixel format). */
+export type MediaFacts = { duration?: number; width?: number; height?: number; alpha?: boolean };
 export type Layers = NonNullable<CheckContext['layers']>;
 export type Stage = 'project' | 'frame' | 'audio';
 
@@ -72,8 +73,10 @@ export function makeContext(project: ProjectFile, compId: string, platform: stri
 const FRAME_SCOPED = new Set(['black-frames', 'trailing-black', 'gaps', 'long-silence', 'luma-range']);
 
 /**
- * Drop findings that clips opted out of with a "qa-ignore:<rule>" tag (or "qa-ignore:all"): the finding's clip;
- * for timeline rules any clip of the comp playing at the finding's frame; for findings with no clip or frame, any clip of the comp.
+ * Drop findings that clips opted out of with a "qa-ignore:<rule>" tag (or "qa-ignore:all"): the finding's clip (any
+ * matching tag); for timeline rules another clip of the comp playing at the finding's frame, and for project-scoped
+ * findings (no clip, no frame: loudness, clipping ...) any clip of the comp, but those only with a tag that names the
+ * rule (or an alias): "qa-ignore:all" on one clip covers that clip, never the whole mix.
  */
 export function applyIgnores(project: ProjectFile, compId: string, fs: Finding[]): Finding[] {
   const all = new Map((project.clips ?? []).map((c) => [c.id, c]));
@@ -82,8 +85,8 @@ export function applyIgnores(project: ProjectFile, compId: string, fs: Finding[]
   if (!inComp.length && ![...all.values()].some((c) => c.tags?.length)) return fs;
   return fs.filter((f) => {
     if (f.clip && ignores(all.get(f.clip), f.rule)) return false;
-    if (f.frame !== undefined && FRAME_SCOPED.has(f.rule) && inComp.some((c) => f.frame! >= c.at && f.frame! < c.at + c.len && ignores(c, f.rule))) return false;
-    if (!f.clip && f.frame === undefined && inComp.some((c) => ignores(c, f.rule))) return false;
+    if (f.frame !== undefined && FRAME_SCOPED.has(f.rule) && inComp.some((c) => f.frame! >= c.at && f.frame! < c.at + c.len && ignoresExplicitly(c, f.rule))) return false;
+    if (!f.clip && f.frame === undefined && inComp.some((c) => ignoresExplicitly(c, f.rule))) return false;
     return true;
   });
 }
@@ -143,6 +146,7 @@ export async function probeAssets(project: ProjectFile, baseDir: string, probe: 
       if (typeof r.duration === 'number' && r.duration > 0 && !IMAGE.test(a.src) && a.kind !== 'image') facts.duration = r.duration;
       if (r.width) facts.width = r.width;
       if (r.height) facts.height = r.height;
+      if (r.pixFmt) facts.alpha = ALPHA_PIX_FMT.test(r.pixFmt);
       out.set(a.id, facts);
     } catch { /* unreadable media is reported by missing-media / render */ }
   }));
@@ -268,11 +272,14 @@ export async function checkProject(project: ProjectFile, opts: CheckOptions): Pr
   return withFile(sortFindings([...problemFindings(problems), ...missingMedia(project, opts.baseDir), ...mergePlatforms(runs)]), opts.file);
 }
 
-/** The context fields beyond plugin API 1.1 that the built-in checks read (see QaContext in src/builtin/checks). */
+/** The optional context fields the built-in checks read beyond the basics (sampled boxes, probed facts, alpha). */
 export function qaExtras(facts: Map<string, MediaFacts>, alpha: boolean | undefined, sampled: Layers | undefined, probed: boolean): Partial<CheckContext> {
   const extra: Record<string, unknown> = {};
   if (sampled) extra.sampled = sampled;
-  if (probed) extra.sourceDuration = (id: string) => facts.get(id)?.duration;
+  if (probed) {
+    extra.sourceDuration = (id: string) => facts.get(id)?.duration;
+    extra.sourceAlpha = (id: string) => facts.get(id)?.alpha;
+  }
   if (alpha) extra.alpha = true;
   return extra as Partial<CheckContext>;
 }

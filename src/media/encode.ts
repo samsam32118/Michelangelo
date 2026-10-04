@@ -26,9 +26,18 @@ const bt709 = (range: 'tv' | 'pc') => ['-colorspace', 'bt709', '-color_primaries
 const PRORES_PROFILE: Record<NonNullable<DeliveryOptions['prores']>, number> = { proxy: 0, lt: 1, '422': 2, hq: 3, '4444': 4, '4444xq': 5 };
 const TIMECODE = /^(\d{2}):([0-5]\d):([0-5]\d)([:;])(\d{2})$/;
 
-/** Check delivery settings against an output format; throws E_ARG with a fix. */
-export function checkDelivery(d: DeliveryOptions | undefined, format: EncodeOptions['format'], rate: Rate, alpha = false): void {
-  if (!d) return;
+/** Drop-frame timecode exists only at 29.97 (30000/1001) and 59.94 (60000/1001) fps. */
+export function isDropFrameRate(rate: Rate): boolean {
+  return rate.den > 0 && (rate.num * 1001 === rate.den * 30000 || rate.num * 1001 === rate.den * 60000);
+}
+
+/**
+ * Check delivery settings against an output format; throws E_ARG with a fix. Returns notes for settings this
+ * format does not use (they are ignored, and the caller reports it rather than dropping them silently).
+ */
+export function checkDelivery(d: DeliveryOptions | undefined, format: EncodeOptions['format'], rate: Rate, alpha = false): string[] {
+  const notes: string[] = [];
+  if (!d) return notes;
   if (d.crf !== undefined) {
     const max = format === 'webm' ? 63 : 51;
     if (format !== 'mp4' && format !== 'webm') fail('E_ARG', `crf applies to mp4 (x264) and webm (VP9), not ${format}.`, format === 'mov' ? 'choose a ProRes profile instead (prores=proxy|lt|422|hq|4444).' : 'drop crf.');
@@ -50,9 +59,20 @@ export function checkDelivery(d: DeliveryOptions | undefined, format: EncodeOpti
     const fps = Math.round(rate.num / rate.den);
     if (!m) fail('E_ARG', `timecode "${d.timecode}" is not HH:MM:SS:FF.`, 'write it like 10:00:00:00 (";" before the frames for drop-frame, e.g. 10:00:00;00).');
     if (Number(m[5]) >= fps) fail('E_ARG', `timecode "${d.timecode}" has frame ${m[5]}, but the comp runs at ${fps} fps.`, `use frames 00–${String(fps - 1).padStart(2, '0')}.`);
-    if (m[4] === ';' && !(rate.den === 1001)) fail('E_ARG', `drop-frame timecode (";") needs a 29.97 or 59.94 fps comp; this one is ${(rate.num / rate.den).toFixed(3)} fps.`, `use ":" before the frames: ${d.timecode.replace(';', ':')}.`);
+    if (m[4] === ';' && !isDropFrameRate(rate)) fail('E_ARG', `drop-frame timecode (";") needs a 29.97 or 59.94 fps comp; this one is ${(rate.num / rate.den).toFixed(3)} fps.`, `use ":" before the frames: ${d.timecode.replace(';', ':')}.`);
   }
   if (d.colorRange !== undefined && d.colorRange !== 'tv' && d.colorRange !== 'pc') fail('E_ARG', `colour range "${String(d.colorRange)}" is not valid.`, 'use tv (limited, the default) or pc (full).');
+  if (d.pcmDepth !== undefined && format !== 'mov') {
+    notes.push(format === 'gif' || format === 'png' || format === 'apng'
+      ? `pcmDepth ${d.pcmDepth} ignored: ${format} outputs carry no audio`
+      : `pcmDepth ${d.pcmDepth} ignored: ${format} audio is ${format === 'webm' ? 'Opus' : 'AAC'}, not PCM (render to .mov or .wav for ${d.pcmDepth}-bit PCM; audioBitrate sets the ${format} audio quality)`);
+  }
+  if (d.audioBitrate !== undefined && format !== 'mp4' && format !== 'webm') {
+    notes.push(format === 'mov'
+      ? `audioBitrate ${d.audioBitrate} ignored: mov audio is uncompressed PCM (pcmDepth sets 16 or 24 bit)`
+      : `audioBitrate ${d.audioBitrate} ignored: ${format} outputs carry no audio`);
+  }
+  return notes;
 }
 
 function need(ff: FfmpegInfo, enc: string, what: string) {

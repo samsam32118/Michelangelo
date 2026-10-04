@@ -74,7 +74,7 @@
  ],
  "results": [
   {
-   "task": "audiogram-square",
+   "task": "h-3975d1",
    "pass": false,
    "score": 0.75,
    "wallSec": 127.562,
@@ -86,8 +86,8 @@
    "outputs": 3,
    "dirRemoved": true,
    "deltaScore": 0.75,
-   "checks": 4,
    "harnessError": false,
+   "checks": 4,
    "metrics": {
     "turns": 25,
     "inputTokens": 42,
@@ -124,7 +124,7 @@
    }
   },
   {
-   "task": "caption-reflow-sidecar",
+   "task": "h-196311",
    "pass": false,
    "score": 0.8,
    "wallSec": 167.331,
@@ -136,8 +136,8 @@
    "outputs": 5,
    "dirRemoved": true,
    "deltaScore": 0.8,
-   "checks": 5,
    "harnessError": false,
+   "checks": 5,
    "metrics": {
     "turns": 21,
     "inputTokens": 36,
@@ -173,7 +173,7 @@
    }
   },
   {
-   "task": "delivery-pack",
+   "task": "h-a70a9d",
    "pass": true,
    "score": 1,
    "wallSec": 79.218,
@@ -185,8 +185,8 @@
    "outputs": 3,
    "dirRemoved": true,
    "deltaScore": 0.8,
-   "checks": 5,
    "harnessError": false,
+   "checks": 5,
    "metrics": {
     "turns": 11,
     "inputTokens": 22,
@@ -218,7 +218,7 @@
    }
   },
   {
-   "task": "follow-the-box",
+   "task": "h-4f4e79",
    "pass": true,
    "score": 1,
    "wallSec": 128.168,
@@ -230,8 +230,8 @@
    "outputs": 3,
    "dirRemoved": true,
    "deltaScore": 1,
-   "checks": 4,
    "harnessError": false,
+   "checks": 4,
    "metrics": {
     "turns": 27,
     "inputTokens": 40,
@@ -268,7 +268,7 @@
    }
   },
   {
-   "task": "highlight-reel-script",
+   "task": "h-39c107",
    "pass": false,
    "score": 0.333,
    "wallSec": 120.645,
@@ -280,8 +280,8 @@
    "outputs": 4,
    "dirRemoved": true,
    "deltaScore": 0.333,
-   "checks": 6,
    "harnessError": false,
+   "checks": 6,
    "metrics": {
     "turns": 17,
     "inputTokens": 30,
@@ -314,7 +314,7 @@
    }
   },
   {
-   "task": "hum-cleanup",
+   "task": "h-74418a",
    "pass": false,
    "score": 0.75,
    "wallSec": 293.535,
@@ -326,8 +326,8 @@
    "outputs": 8,
    "dirRemoved": true,
    "deltaScore": 0.75,
-   "checks": 4,
    "harnessError": false,
+   "checks": 4,
    "metrics": {
     "turns": 49,
     "inputTokens": 80,
@@ -367,7 +367,7 @@
    }
   },
   {
-   "task": "podcast-angle-switch",
+   "task": "h-7305d1",
    "pass": true,
    "score": 1,
    "wallSec": 122.126,
@@ -379,8 +379,8 @@
    "outputs": 4,
    "dirRemoved": true,
    "deltaScore": 1,
-   "checks": 6,
    "harnessError": false,
+   "checks": 6,
    "metrics": {
     "turns": 21,
     "inputTokens": 36,
@@ -415,7 +415,7 @@
    }
   },
   {
-   "task": "quote-card-plugin",
+   "task": "h-040ad4",
    "pass": true,
    "score": 1,
    "wallSec": 99.965,
@@ -427,8 +427,8 @@
    "outputs": 10,
    "dirRemoved": true,
    "deltaScore": 0.8,
-   "checks": 5,
    "harnessError": false,
+   "checks": 5,
    "metrics": {
     "turns": 24,
     "inputTokens": 40,
@@ -465,7 +465,7 @@
    }
   },
   {
-   "task": "stats-bar-chart",
+   "task": "h-eef6e4",
    "pass": false,
    "score": 0.8,
    "wallSec": 64.616,
@@ -477,8 +477,8 @@
    "outputs": 4,
    "dirRemoved": true,
    "deltaScore": 0.8,
-   "checks": 5,
    "harnessError": false,
+   "checks": 5,
    "metrics": {
     "turns": 14,
     "inputTokens": 24,
@@ -514,7 +514,7 @@
    }
   },
   {
-   "task": "youtube-chapters",
+   "task": "h-8f98bf",
    "pass": true,
    "score": 1,
    "wallSec": 132.534,
@@ -526,8 +526,8 @@
    "outputs": 4,
    "dirRemoved": true,
    "deltaScore": 1,
-   "checks": 4,
    "harnessError": false,
+   "checks": 4,
    "metrics": {
     "turns": 15,
     "inputTokens": 26,

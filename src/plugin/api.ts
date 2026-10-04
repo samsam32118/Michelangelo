@@ -16,7 +16,7 @@ export { defineCommand } from '../core/commands/registry.js';
 export type { CommandDef, TemplateDef, TemplateOutput, CommandContext } from '../core/commands/registry.js';
 export type { FilterSpec } from '../render/types.js';
 
-export const PLUGIN_API_VERSION = '1.1.0';
+export const PLUGIN_API_VERSION = '1.2.0';
 
 /** A CanvasRenderingContext2D-compatible drawing context (Skia today; a GPU renderer provides the same contract). */
 export type Canvas2D = SKRSContext2D;
@@ -124,6 +124,8 @@ export interface CheckContext {
   sampled?: Map<number, { clipId: string; kind: string; box: [number, number, number, number]; text?: string; fontPx?: number }[]>;
   /** probed source duration (s) of a media asset, when known (since 1.1) */
   sourceDuration?(assetId: string): number | undefined;
+  /** whether a media asset's probed pixel format has an alpha channel (undefined when unknown; since 1.1) */
+  sourceAlpha?(assetId: string): boolean | undefined;
   /** the render will use --alpha (since 1.1) */
   alpha?: boolean;
   safeArea(platform?: string): { x: number; y: number; w: number; h: number };

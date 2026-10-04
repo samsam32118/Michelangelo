@@ -198,6 +198,20 @@ defineCommand({
       (ctx.project.clips ??= []).push(c);
       ids.push(c.id);
     }
+    if (p.transition && !audio && ids.length > 1) {
+      // every item starts at in=0, so a centred transition has no in-handle on the incoming clip;
+      // with full=true each item also ends at its source end, so the outgoing clip has no out-handle either
+      const headIn = Math.ceil(tlen / 2), tailOut = tlen - headIn;
+      const timed = (i: number) => kinds[i] === 'video';
+      const incoming = ids.filter((_id, i) => i > 0 && timed(i));
+      const outgoing = p.full ? ids.filter((_id, i) => i < ids.length - 1 && timed(i)) : [];
+      if (incoming.length && headIn > 0) {
+        ctx.note(`each transition is centred on the cut, but the clips start at the first frame of their media (in=0), so the first frame of ${incoming.map((x) => `"${x}"`).join(', ')} is held for ${headIn} frame(s) while the transition plays (add a handle with clip.slip <id> by=${headIn}, or transition.set <id> type=${p.transition.type} align=start).`);
+      }
+      if (outgoing.length && tailOut > 0) {
+        ctx.note(`with full=true each clip runs to the end of its media, so the last frame of ${outgoing.map((x) => `"${x}"`).join(', ')} is held for ${tailOut} frame(s) under the transition (the outgoing clip has no media after its source end; shorten it with clip.trim <id> len=<frames> ripple=true to leave a handle; align=start would move the whole transition after the cut and hold all ${tlen} frames there instead).`);
+      }
+    }
     ctx.out.ids = ids;
     ctx.out.id = ids[0];
     ctx.summary(`sequenced ${ids.length} clip(s) on ${track.id} from ${first} to ${last}${p.on ? ` on ${p.on}` : ''}: ${ids.slice(0, 6).join(', ')}${ids.length > 6 ? ', ...' : ''}.`);

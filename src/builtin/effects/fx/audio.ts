@@ -106,7 +106,7 @@ export const limiter = defineEffect({
     attack: ms(5, 80, 'attack in ms'),
     release: ms(50, 8000, 'release in ms'),
   }),
-  audio: (p) => [{ filter: 'alimiter', args: { limit: lin(p.ceiling), attack: p.attack, release: p.release, level: false } }],
+  audio: (p) => [{ filter: 'alimiter', args: { limit: lin(p.ceiling), attack: p.attack, release: p.release, level: false, latency: true } }],
 });
 
 export const gate = defineEffect({

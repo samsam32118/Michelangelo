@@ -8,13 +8,17 @@
 //   --baseline    (main set) grade untouched sandboxes for tasks whose result has no baselineScore, store it
 //   --collect     copy the outputs of run dirs that still exist into <task>/outputs, then delete those run dirs
 //                 and the grader-only <task>/stash copies
+//   --private-dir <dir>  the private results root (default $MGL_EVAL_PRIVATE_DIR or /root/mgl-eval-private)
+// A held-out results dir (heldout, heldout2, ...) outside the private dir is public: tasks are named by their
+// directory (the alias), never by the task field of a result.json, and the summary holds counts only.
 import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { readTranscript, metricsFrom } from './sandbox/metrics.mjs';
-import { summarise, writeSummary, appendHistory } from './sandbox/summary.mjs';
-import { FORBIDDEN, gradeIn, keepOutputs } from './run.mjs';
+import { summarise, writeSummary, appendHistory, publicResult } from './sandbox/summary.mjs';
+import { FORBIDDEN, DEFAULT_PRIVATE_DIR, fatalPaths, gradeIn, keepOutputs } from './run.mjs';
+import { isAlias, isHiddenSet } from './sandbox/alias.mjs';
 
 const EVALS = dirname(fileURLToPath(import.meta.url));
 const REPO = resolve(EVALS, '..');
@@ -40,18 +44,31 @@ export async function baselineScore(task, { env = {} } = {}) {
   } finally { rmSync(dir, { recursive: true, force: true }); }
 }
 
-export async function report(dir, { history = false, transcripts, baseline = false, collect = false, parallel = 3 } = {}) {
+export async function report(dir, { history = false, transcripts, baseline = false, collect = false, parallel = 3, privateDir = DEFAULT_PRIVATE_DIR } = {}) {
   dir = resolve(dir);
+  privateDir = resolve(privateDir);
   if (!existsSync(dir)) throw new Error(`${dir} does not exist. fix: pass evals/results/<label>/<set>.`);
   const prev = existsSync(join(dir, 'summary.json')) ? JSON.parse(readFileSync(join(dir, 'summary.json'), 'utf8')) : {};
   const set = prev.set ?? dir.split('/').pop();
-  const tasks = readdirSync(dir).filter((t) => existsSync(join(dir, t, 'result.json'))).sort();
-  if (!tasks.length) throw new Error(`no <task>/result.json under ${dir}.`);
+  // a held-out set is hidden unless this is its private copy (which keeps the real ids, checks and transcripts)
+  const isPrivate = dir === privateDir || dir.startsWith(privateDir + '/');
+  const hidden = isHiddenSet(set) && !isPrivate;
+  const tasks = readdirSync(dir).filter((t) => existsSync(join(dir, t, 'result.json')) && (!hidden || isAlias(t))).sort();
+  if (!tasks.length) throw new Error(`no <task>/result.json under ${dir}${hidden ? ' (held-out: only h-<alias> dirs are read)' : ''}.`);
+  const fatal = fatalPaths({ privateDir, resultsDir: resolve(EVALS, 'results') });
   const tr = (t) => join(transcripts ?? dir, t, 'transcript.jsonl');
   const home = prev.agentHome ?? (prev.sandbox ? undefined : inferHome(tasks.map(tr)));
   const results = tasks.map((t) => {
     const r = JSON.parse(readFileSync(join(dir, t, 'result.json'), 'utf8'));
-    if (existsSync(tr(t))) r.metrics = metricsFrom(readTranscript(tr(t)), { runDir: r.dir ?? '', home: r.agentHome ?? home ?? '/home/mgleval', forbidden: FORBIDDEN, fatal: [REPO, EVALS] });
+    // public held-out copy: the directory name is the alias; an old result.json that still holds the real id (or
+    // check names, paths, reasons) is scrubbed to its public form in place
+    if (hidden) {
+      const pub = { ...publicResult(r), task: t };
+      if (JSON.stringify(pub) !== JSON.stringify(r)) writeFileSync(join(dir, t, 'result.json'), JSON.stringify(pub, null, 1));
+      for (const k of Object.keys(r)) delete r[k];
+      Object.assign(r, pub);
+    }
+    if (existsSync(tr(t))) r.metrics = metricsFrom(readTranscript(tr(t)), { runDir: r.dir ?? '', home: r.agentHome ?? home ?? '/home/mgleval', forbidden: FORBIDDEN, fatal });
     for (const k of ['violations', 'fatalViolations']) if (typeof r.metrics?.[k] === 'number') r.metrics[k] = Array(r.metrics[k]).fill('(hidden)');
     return r;
   });
@@ -82,12 +99,13 @@ export async function report(dir, { history = false, transcripts, baseline = fal
       const file = join(dir, r.task, 'result.json');
       const orig = JSON.parse(readFileSync(file, 'utf8'));
       for (const k of ['baselineScore', 'outputs', 'dirRemoved']) if (r[k] !== undefined) orig[k] = r[k];
+      if (hidden) orig.task = r.task;
       writeFileSync(file, JSON.stringify(orig, null, 1));
     }
   }
   const s = summarise(results, { label: prev.label ?? dir.split('/').at(-2), set, model: prev.model ?? '?', date: prev.date ?? new Date().toISOString(), dryRun: !!prev.dryRun, sandbox: prev.sandbox,
     isolation: prev.isolation ?? (prev.sandbox ? 'user' : 'audit'), packageVersion: prev.packageVersion, timeoutScale: prev.timeoutScale, ...(home ? { agentHome: home } : {}), resummarisedAt: new Date().toISOString() });
-  writeSummary(dir, s, { hideChecks: set === 'heldout' });
+  writeSummary(dir, s, { hideChecks: hidden });
   if (history) appendHistory(join(EVALS, 'HISTORY.md'), s, 're-summarised');
   return s;
 }
@@ -95,8 +113,9 @@ export async function report(dir, { history = false, transcripts, baseline = fal
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   const args = process.argv.slice(2);
   const ti = args.indexOf('--transcripts');
-  const dir = args.find((a, i) => !a.startsWith('--') && !(ti >= 0 && i === ti + 1));
-  report(dir ?? '', { history: args.includes('--history'), transcripts: ti >= 0 ? args[ti + 1] : undefined, baseline: args.includes('--baseline'), collect: args.includes('--collect') }).then((s) => {
+  const pi = args.indexOf('--private-dir');
+  const dir = args.find((a, i) => !a.startsWith('--') && !(ti >= 0 && i === ti + 1) && !(pi >= 0 && i === pi + 1));
+  report(dir ?? '', { ...(pi >= 0 ? { privateDir: args[pi + 1] } : {}), history: args.includes('--history'), transcripts: ti >= 0 ? args[ti + 1] : undefined, baseline: args.includes('--baseline'), collect: args.includes('--collect') }).then((s) => {
     console.log(`${s.passed}/${s.tasks} passed (${Math.round(s.successRate * 1000) / 10} %), mean score ${s.meanScore}${s.meanBaselineScore !== undefined ? `, baseline ${s.meanBaselineScore}, delta ${s.meanDeltaScore}` : ''}, permission denials ${s.permissionDenials}, violations ${s.violations} (${s.fatalViolations} fatal); wrote ${join(resolve(dir), 'summary.md')}`);
   }, (e) => { console.error(`error: ${e.message}`); process.exit(1); });
 }

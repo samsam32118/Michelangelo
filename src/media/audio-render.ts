@@ -1,8 +1,10 @@
 /**
  * renderAudio: an AudioPlan → 48 kHz stereo WAV, through one ffmpeg -filter_complex_script.
- * Segments are trimmed by sample, tempo-adjusted, enveloped and faded, then laid end to end in
- * non-overlapping lanes (concat with exact silent gaps, so cost is linear in the timeline length),
- * mixed per bus, ducked with sidechaincompress, summed into master and loudness-normalised (two passes).
+ * Segments are trimmed by sample, tempo-adjusted and enveloped (clip gain); a clip with fx has its segments joined
+ * and run through its fx chain once (latency-compensated); then fades, and everything is laid end to end in
+ * non-overlapping lanes (concat with exact silent gaps, so cost is linear in the timeline length).
+ * Per bus: mix → bus fx → duck (sidechaincompress) → bus gain/mute; summed into master and loudness-normalised
+ * (two passes). Order in a clip: gain → fx → fades.
  */
 import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -74,9 +76,36 @@ export function volumeFilter(gain: [number, number][]): string | null {
   return `asetnsamples=n=256,volume=${escapeValue(`pow(10,(${expr})/20)`)}:eval=frame`;
 }
 
-/** Audio-stage effect filters as filtergraph text (allowlisted and escaped), or '' for none. */
+/**
+ * Output delay in samples (48 kHz) of an audio filter: its own `latency`, else the measured lookahead of known
+ * ffmpeg filters (alimiter is compensated by its own latency option, see fxFilters).
+ */
+export function filterLatency(f: FilterSpec): number {
+  if (typeof f.latency === 'number' && f.latency > 0) return Math.round(f.latency);
+  const a = f.args ?? {};
+  const sec = (v: unknown, d: number) => (typeof v === 'number' && Number.isFinite(v) ? v : d);
+  switch (f.filter) {
+    case 'afftdn': return 1200; // 2400-sample window at 48 kHz, half of it ahead
+    case 'anlmdn': return Math.round(sec(a.r ?? a.research, 0.006) * SR) + Math.round(sec(a.p ?? a.patch, 0.002) * SR);
+    case 'superequalizer': return 4095;
+    default: return 0;
+  }
+}
+/** alimiter delays by its attack unless `latency` is on: turn it on (an explicit latency=false is respected). */
+function fxFilters(filters: FilterSpec[]): FilterSpec[] {
+  return filters.map((f) => (f.filter === 'alimiter' && f.args?.latency === undefined ? { ...f, args: { ...f.args, latency: true } } : f));
+}
+/**
+ * Audio-stage effect filters as filtergraph text (allowlisted and escaped), latency-compensated, or '' for none:
+ * the input is padded by the chain's total lookahead L and the first L output samples are dropped, so a transient
+ * keeps its sample position.
+ */
 function audioStage(filters: FilterSpec[] | undefined, baseDir?: string): string {
-  return filters?.length ? filtersToString(filters, { stage: 'audio', ...(baseDir ? { baseDir } : {}) }) : '';
+  if (!filters?.length) return '';
+  const fs = fxFilters(filters);
+  const body = filtersToString(fs, { stage: 'audio', ...(baseDir ? { baseDir } : {}) });
+  const L = fs.reduce((n, f) => n + filterLatency(f), 0);
+  return L > 0 ? `apad=pad_len=${L},${body},atrim=start_sample=${L},asetpts=PTS-STARTPTS` : body;
 }
 /** back to the mix format after effects (a pan to mono or a resample must not change the bus layout) */
 const AFTER_FX = `aresample=${SR},aformat=sample_fmts=fltp:sample_rates=${SR}:channel_layouts=stereo`;
@@ -103,8 +132,12 @@ export async function buildMixGraph(plan: AudioPlan, opts: GraphOptions = {}): P
   const used = [...srcs.values()].filter((s) => s.segs.length);
   const lines: string[] = [];
   const inputs: string[] = [];
-  const segLabel = new Map<AudioSegment, string>();
-  let n = 0;
+  /** what goes into the bus lanes: a segment, or a clip's segments joined and run through its fx once */
+  interface Item { start: number; end: number; bus: string; label: string }
+  const items: Item[] = [];
+  /** segments with clip fx, grouped per clip (pieces of one clip never overlap; instances that do get their own group) */
+  const groups: { clipId: string; bus: string; filters: FilterSpec[]; end: number; parts: { seg: AudioSegment; label: string }[] }[] = [];
+  let n = 0, pieceN = 0;
   used.forEach((src, i) => {
     inputs.push(src.path);
     const fmt = src.info.channels === 1 ? 'pan=stereo|c0=c0|c1=c0' : 'aformat=channel_layouts=stereo';
@@ -118,26 +151,63 @@ export async function buildMixGraph(plan: AudioPlan, opts: GraphOptions = {}): P
       const s0 = Math.max(0, zero + Math.floor((s.sourceFrame * SR * s.rate.den) / s.rate.num + 1e-6));
       const need = Math.ceil(N * sp) + (Math.abs(sp - 1) > 1e-9 ? 8192 : 0);
       const chain = [`atrim=start_sample=${s0}:end_sample=${s0 + need}`, 'asetpts=PTS-STARTPTS', ...atempoChain(sp), `apad=whole_len=${N}`, `atrim=end_sample=${N}`];
-      // audio-stage effects (escaped, allowlisted), then back to exactly N stereo float samples
-      const fx = audioStage(s.filters, opts.baseDir);
-      if (fx) chain.push(fx, AFTER_FX, `apad=whole_len=${N}`, `atrim=end_sample=${N}`);
+      // clip gain first: the clip fx see the level the editor set (a limiter then holds its ceiling)
       const vol = volumeFilter(s.gain);
       if (vol) chain.push(vol);
+      if (s.filters?.length) {
+        const lab = `p${pieceN++}`;
+        lines.push(`[${outs[k]}]${chain.join(',')}[${lab}]`);
+        let g = groups.find((x) => x.clipId === s.clipId && x.bus === s.bus && x.end <= s.start);
+        if (!g) { g = { clipId: s.clipId, bus: s.bus, filters: s.filters, end: 0, parts: [] }; groups.push(g); }
+        g.parts.push({ seg: s, label: lab });
+        g.end = s.end;
+        return;
+      }
       if (s.fadeIn > 0) chain.push(`afade=t=in:start_sample=0:nb_samples=${Math.min(s.fadeIn, N)}`);
       if (s.fadeOut > 0) chain.push(`afade=t=out:start_sample=${Math.max(0, N - s.fadeOut)}:nb_samples=${Math.min(s.fadeOut, N)}`);
-      const lab = `g${segLabel.size}`;
+      const lab = `g${items.length}`;
       lines.push(`[${outs[k]}]${chain.join(',')}[${lab}]`);
-      segLabel.set(s, lab);
+      items.push({ start: s.start, end: s.end, bus: s.bus, label: lab });
     });
   });
 
   let z = 0;
   const silence = (len: number) => { const l = `z${z++}`; lines.push(`anullsrc=r=${SR}:cl=stereo:nb_samples=1024,aformat=sample_fmts=fltp,atrim=end_sample=${len}[${l}]`); return l; };
 
+  // clip fx: the clip's pieces (loop wraps, remap pieces, nested-comp repeats) laid end to end with exact silent
+  // gaps, then one fx chain over the continuous sound (no restart or dropout at a boundary), then the fades
+  groups.forEach((g, gi) => {
+    g.parts.sort((a, b) => a.seg.start - b.seg.start);
+    const G0 = g.parts[0]!.seg.start, G1 = g.end, N = G1 - G0;
+    const parts: string[] = [];
+    let at = G0;
+    for (const p of g.parts) {
+      if (p.seg.start > at) parts.push(silence(p.seg.start - at));
+      parts.push(p.label);
+      at = p.seg.end;
+    }
+    const chain = [audioStage(g.filters, opts.baseDir), AFTER_FX, `apad=whole_len=${N}`, `atrim=end_sample=${N}`];
+    // fades on the joined sound: in from the first piece that fades in, out to the end of the last that fades out
+    const fin = g.parts.filter((p) => p.seg.fadeIn > 0), fout = g.parts.filter((p) => p.seg.fadeOut > 0);
+    if (fin.length) {
+      const endIn = Math.max(...fin.map((p) => p.seg.start + p.seg.fadeIn)) - G0;
+      const s0 = fin[0]!.seg.start - G0;
+      chain.push(`afade=t=in:start_sample=${s0}:nb_samples=${Math.max(1, endIn - s0)}`);
+    }
+    if (fout.length) {
+      const last = fout[fout.length - 1]!.seg;
+      const startOut = Math.min(...fout.map((p) => p.seg.end - p.seg.fadeOut)) - G0;
+      chain.push(`afade=t=out:start_sample=${startOut}:nb_samples=${Math.max(1, last.end - G0 - startOut)}`);
+    }
+    const lab = `c${gi}`;
+    lines.push(parts.length === 1 ? `[${parts[0]}]${chain.join(',')}[${lab}]` : `${parts.map((x) => `[${x}]`).join('')}concat=n=${parts.length}:v=0:a=1,${chain.join(',')}[${lab}]`);
+    items.push({ start: G0, end: G1, bus: g.bus, label: lab });
+  });
+
   // lanes per bus: greedy interval packing, each lane is one concat of gaps and segments
   const busInputs = new Map<string, string[]>();
-  const byBus = new Map<string, AudioSegment[]>();
-  for (const s of segLabel.keys()) { if (!byBus.has(s.bus)) byBus.set(s.bus, []); byBus.get(s.bus)!.push(s); }
+  const byBus = new Map<string, Item[]>();
+  for (const s of items) { if (!byBus.has(s.bus)) byBus.set(s.bus, []); byBus.get(s.bus)!.push(s); }
   let laneN = 0;
   for (const [bus, segs] of byBus) {
     segs.sort((a, b) => a.start - b.start);
@@ -146,7 +216,7 @@ export async function buildMixGraph(plan: AudioPlan, opts: GraphOptions = {}): P
       let lane = lanes.find((l) => l.end <= s.start);
       if (!lane) { lane = { end: 0, parts: [] }; lanes.push(lane); }
       if (s.start > lane.end) lane.parts.push(silence(s.start - lane.end));
-      lane.parts.push(segLabel.get(s)!);
+      lane.parts.push(s.label);
       lane.end = s.end;
     }
     for (const lane of lanes) {
@@ -205,18 +275,20 @@ export async function buildMixGraph(plan: AudioPlan, opts: GraphOptions = {}): P
     lines.push(ins.length === 1
       ? `[${ins[0]}]apad=whole_len=${L},atrim=end_sample=${L}[${cur}]`
       : `${ins.map((x) => `[${x}]`).join('')}amix=inputs=${ins.length}:normalize=0:duration=longest:dropout_transition=0,apad=whole_len=${L},atrim=end_sample=${L}[${cur}]`);
+    // the bus's own fx run before the duck, so ducking lowers the bus by the requested dB (a compressor after the
+    // duck would shrink it); the duck, then the bus gain, come last
+    const bfx = audioStage(b.filters, opts.baseDir);
+    if (bfx) {
+      const nxt = `bus_${id}_fx`;
+      lines.push(`[${cur}]${bfx},${AFTER_FX},apad=whole_len=${L},atrim=end_sample=${L}[${nxt}]`);
+      cur = nxt;
+    }
     if (b.duck && outLabel.has(b.duck.by)) {
       const sc = takeOut(b.duck.by);
       const p = duckParams(b.duck.db, b.duck.attack, b.duck.release);
       const nxt = `bus_${id}_duck`;
       lines.push(`[${sc}]${SIDECHAIN_DRIVE}[${sc}_d]`);
       lines.push(`[${cur}][${sc}_d]sidechaincompress=threshold=${p.threshold.toFixed(6)}:ratio=${p.ratio.toFixed(4)}:attack=${p.attack}:release=${p.release}:makeup=1:knee=1:detection=rms:link=maximum[${nxt}]`);
-      cur = nxt;
-    }
-    const bfx = audioStage(b.filters, opts.baseDir);
-    if (bfx) {
-      const nxt = `bus_${id}_fx`;
-      lines.push(`[${cur}]${bfx},${AFTER_FX},apad=whole_len=${L},atrim=end_sample=${L}[${nxt}]`);
       cur = nxt;
     }
     const post: string[] = [];

@@ -16,8 +16,18 @@ type Layer = NonNullable<CheckContext['layers']> extends Map<number, (infer L)[]
 type Layers = Map<number, Layer[]>;
 type Rect = { x: number; y: number; w: number; h: number };
 
-/** The check context (plugin API 1.1 carries sampled, sourceDuration and alpha, all optional; every check works without them). */
+/**
+ * The check context (plugin API 1.1 carries sampled, sourceDuration and alpha, all optional; every check works without them).
+ * `sourceAlpha` (set by the QA runner when media were probed) says whether a media asset carries an alpha channel.
+ */
 export type QaContext = CheckContext;
+/** What opacity decisions need: the project, and probed alpha when known. */
+type Q = Pick<QaContext, 'project' | 'sourceAlpha'>;
+
+/** Pixel formats with an alpha channel (ProRes 4444 yuva444p*, VP9 alpha yuva420p, PNG/QuickTime rgba/argb ...). */
+export const ALPHA_PIX_FMT = /^(yuva|rgba|argb|bgra|abgr|gbrap|ya8|ya16|rgba64|bgra64|pal8)/i;
+/** Containers that cannot (in practice) carry an alpha channel: a video in one of these is opaque without probing. */
+const NO_ALPHA_VIDEO = /\.(mp4|m4v|mpe?g|ts|mts|m2ts|avi|wmv|flv|3gp|y4m)(\?.*)?$/i;
 
 // ------------------------------------------------------------------------------------------- helpers
 
@@ -84,6 +94,20 @@ export function ignores(clip: { tags?: string[] | undefined } | undefined, rule:
     if (!t.startsWith('qa-ignore:')) continue;
     const w = t.slice(10).trim();
     if (w === rule || w === 'all' || w === '*' || IGNORE_ALIASES[w]?.includes(rule)) return true;
+  }
+  return false;
+}
+
+/**
+ * Does a clip carry a tag that names this rule itself (the rule id or an alias, never "all" or "*")? Project-scoped
+ * findings (the mix's loudness or true peak, a comp-wide note) are only silenced this way: a qa-ignore:all on one
+ * credits clip must not hide clipping in the whole mix.
+ */
+export function ignoresExplicitly(clip: { tags?: string[] | undefined } | undefined, rule: string): boolean {
+  for (const t of clip?.tags ?? []) {
+    if (!t.startsWith('qa-ignore:')) continue;
+    const w = t.slice(10).trim();
+    if (w === rule || IGNORE_ALIASES[w]?.includes(rule)) return true;
   }
   return false;
 }
@@ -158,6 +182,19 @@ function opaqueColour(s: string | undefined): boolean {
   return true;
 }
 
+/**
+ * Is a media asset known to have no alpha channel? Probed pixel format first; else only containers that cannot carry
+ * alpha (.mp4 ...) and generators count. .mov (ProRes 4444), .webm (VP9 alpha), .mkv, .png ... are unknown = not opaque.
+ */
+function mediaOpaque(q: Q, assetId: string | undefined): boolean {
+  const a = (q.project.assets ?? []).find((y) => y.id === assetId);
+  if (!a) return false;
+  const known = q.sourceAlpha?.(a.id);
+  if (known !== undefined) return !known;
+  if (/^lavfi:/i.test(a.src)) return !/alpha|yuva|rgba/i.test(a.src);
+  return NO_ALPHA_VIDEO.test(a.src);
+}
+
 function fullOpacity(v: unknown): boolean {
   if (v === undefined) return true;
   if (typeof v === 'number') return v >= 0.999;
@@ -173,20 +210,36 @@ function seeThrough(x: Clip): boolean {
 }
 
 /** Does a nested comp draw an opaque picture over its whole frame (opaque bg, or a clip that fills it at rest)? */
-function compOpaque(p: Project, compId: string | undefined, depth = 0): boolean {
-  const child = p.comps.find((x) => x.id === compId);
+function compOpaque(q: Q, compId: string | undefined, depth = 0): boolean {
+  const p = q.project, child = p.comps.find((x) => x.id === compId);
   if (!child || depth > 8) return false;
   if (opaqueColour(child.bg)) return true;
   const tracks = new Set((p.tracks ?? []).filter((t) => t.comp === child.id && !t.audio && !t.hidden).map((t) => t.id));
-  return (p.clips ?? []).some((x) => tracks.has(x.track) && !x.hidden && !seeThrough(x)
-    && (x.x === undefined || x.x === child.size[0] / 2) && (x.y === undefined || x.y === child.size[1] / 2)
+  return (p.clips ?? []).some((x) => tracks.has(x.track) && x.at === 0 && (typeof child.length !== 'number' || x.len >= child.length)
+    && fillsFrame(q, x, child.size[0], child.size[1], depth));
+}
+
+/** Does clip x (at rest, from the data alone) draw an opaque picture over the whole W×H frame? Conservative. */
+function fillsFrame(q: Q, x: Clip, W: number, H: number, depth = 0): boolean {
+  const p = q.project;
+  return !x.hidden && !seeThrough(x)
+    && (x.x === undefined || x.x === W / 2) && (x.y === undefined || x.y === H / 2)
     && x.rotate === undefined && (x.scale === undefined || (typeof x.scale === 'number' && x.scale >= 1))
-    && x.at === 0 && (typeof child.length !== 'number' || x.len >= child.length)
-    && (x.color !== undefined ? opaqueColour(x.color) : x.asset !== undefined ? assetKind(p, x.asset) === 'video' && (x.fit ?? 'cover') !== 'contain' && x.fit !== 'none' : x.comp !== undefined && compOpaque(p, x.comp, depth + 1)));
+    && (x.color !== undefined ? opaqueColour(x.color)
+      : x.asset !== undefined ? assetKind(p, x.asset) === 'video' && mediaOpaque(q, x.asset) && (x.fit ?? 'cover') !== 'contain' && x.fit !== 'none'
+        : x.comp !== undefined && compOpaque(q, x.comp, depth + 1));
+}
+
+/** Do the spans of `cover` clips (outside their fades) cover [s, e) completely? */
+function spansCover(cover: Clip[], s: number, e: number): boolean {
+  const spans = cover.map((k) => [k.at + (k.fade?.[0] ?? 0), k.at + k.len - (k.fade?.[1] ?? 0)] as const).sort((a, b) => a[0] - b[0]);
+  let reach = s;
+  for (const [a, b] of spans) if (a <= reach) reach = Math.max(reach, b);
+  return reach >= e;
 }
 
 /** Is this layer opaque over its whole box at frame f (so it hides what is under it)? Conservative: unknown = no. */
-function opaqueLayer(p: Project, clips: Map<string, Clip>, l: Layer, f: number): boolean {
+function opaqueLayer(q: Q, clips: Map<string, Clip>, l: Layer, f: number): boolean {
   const x = clips.get(l.clipId);
   if (!x || seeThrough(x) || inFade(x, f)) return false;
   if (typeof x.rotate === 'number' ? x.rotate % 360 !== 0 : x.rotate !== undefined) return false;
@@ -200,15 +253,17 @@ function opaqueLayer(p: Project, clips: Map<string, Clip>, l: Layer, f: number):
       return s.fill === undefined || opaqueColour(s.fill);
     }
     case 'video': {
-      const a = (p.assets ?? []).find((y) => y.id === x.asset);
-      if (!a || /\.webm(\?.*)?$/i.test(a.src)) return false;
+      // an alpha video (ProRes 4444, VP9 alpha, PNG sequence ...) shows what is under it: only known-opaque media hide
+      if (!mediaOpaque(q, x.asset)) return false;
       return (x.fit ?? 'cover') === 'cover' || x.fit === 'fill';
     }
     case 'image': {
-      const a = (p.assets ?? []).find((y) => y.id === x.asset);
-      return !!a && /\.(jpe?g|bmp)(\?.*)?$/i.test(a.src) && (x.fit === 'cover' || x.fit === 'fill');
+      const a = (q.project.assets ?? []).find((y) => y.id === x.asset);
+      if (!a || !(x.fit === 'cover' || x.fit === 'fill')) return false;
+      const known = q.sourceAlpha?.(a.id);
+      return known !== undefined ? !known : /\.(jpe?g|bmp)(\?.*)?$/i.test(a.src);
     }
-    case 'comp': return compOpaque(p, x.comp);
+    case 'comp': return compOpaque(q, x.comp);
     default: return false;
   }
 }
@@ -226,8 +281,8 @@ function coveredBy(b: Box, covers: Box[], c: Comp): boolean {
 }
 
 /** Opaque layers stacked above index i that cover layers[i] completely, or [] when it shows. */
-function coversOf(p: Project, clips: Map<string, Clip>, layers: Layer[], i: number, f: number, c: Comp): Layer[] {
-  const above = layers.slice(i + 1).filter((o) => o.clipId !== layers[i]!.clipId && opaqueLayer(p, clips, o, f) && area(intersect(o.box, layers[i]!.box)) > 0);
+function coversOf(q: Q, clips: Map<string, Clip>, layers: Layer[], i: number, f: number, c: Comp): Layer[] {
+  const above = layers.slice(i + 1).filter((o) => o.clipId !== layers[i]!.clipId && opaqueLayer(q, clips, o, f) && area(intersect(o.box, layers[i]!.box)) > 0);
   return coveredBy(layers[i]!.box, above.map((o) => o.box), c) ? above : [];
 }
 
@@ -271,25 +326,68 @@ function moveUpFix(ctx: CheckContext, c: Comp, id: string, over: string[]): stri
 
 // ------------------------------------------------------------------------------------------- project stage
 
+/** Visual clips that draw a picture (not adjustment layers, not the sound of an audio asset). */
+const pictureClips = (ctx: CheckContext, c: Comp) => visualClips(c).filter((x) => !x.adjustment && !(x.asset !== undefined && assetKind(ctx.project, x.asset) === 'audio'));
+
 const gaps = defineCheck({
-  id: 'gaps', stage: 'project', describe: 'black gaps on the main (bottom) visual track',
-  run(ctx) {
+  id: 'gaps', stage: 'project', describe: 'black gaps on the main (bottom) visual track not covered by other tracks, and a main track that ends before the clips over it',
+  run(ctx: QaContext) {
     const c = compOf(ctx), t = mainTrack(c);
     if (!t) return [];
     const clips = onTrack(c, t.id), out: Finding[] = [];
+    const others = pictureClips(ctx, c).filter((x) => x.track !== t.id);
+    const over = (s: number, e: number) => others.filter((y) => y.at < e && y.at + y.len > s);
+    const fills = (xs: Clip[]) => xs.filter((y) => fillsFrame(ctx, y, c.W, c.H));
     let end = 0;
     for (const x of clips) {
-      if (x.at > end) out.push({ rule: 'gaps', severity: 'warning', frame: end, clip: x.id,
-        message: `gap on main track ${t.id} ${sec(end, c.fps)}–${sec(x.at, c.fps)} shows black before "${x.id}"`,
-        fix: `mgl edit <file> clip.move ${x.id} at=${end}` });
+      if (x.at > end) {
+        const o = over(end, x.at), f = fills(o);
+        // a slate, title card or full-frame plate on another track plays over the whole gap: nothing is black
+        if (!(f.length && spansCover(f, end, x.at))) {
+          const span = `${sec(end, c.fps)}–${sec(x.at, c.fps)}`;
+          if (f.length) {
+            // moving the clip up would put its first frames under an opaque layer: no fix that hides programme
+            out.push({ rule: 'gaps', severity: 'info', frame: end, clip: x.id,
+              message: `gap on main track ${t.id} ${span} before "${x.id}" is only partly covered by ${f.slice(0, 2).map((y) => `"${y.id}"`).join(', ')}; the rest shows the comp bg` });
+          } else {
+            const names = o.length ? ` (only ${o.slice(0, 2).map((y) => `"${y.id}"`).join(', ')}${o.length > 2 ? ` +${o.length - 2}` : ''} over it)` : '';
+            out.push({ rule: 'gaps', severity: 'warning', frame: end, clip: x.id,
+              message: `gap on main track ${t.id} ${span} shows black before "${x.id}"${names}`,
+              fix: `mgl edit <file> clip.move ${x.id} at=${end}` });
+          }
+        }
+      }
       end = Math.max(end, x.at + x.len);
     }
-    if (clips.length && c.length !== undefined && end < c.length) {
-      const last = clips.at(-1)!;
-      out.push({ rule: 'gaps', severity: 'warning', frame: end, clip: last.id,
+    if (!clips.length) return out;
+    const last = clips.reduce((a, b) => (b.at + b.len > a.at + a.len ? b : a));
+    if (c.length !== undefined) {
+      if (end < c.length) out.push({ rule: 'gaps', severity: 'warning', frame: end, clip: last.id,
         message: `main track ${t.id} ends at ${sec(end, c.fps)} ("${last.id}") but comp ${c.id} runs to ${sec(c.length, c.fps)}: black tail`,
         fix: `mgl edit <file> comp.set ${c.id} length=auto` });
+      return out;
     }
+    // length auto: overlays (captions, lower thirds, titles) that outlast the main picture play over an empty frame
+    const tail = others.filter((y) => y.at + y.len > end).sort((a, b) => b.at + b.len - (a.at + a.len));
+    if (!tail.length) return out;
+    const overEnd = tail[0]!.at + tail[0]!.len;
+    if (overEnd - end < Math.max(1, Math.round(c.fps / 2))) return out;
+    const f = fills(tail);
+    if (f.length && spansCover(f, end, overEnd)) return out;
+    const fixes: string[] = [];
+    // extend the main clip when its source can play that long (stills, solids, gens, comps, loops, or a probed handle)
+    const room = (() => {
+      if (last.asset === undefined || last.loop || assetKind(ctx.project, last.asset) === 'image') return true;
+      const d = ctx.sourceDuration?.(last.asset);
+      if (d === undefined || !(d > 0) || last.remap !== undefined) return false;
+      return (last.in ?? 0) + (overEnd - last.at) * speedOf(last) <= Math.floor(d * c.fps + 1e-6);
+    })();
+    if (room) fixes.push(`mgl edit <file> clip.trim ${last.id} end=${overEnd}`);
+    else for (const y of tail.filter((y) => y.at < end).slice(0, 3)) fixes.push(`mgl edit <file> clip.trim ${y.id} end=${end}`);
+    const names = `${tail.slice(0, 2).map((y) => `"${y.id}"`).join(', ')}${tail.length > 2 ? ` +${tail.length - 2}` : ''}`;
+    out.push({ rule: 'gaps', severity: 'warning', frame: end, clip: last.id,
+      message: `main track ${t.id} ends at ${sec(end, c.fps)} ("${last.id}") but ${names} run${tail.length > 1 ? '' : 's'} to ${sec(overEnd, c.fps)} over an empty frame; ${room ? `extend "${last.id}"` : 'trim the overlays to the picture'}${room || !tail.some((y) => y.at >= end) ? '' : ' (clips that start after it need a picture under them)'}`,
+      ...(fixes.length ? { fix: fixes.join(' && ') } : {}) });
     return out;
   },
 });
@@ -356,6 +454,18 @@ const tinyText = defineCheck({
 const CONTENT = ['image', 'video', 'gen', 'comp', 'text', 'captions', 'shape', 'solid'];
 
 /**
+ * A see-through overlay meant to sit over everything: a watermark (tag "role:watermark" or "watermark"), a layer at
+ * opacity 0.35 or less, or one with a non-normal blend. Text under or over it stays readable, so overlaps skip it.
+ */
+function translucentOverlay(x: Clip | undefined): boolean {
+  if (!x) return false;
+  if (x.tags?.some((t) => /^(role:)?watermark$/i.test(t))) return true;
+  if (x.blend && x.blend !== 'normal') return true;
+  const o = x.opacity;
+  return typeof o === 'number' ? o <= 0.35 : keyed(o) && o.every((k) => typeof k[1] === 'number' && k[1] <= 0.35);
+}
+
+/**
  * Pairs of a text layer and another content layer whose boxes intersect at a frame. `under` = the other layer is
  * stacked ABOVE the text (the text is hidden under it). Two texts give one pair, with the lower one as `t`.
  * Full-frame backgrounds below the text are skipped, and so are full-frame layers above that are not opaque (particles, vignettes).
@@ -363,13 +473,13 @@ const CONTENT = ['image', 'video', 'gen', 'comp', 'text', 'captions', 'shape', '
 function overlaps(ctx: CheckContext, c: Comp, layers: Layer[], f: number, rule: string): { t: Layer; o: Layer; i: Box; under: boolean }[] {
   const out: { t: Layer; o: Layer; i: Box; under: boolean }[] = [], clips = allClips(ctx.project);
   layers.forEach((t, ti) => {
-    if (!isText(t.kind) || ignores(clips.get(t.clipId), rule)) return;
+    if (!isText(t.kind) || ignores(clips.get(t.clipId), rule) || translucentOverlay(clips.get(t.clipId))) return;
     layers.forEach((o, oi) => {
-      if (oi === ti || o.clipId === t.clipId || !CONTENT.includes(o.kind) || ignores(clips.get(o.clipId), rule)) return;
+      if (oi === ti || o.clipId === t.clipId || !CONTENT.includes(o.kind) || ignores(clips.get(o.clipId), rule) || translucentOverlay(clips.get(o.clipId))) return;
       const under = oi > ti;
       if (isText(o.kind) && !under) return; // the pair is reported from the lower text
       if (!under && (fullFrame(o.box, c) || o.kind === 'shape' || o.kind === 'solid')) return; // text on a background, plate or panel
-      if (under && fullFrame(o.box, c) && !opaqueLayer(ctx.project, clips, o, f)) return;
+      if (under && fullFrame(o.box, c) && !opaqueLayer(ctx, clips, o, f)) return;
       const i = intersect(t.box, o.box);
       if (area(i) > 0.02 * Math.min(area(t.box), area(o.box))) out.push({ t, o, i, under });
     });
@@ -377,18 +487,21 @@ function overlaps(ctx: CheckContext, c: Comp, layers: Layer[], f: number, rule: 
   return out;
 }
 
-/** Content boxes at a frame other than `skip`, minus full-frame backgrounds (what a moved box must stay clear of). */
-function obstacles(c: Comp, layers: Layer[], skip: string[]): Box[] {
-  return layers.filter((l) => !skip.includes(l.clipId) && CONTENT.includes(l.kind) && !fullFrame(l.box, c)).map((l) => l.box);
+/** Content boxes at a frame other than `skip`, minus full-frame backgrounds and watermarks (what a moved box must stay clear of). */
+function obstacles(c: Comp, layers: Layer[], skip: string[], clips?: Map<string, Clip>): Box[] {
+  return layers.filter((l) => !skip.includes(l.clipId) && CONTENT.includes(l.kind) && !fullFrame(l.box, c) && !translucentOverlay(clips?.get(l.clipId))).map((l) => l.box);
 }
 
 /**
  * A fix that separates text t from layer o below it, verified: the moved box stays inside the frame and clear of every
- * other layer at that frame. Undefined when no such spot exists (e.g. labels on split-screen halves).
+ * other layer, at this frame and at every other sampled frame where the moved clip shows (so it never moves into
+ * another overlap). Undefined when no such spot exists (e.g. labels on split-screen halves).
  */
-function awayFix(c: Comp, clips: Map<string, Clip>, layers: Layer[], t: Layer, o: Layer): string | undefined {
+function awayFix(ctx: QaContext, c: Comp, clips: Map<string, Clip>, layers: Layer[], f: number, t: Layer, o: Layer): string | undefined {
   const gap = Math.round(c.H * 0.01);
-  const fits = (b: Box, moved: string) => b[1] >= 0 && b[1] + b[3] <= c.H && !obstacles(c, layers, [moved]).some((k) => meets(b, k));
+  const frames = new Map<number, Layer[]>([...allLayers(ctx), [f, layers]]);
+  const fitsAt = (ls: Layer[], b: Box, moved: string) => b[1] >= 0 && b[1] + b[3] <= c.H && !obstacles(c, ls, [moved], clips).some((k) => meets(b, k));
+  const fits = (moved: string, dy: number) => [...frames.values()].every((ls) => ls.every((l) => l.clipId !== moved || fitsAt(ls, [l.box[0], l.box[1] + dy, l.box[2], l.box[3]], moved)));
   const cands: [Layer, number][] = [];
   if (o.kind !== 'comp' && o.kind !== 'video') {
     cands.push([o, t.box[1] - gap - (o.box[1] + o.box[3])], [o, t.box[1] + t.box[3] + gap - o.box[1]]); // o above / below the text
@@ -397,7 +510,7 @@ function awayFix(c: Comp, clips: Map<string, Clip>, layers: Layer[], t: Layer, o
   cands.sort((a, b) => Math.abs(a[1]) - Math.abs(b[1]));
   for (const [l, dy] of cands) {
     const nb: Box = [l.box[0], l.box[1] + dy, l.box[2], l.box[3]];
-    if (fits(nb, l.clipId)) return moveFix(clips.get(l.clipId), l.clipId, 0, dy, c, l.box);
+    if (fitsAt(layers, nb, l.clipId) && fits(l.clipId, dy)) return moveFix(clips.get(l.clipId), l.clipId, 0, dy, c, l.box);
   }
   return undefined;
 }
@@ -409,7 +522,7 @@ function overlapFinding(ctx: CheckContext, c: Comp, rule: string, f: number, lay
       message: `${t.kind} ${quote(t.text)}(${t.clipId}) is hidden under ${o.kind} "${o.clipId}" (stacked above it) at ${sec(f, c.fps)}${detail}`,
       fix: moveUpFix(ctx, c, t.clipId, [o.clipId]) || ignoreFix(clips.get(t.clipId), t.clipId, 'overlap') };
   }
-  const fix = awayFix(c, clips, layers, t, o);
+  const fix = awayFix(ctx, c, clips, layers, f, t, o);
   if (fix) return { rule, severity: 'warning', frame: f, clip: t.clipId, box: round(i), message: `${t.kind} ${quote(t.text)}(${t.clipId}) ${p.under ? 'is overlapped by' : detail ? 'is drawn over' : 'overlaps'} ${o.kind} "${o.clipId}" at ${sec(f, c.fps)}${detail}`, fix };
   return { rule, severity: 'info', frame: f, clip: t.clipId, box: round(i),
     message: `${t.kind} ${quote(t.text)}(${t.clipId}) sits on ${o.kind} "${o.clipId}" at ${sec(f, c.fps)}${detail}; no clear spot nearby (a label meant to sit on it? tag it qa-ignore:overlap)`,
@@ -479,7 +592,7 @@ const layerHidden = defineCheck({
         const idx = layers.map((l, i) => (l.clipId === x.id ? i : -1)).filter((i) => i >= 0);
         if (!idx.length) continue;
         for (const i of idx) {
-          const cov = coversOf(ctx.project, clips, layers, i, f, c);
+          const cov = coversOf(ctx, clips, layers, i, f, c);
           if (!cov.length) { hidden = false; break; }
           first ??= { f, l: layers[i]! };
           for (const k of cov) covers.add(k.clipId);
@@ -523,6 +636,30 @@ function intoFrameFix(clip: Clip | undefined, id: string, box: Box, c: Comp): st
   return `mgl edit <file> clip.set ${id} ${parts.join(' ')}`;
 }
 
+/**
+ * The part of a layer's box its masks let through (layout.grid crops with clip-space rect masks). undefined = no masks
+ * or matte. `sure` is false when the region cannot be worked out from boxes (paths, inverted/subtracted or animated
+ * masks, rotation or flips with clip-space masks, track mattes): then only the layer box is known.
+ */
+function visibleBox(x: Clip, b: Box): { box: Box; sure: boolean } | undefined {
+  if (!x.masks?.length && !x.matte) return undefined;
+  if (x.matte) return { box: b, sure: false };
+  const sc = x.scale, flipped = (typeof sc === 'number' && sc < 0) || (Array.isArray(sc) && sc.some((v) => typeof v === 'number' && v < 0));
+  const rotated = typeof x.rotate === 'number' ? x.rotate % 360 !== 0 : x.rotate !== undefined;
+  let region: Box | undefined, sure = true;
+  for (const m of x.masks ?? []) {
+    const mb = m.box;
+    if ((m.shape !== 'rect' && m.shape !== 'ellipse') || keyed(mb) || !Array.isArray(mb) || m.invert || m.mode === 'subtract') { sure = false; continue; }
+    const [mx, my, mw, mh] = mb as Box;
+    if (m.space === 'clip' && (rotated || flipped)) sure = false;
+    const r: Box = m.space === 'clip' ? [b[0] + mx * b[2], b[1] + my * b[3], mw * b[2], mh * b[3]] : [mx, my, mw, mh];
+    if (!region) region = r;
+    else if (m.mode === 'intersect') region = intersect(region, r);
+    else { const x0 = Math.min(region[0], r[0]), y0 = Math.min(region[1], r[1]); region = [x0, y0, Math.max(region[0] + region[2], r[0] + r[2]) - x0, Math.max(region[1] + region[3], r[1] + r[3]) - y0]; }
+  }
+  return region ? { box: intersect(b, region), sure } : { box: b, sure: false };
+}
+
 const mediaOffFrame = defineCheck({
   id: 'media-off-frame', stage: 'project', describe: 'an image, video or shape layer mostly outside the frame at rest (not a background that fills the frame)',
   run(ctx: QaContext) {
@@ -540,18 +677,22 @@ const mediaOffFrame = defineCheck({
       }
       if (!best || (best.l.kind !== 'image' && best.l.kind !== 'video' && best.l.kind !== 'shape')) continue;
       seen.add(x.id);
-      const b = best.l.box;
+      // judge what is drawn: a masked layer (a layout.grid cell, a crop) only shows its mask region
+      const vis = visibleBox(x, best.l.box), b = vis ? vis.box : best.l.box;
       if (area(b) <= 0) continue;
       if (b[0] <= 1 && b[1] <= 1 && b[0] + b[2] >= c.W - 1 && b[1] + b[3] >= c.H - 1) continue; // fills the frame (background, cover, punch-in)
       if (inFade(x, best.f) || moving(ctx.project, clips, x.id, samples, c)) continue; // flying in or out on purpose
       const inside = area(intersect(b, frameBox(c))) / area(b);
       if (inside >= 0.75) continue;
       const edges = crossedEdges(b, { x: 0, y: 0, w: c.W, h: c.H });
-      out.push({ rule: 'media-off-frame', severity: 'warning', frame: best.f, clip: x.id, box: round(inside > 0 ? intersect(b, frameBox(c)) : b),
+      const what = vis ? `${best.l.kind} "${x.id}"${vis.sure ? '\'s masked area' : ' (masked; its visible area is estimated from the layer box)'}` : `${best.l.kind} "${x.id}"`;
+      const f: Finding = { rule: 'media-off-frame', severity: vis && !vis.sure ? 'info' : 'warning', frame: best.f, clip: x.id, box: round(inside > 0 ? intersect(b, frameBox(c)) : b),
         message: inside > 0
-          ? `${best.l.kind} "${x.id}" runs off the ${andList(edges)} of the frame at ${sec(best.f, c.fps)}: ${Math.round((1 - inside) * 100)}% of it (${Math.round(b[2])}x${Math.round(b[3])} px) is cut off`
-          : `${best.l.kind} "${x.id}" is entirely outside the frame at ${sec(best.f, c.fps)} (box ${round(b).join(',')}): never seen`,
-        fix: intoFrameFix(clips.get(x.id), x.id, b, c) });
+          ? `${what} runs off the ${andList(edges)} of the frame at ${sec(best.f, c.fps)}: ${Math.round((1 - inside) * 100)}% of it (${Math.round(b[2])}x${Math.round(b[3])} px) is cut off`
+          : `${what} is entirely outside the frame at ${sec(best.f, c.fps)} (box ${round(b).join(',')}): never seen` };
+      // moving or scaling a masked layer moves its crop too (it would undo a layout): name the problem, offer no edit
+      if (!vis) f.fix = intoFrameFix(clips.get(x.id), x.id, b, c);
+      out.push(f);
     }
     return out;
   },
@@ -559,12 +700,34 @@ const mediaOffFrame = defineCheck({
 
 const isBlack = (s: string | undefined) => !!s && /^(#0{3}|#0{6}|#0{8}|black)$/i.test(s);
 
+/** A colour that draws nothing visible on black: transparent, or (near) black at any opacity (a matte, a dark plate). */
+function darkOrClear(s: string | undefined): boolean {
+  if (!s || s === 'transparent' || s === 'none') return true;
+  if (/^#[0-9a-f]{8}$/i.test(s) && s.slice(7) === '00') return true;
+  if (/^#[0-9a-f]{4}$/i.test(s) && s.slice(4) === '0') return true;
+  if (!/^#[0-9a-f]{3,8}$/i.test(s)) return /^black$/i.test(s);
+  return Math.max(...parseColor(s)) <= 16;
+}
+
+/** Does a shape clip draw something visible (a logo, a graphic), as opposed to a black matte bar or nothing? */
+function visibleShape(x: Clip): boolean {
+  const s = x.shape;
+  if (!s) return false;
+  if (s.trim === 0 || (typeof s.trim === 'number' && typeof s.trimStart === 'number' && s.trim <= s.trimStart)) return false;
+  // as the renderer draws it: fill defaults to white (lines have none), a line's stroke defaults to its fill or white
+  const fill = s.type !== 'line' && s.fill !== 'none' && (s.gradient ? s.gradient.stops.some((st) => !darkOrClear(st[1])) : !darkOrClear(s.fill ?? '#ffffff'));
+  const sc = s.stroke ?? (s.type === 'line' ? (s.fill && s.fill !== 'none' ? s.fill : '#ffffff') : undefined);
+  const stroke = sc !== undefined && (s.strokeWidth ?? 4) > 0 && !darkOrClear(sc);
+  return fill || stroke;
+}
+
 const trailingBlack = defineCheck({
   id: 'trailing-black', stage: 'project', describe: 'empty or black timeline after the last visual content (only decoration such as mattes, or nothing)',
   run(ctx) {
     const c = compOf(ctx), vis = visualClips(c);
     if (!vis.length) return [];
-    const content = vis.filter((x) => !x.adjustment && x.shape === undefined && !(x.color !== undefined && isBlack(x.color)) && !(x.asset !== undefined && assetKind(ctx.project, x.asset) === 'audio'));
+    // content: media, text, captions, gens, comps, coloured solids and visible shapes; decoration: black mattes, empty shapes
+    const content = vis.filter((x) => !x.adjustment && (x.shape === undefined || visibleShape(x)) && !(x.color !== undefined && darkOrClear(x.color)) && !(x.asset !== undefined && assetKind(ctx.project, x.asset) === 'audio'));
     if (!content.length) return [];
     const last = Math.max(...content.map((x) => x.at + x.len));
     const end = c.length ?? Math.max(...c.clips.map((x) => x.at + x.len));
@@ -588,8 +751,9 @@ const trailingBlack = defineCheck({
     });
     if (c.length !== undefined) fixes.push(`mgl edit <file> comp.set ${c.id} length=${decor.length > 3 ? last : 'auto'}`);
     const what = decor.length ? `only ${decor.slice(0, 2).map((x) => `"${x.id}"`).join(', ')}${decor.length > 2 ? ` +${decor.length - 2}` : ''} (no content)` : 'nothing';
-    return [{ rule: 'trailing-black', severity: audioOn ? 'info' : 'warning', frame: last, clip: lastClip.id,
-      message: `after "${lastClip.id}" ends at ${sec(last, c.fps)} comp ${c.id} shows ${what} until ${sec(end, c.fps)}: ${((end - last) / c.fps).toFixed(2)} s of black${audioOn ? ' (audio continues)' : ''}`,
+    const bgShows = opaqueColour(c.bg) && !darkOrClear(c.bg); // a coloured bg: an empty end card, not black
+    return [{ rule: 'trailing-black', severity: audioOn || bgShows ? 'info' : 'warning', frame: last, clip: lastClip.id,
+      message: `after "${lastClip.id}" ends at ${sec(last, c.fps)} comp ${c.id} shows ${what} until ${sec(end, c.fps)}: ${((end - last) / c.fps).toFixed(2)} s of ${bgShows ? `bg ${c.bg} only` : 'black'}${audioOn ? ' (audio continues)' : ''}`,
       fix: fixes.join(' && ') }];
   },
 });
@@ -729,12 +893,38 @@ function parseColor(s: string | undefined): [number, number, number] {
 
 const sortedFrames = (ctx: CheckContext) => [...(ctx.frames ?? new Map<number, Img>())].sort((a, b) => a[0] - b[0]);
 
+/** Luma statistics (0..1, BT.709, alpha-weighted) of a frame: mean, standard deviation and the share of bright pixels (> 0.12). */
+function lumaStats(img: Img, step: number): { mean: number; sd: number; bright: number } {
+  let sum = 0, sq = 0, bright = 0, n = 0;
+  for (let y = 0; y < img.height; y += step) for (let x = 0; x < img.width; x += step) {
+    const i = (y * img.width + x) * 4;
+    const Y = ((0.2126 * img.data[i]! + 0.7152 * img.data[i + 1]! + 0.0722 * img.data[i + 2]!) * (img.data[i + 3]! / 255)) / 255;
+    sum += Y; sq += Y * Y; n++;
+    if (Y > 0.12) bright++;
+  }
+  if (!n) return { mean: 0, sd: 0, bright: 0 };
+  const mean = sum / n;
+  return { mean, sd: Math.sqrt(Math.max(0, sq / n - mean * mean)), bright: bright / n };
+}
+
+/**
+ * A black frame: near-zero mean luma AND almost no spread or bright detail. Dark footage (a night shot, grey text on
+ * black) and white credits on a black bg have bright pixels or variance, so they are not black.
+ */
+function blackFrame(img: Img): boolean {
+  const st = lumaStats(img, Math.max(1, Math.floor(img.width / 240)));
+  return st.mean < 0.03 && st.sd < 0.025 && st.bright < 0.001;
+}
+
+const GRAPHIC = ['text', 'captions', 'shape', 'gen'];
+
 const blackFrames = defineCheck({
-  id: 'black-frames', stage: 'frame', describe: 'black stretches (mean luma < 0.03) in the sampled frames (not in audio-only comps)',
-  run(ctx) {
+  id: 'black-frames', stage: 'frame', describe: 'black stretches (near-zero luma with no detail, and no graphics on screen) in the sampled frames (not in audio-only comps)',
+  run(ctx: QaContext) {
     const c = compOf(ctx), out: Finding[] = [];
     if (!visualClips(c).length) return []; // an audio-only deliverable has no picture to check
     const frames = sortedFrames(ctx), clips = allClips(ctx.project);
+    const step = frames.length > 1 ? Math.max(1, frames[1]![0] - frames[0]![0]) : 1;
     let run: number[] = [];
     const flush = () => {
       if (!run.length) return;
@@ -742,28 +932,60 @@ const blackFrames = defineCheck({
       const media = [...layers].reverse().find((l) => l.kind === 'video' || l.kind === 'image');
       const t = mainTrack(c), next = t ? onTrack(c, t.id).find((x) => x.at > f) : undefined;
       const span = run.length > 1 ? `${sec(f, c.fps)}–${sec(run.at(-1)!, c.fps)} (${run.length} sampled frames)` : `at ${sec(f, c.fps)}`;
-      if (media) out.push({ rule: 'black-frames', severity: 'warning', frame: f, clip: media.clipId, message: `black frame ${span} in "${media.clipId}"`, fix: `mgl edit <file> clip.slip ${media.clipId} by=1s` });
+      if (media) out.push(mediaBlack(ctx, c, clips.get(media.clipId), media, run, step, span));
       else if (!layers.length && next) out.push({ rule: 'black-frames', severity: 'warning', frame: f, clip: next.id, message: `black frame ${span}: nothing is on screen before "${next.id}"`, fix: `mgl edit <file> clip.move ${next.id} at=${f}` });
       else if (!layers.length) out.push({ rule: 'black-frames', severity: 'warning', frame: f, message: `black frame ${span}: nothing is on screen`, fix: `mgl edit <file> comp.set ${c.id} length=auto` });
       else {
         const top = layers.at(-1)!.clipId;
-        out.push(c.bg
-          ? { rule: 'black-frames', severity: 'info', frame: f, clip: top, message: `black frame ${span} with "${top}" on top (comp bg ${c.bg})`, fix: `mgl edit <file> comp.set ${c.id} bg=#202020` }
-          : { rule: 'black-frames', severity: 'info', frame: f, clip: top,
-            message: `black frame ${span} with "${top}" on top: comp ${c.id} has no bg (transparent). Intended for alpha? ignore with tag qa-ignore:black-frames; otherwise set a bg (comp.set ${c.id} bg=#202020)`,
+        if (ctx.alpha || !c.bg) {
+          out.push({ rule: 'black-frames', severity: 'info', frame: f, clip: top,
+            message: ctx.alpha ? `black frame ${span} with "${top}" on top: transparent in the --alpha render (fine if intended)`
+              : `black frame ${span} with "${top}" on top: comp ${c.id} has no bg (transparent renders as black); set one if it should not be black`,
+            fix: ctx.alpha ? ignoreFix(clips.get(top), top, 'black-frames') : `mgl edit <file> comp.set ${c.id} bg=#202020` });
+        } else {
+          // the bg was chosen (a black bg under a dark solid or comp is a look): never suggest repainting it
+          out.push({ rule: 'black-frames', severity: 'info', frame: f, clip: top,
+            message: `black frame ${span} with "${top}" on top (comp bg ${c.bg}); tag it qa-ignore:black-frames if intended`,
             fix: ignoreFix(clips.get(top), top, 'black-frames') });
+        }
       }
       run = [];
     };
+    const samples = [...new Map<number, Layer[]>([...allLayers(ctx), ...(ctx.layers ?? [])])].sort((a, b) => a[0] - b[0]);
     for (const [f, img] of frames) {
-      const dark = meanLuma(img, undefined, Math.max(1, Math.floor(img.width / 120))) < 0.03;
+      const layers = ctx.layers?.get(f) ?? [];
+      // titles, credits, shapes or gens on screen: the frame shows something even when it is mostly dark;
+      // a roll or crawl just outside the frame (entering or leaving) is part of the same deliberate design
+      const graphic = layers.some((l) => GRAPHIC.includes(l.kind) && !translucentOverlay(clips.get(l.clipId))
+        && (area(intersect(l.box, frameBox(c))) > 0 || moving(ctx.project, clips, l.clipId, samples, c)));
       const intentional = c.clips.some((x) => f >= x.at && f < x.at + x.len && inFade(x, f));
-      if (dark && !intentional) run.push(f); else flush();
+      if (!graphic && !intentional && blackFrame(img)) run.push(f); else flush();
     }
     flush();
     return out;
   },
 });
+
+/**
+ * A black run inside a media clip. A slip is offered only when it clears the run without running past the source:
+ * the source has a probed handle for it, and the run is a minority of the clip. Otherwise an info with an ignore tag.
+ */
+function mediaBlack(ctx: QaContext, c: Comp, clip: Clip | undefined, media: Layer, run: number[], step: number, span: string): Finding {
+  const f = run[0]!, id = media.clipId;
+  const base = { rule: 'black-frames', frame: f, clip: id } as const;
+  const runLen = run.at(-1)! - f + step;
+  if (clip && media.kind === 'video' && clip.asset !== undefined && !clip.loop && clip.remap === undefined && runLen < clip.len / 2) {
+    const d = ctx.sourceDuration?.(clip.asset), sp = speedOf(clip);
+    // slip past the dark run when it is at the head of the clip, else by one second
+    const by = f - clip.at <= step ? Math.max(Math.round(c.fps), run.at(-1)! - clip.at + step) : Math.round(c.fps);
+    if (d !== undefined && d > 0 && sp > 0 && (clip.in ?? 0) + clip.len * sp + by * sp <= Math.floor(d * c.fps + 1e-6)) {
+      return { ...base, severity: 'warning', message: `black frame ${span} in "${id}"`, fix: `mgl edit <file> clip.slip ${id} by=${Math.round(by * sp)}` };
+    }
+  }
+  return { ...base, severity: 'info',
+    message: `black frame ${span} in "${id}" (${clip?.asset !== undefined && ctx.sourceDuration?.(clip.asset) === undefined ? 'source length unknown' : 'no source handle to slip past it'}; check it with --at, or tag the clip qa-ignore:black-frames if intended)`,
+    fix: ignoreFix(clip, id, 'black-frames') };
+}
 
 /** The timeline frame where a media clip's source runs out (undefined when it never does or is unknown). */
 function sourceEnd(ctx: QaContext, x: Clip, fps: number): number | undefined {
@@ -846,32 +1068,52 @@ const overlapAlpha = defineCheck({
   },
 });
 
+const hasLegalize = (x: Clip | undefined) => !!x?.fx?.some((e) => e.enabled !== false && e.type === 'legalize');
+
 const lumaRange = defineCheck({
-  id: 'luma-range', stage: 'frame', describe: 'broadcast range: over 5% of the picture in video/image layers outside luma 16–235 in a sampled frame (info)',
-  run(ctx) {
+  id: 'luma-range', stage: 'frame', describe: 'broadcast range: over 5% of the visible pixels of video/image layers (not under titles or graphics) outside luma 16–235 in a sampled frame (info)',
+  run(ctx: QaContext) {
     const c = compOf(ctx), clips = allClips(ctx.project);
     let worst: { f: number; pct: number; lo: number; hi: number; clip: string } | undefined;
     for (const [f, img] of sortedFrames(ctx)) {
-      const media = (ctx.layers?.get(f) ?? []).filter((l) => (l.kind === 'video' || l.kind === 'image') && !ignores(clips.get(l.clipId), 'luma-range'));
-      if (!media.length) continue;
+      // the layer each pixel shows is the topmost one whose box holds it: only pixels a media layer shows are judged,
+      // so a white title over the video does not count, and a legalize on that media clip clears what is counted
+      const ls = (ctx.layers?.get(f) ?? []).filter((l) => l.kind !== 'adjustment');
+      if (!ls.some((l) => l.kind === 'video' || l.kind === 'image')) continue;
       const step = Math.max(1, Math.floor(img.width / 160));
-      let n = 0, bad = 0, lo = 255, hi = 0;
+      const per = new Map<string, { n: number; bad: number; lo: number; hi: number }>();
       for (let y = 0; y < img.height; y += step) for (let x = 0; x < img.width; x += step) {
         const px = x / img.scale, py = y / img.scale;
-        if (!media.some((l) => px >= l.box[0] && px < l.box[0] + l.box[2] && py >= l.box[1] && py < l.box[1] + l.box[3])) continue;
+        let top: Layer | undefined, under = false;
+        for (let k = ls.length - 1; k >= 0; k--) {
+          const l = ls[k]!;
+          if (px >= l.box[0] && px < l.box[0] + l.box[2] && py >= l.box[1] && py < l.box[1] + l.box[3]) {
+            if (top) { under = true; break; }
+            top = l;
+          }
+        }
+        if (!top || (top.kind !== 'video' && top.kind !== 'image')) continue;
+        const clip = clips.get(top.clipId);
+        // a see-through media layer (alpha overlay, low opacity, blend) over another layer: the pixel may be either's
+        if (under && (!clip || seeThrough(clip) || !mediaOpaque(ctx, clip.asset))) continue;
+        if (ignores(clip, 'luma-range') || hasLegalize(clip)) continue;
         const i = (y * img.width + x) * 4;
         if (img.data[i + 3]! < 250) continue;
         const Y = 0.2126 * img.data[i]! + 0.7152 * img.data[i + 1]! + 0.0722 * img.data[i + 2]!;
-        n++;
-        lo = Math.min(lo, Y); hi = Math.max(hi, Y);
-        if (Y < 16 || Y > 235.5) bad++;
+        const s = per.get(top.clipId) ?? { n: 0, bad: 0, lo: 255, hi: 0 };
+        s.n++;
+        s.lo = Math.min(s.lo, Y); s.hi = Math.max(s.hi, Y);
+        if (Y < 16 || Y > 235.5) s.bad++;
+        per.set(top.clipId, s);
       }
-      if (n < 50 || bad / n <= 0.05) continue;
-      if (!worst || bad / n > worst.pct) worst = { f, pct: bad / n, lo, hi, clip: media.at(-1)!.clipId };
+      for (const [id, s] of per) {
+        if (s.n < 50 || s.bad / s.n <= 0.05) continue;
+        if (!worst || s.bad / s.n > worst.pct) worst = { f, pct: s.bad / s.n, lo: s.lo, hi: s.hi, clip: id };
+      }
     }
     if (!worst) return [];
     return [{ rule: 'luma-range', severity: 'info', frame: worst.f, clip: worst.clip,
-      message: `${Math.round(worst.pct * 100)}% of the picture at ${sec(worst.f, c.fps)} is outside broadcast luma 16–235 (Y ${Math.round(worst.lo)}–${Math.round(worst.hi)}); only matters for broadcast/legal-range delivery`,
+      message: `${Math.round(worst.pct * 100)}% of "${worst.clip}" at ${sec(worst.f, c.fps)} is outside broadcast luma 16–235 (Y ${Math.round(worst.lo)}–${Math.round(worst.hi)}); only matters for broadcast/legal-range delivery`,
       fix: `mgl edit <file> fx.add ${worst.clip} type=legalize range=pc` }];
   },
 });

@@ -113,7 +113,7 @@ export function deliveryOf(o: Partial<Record<(typeof DELIVERY_KEYS)[number], unk
   return Object.keys(d).length ? (d as DeliveryOptions) : undefined;
 }
 
-export interface ProbeReport { duration: number; streams: { type: string; codec: string; width?: number; height?: number; frames?: number; sampleRate?: number }[]; format: string }
+export interface ProbeReport { duration: number; streams: { type: string; codec: string; width?: number; height?: number; frames?: number; sampleRate?: number }[]; format: string; /** start timecode tag (format, stream or tmcd track), when the file has one */ timecode?: string }
 
 export interface RenderResult {
   out: string;
@@ -559,7 +559,9 @@ export function passthroughSource(prep: Pick<Prep, 'W' | 'H' | 'info'>, list: Di
   const src = n.source;
   if (src.crop || !src.size) return null;
   const info = prep.info.get(src.assetId);
-  if (!info?.pixFmt || ALPHA_PIX.test(info.pixFmt)) return null;
+  // a source that may decode with alpha (alpha pix_fmt, ProRes 4444, PNG; VP8/VP9 alpha reports yuv420p but carries
+  // alpha_mode) needs compositing over the comp bg and flattening, so it never takes the fast path
+  if (!info?.pixFmt || ALPHA_PIX.test(info.pixFmt) || (info as { alpha?: boolean }).alpha) return null;
   const m = n.matrix, sx = width / prep.W, sy = height / prep.H;
   const tol = 0.5;
   if (Math.abs(m[1]) > 1e-9 || Math.abs(m[2]) > 1e-9 || m[0] <= 0 || m[3] <= 0) return null;
@@ -642,7 +644,7 @@ export async function render(project: ProjectFile, out: string, opts: RenderOpti
     case 'video': {
       const format = VIDEO_EXT[ext]!;
       if (opts.alpha && format !== 'webm' && format !== 'mov') fail('E_ALPHA', `${format} cannot carry an alpha channel.`, 'render to .mov (ProRes 4444) or .webm (VP9) for alpha.');
-      checkDelivery(delivery, format, prep.rate, !!opts.alpha);
+      prep.notes.push(...checkDelivery(delivery, format, prep.rate, !!opts.alpha));
       if (opts.alpha && prep.comp.bg && isOpaqueColor(prep.comp.bg)) {
         prep.notes.push(`warning: comp "${prep.comp.id}" has an opaque bg (${prep.comp.bg}), so the alpha channel is fully opaque; for a transparent background remove it: mgl edit <file> comp.set ${prep.comp.id} bg=null`);
       }
@@ -654,7 +656,6 @@ export async function render(project: ProjectFile, out: string, opts: RenderOpti
       const job: VideoJob = { range, quality, format, width, height, alpha: !!opts.alpha, onProgress: opts.onProgress, plan, ...(delivery ? { delivery } : {}) };
       if (segs > 1) await renderSegmented(prep, out, { ...job, segments: segs });
       else await renderVideo(prep, out, job);
-      if (delivery?.timecode) prep.notes.push(`start timecode ${delivery.timecode}`);
       res = { out, seconds: framesToSeconds(range[1] - range[0], prep.rate), frames: range[1] - range[0], width, height, ...base, segments: segs, estimate: est };
       break;
     }
@@ -680,6 +681,7 @@ export async function render(project: ProjectFile, out: string, opts: RenderOpti
   };
   if (au && v) result.audioCodec = au.codec;
   if (probe) result.probe = probe;
+  if (kind === 'video' && delivery?.timecode) prep.notes.push(verifyTimecode(probe, delivery.timecode, prep.rate, out));
   return result;
 }
 
@@ -736,6 +738,11 @@ async function renderAudioFile(prep: Prep, range: [number, number], out: string,
   } finally { await rm(dir, { recursive: true, force: true }); }
 }
 
+/** The intermediate mix of a video job: 24-bit when the output carries 24-bit PCM (mov --pcm 24), so no precision is lost. */
+function mixOpts(j: Pick<VideoJob, 'format' | 'delivery'>): RenderAudioOptions {
+  return j.format === 'mov' && j.delivery?.pcmDepth === 24 ? { pcmDepth: 24 } : {};
+}
+
 /** Encoder settings of a video job; the timecode is written when the final file is assembled (muxed), not per segment. */
 function encodeDelivery(d: DeliveryOptions | undefined): DeliveryOptions | undefined {
   if (!d) return undefined;
@@ -747,7 +754,7 @@ async function renderVideo(prep: Prep, out: string, j: VideoJob): Promise<void> 
   const dir = await mkdtemp(join(tmpdir(), 'mgl-render-'));
   try {
     // the audio mix runs while frames render; it is muxed at the end without re-encoding the video
-    const audio = j.format === 'gif' ? Promise.resolve(null) : mixAudio(prep, j.range, join(dir, 'mix.wav'), false, {}, j.plan);
+    const audio = j.format === 'gif' ? Promise.resolve(null) : mixAudio(prep, j.range, join(dir, 'mix.wav'), false, mixOpts(j), j.plan);
     audio.catch(() => {});
     const tmp = join(dir, `video${extname(out)}`);
     const enc: EncodeOptions = { out: tmp, width: j.width, height: j.height, rate: prep.rate, format: j.format, quality: j.quality };
@@ -864,7 +871,7 @@ async function renderSegmented(prep: Prep, out: string, j: VideoJob & { segments
       await writeFile(jf, JSON.stringify(job));
       await runWorker(jf, (n) => { done[i] = n; progress(done.reduce((s, x) => s + x, 0)); });
     });
-    const [audio] = await Promise.all([mixAudio(prep, j.range, join(dir, 'mix.wav'), false, {}, j.plan), Promise.all(workers)]);
+    const [audio] = await Promise.all([mixAudio(prep, j.range, join(dir, 'mix.wav'), false, mixOpts(j), j.plan), Promise.all(workers)]);
     const joined = join(dir, `joined${ext}`);
     await prep.backend.concat(parts, joined);
     await finishVideo(prep.backend, joined, audio, out, j);
@@ -898,9 +905,12 @@ async function muxAudio(backend: MediaBackend, video: string, wav: string | null
 export async function probeOutput(backend: MediaBackend, file: string): Promise<ProbeReport> {
   const ff = await backend.info();
   const r = await run(ff.ffprobe, ['-v', 'error', '-print_format', 'json', '-show_streams', '-show_format', file], { what: `checking ${file}` });
-  const j = JSON.parse(r.stdout.toString()) as { streams?: Record<string, string | number | undefined>[]; format?: Record<string, string | number | undefined> };
+  const j = JSON.parse(r.stdout.toString()) as { streams?: Record<string, string | number | undefined | Record<string, string>>[]; format?: Record<string, string | number | undefined | Record<string, string>> };
   const num = (v: unknown) => (v === undefined || v === 'N/A' ? undefined : Number(v));
+  const tcOf = (o: { tags?: unknown } | undefined) => { const t = o?.tags as Record<string, string> | undefined; return t?.timecode ?? t?.TIMECODE; };
+  const timecode = tcOf(j.format as never) ?? (j.streams ?? []).map((x) => tcOf(x as never)).find((x) => x !== undefined);
   return {
+    ...(timecode !== undefined ? { timecode } : {}),
     duration: num(j.format?.duration) ?? 0,
     format: String(j.format?.format_name ?? ''),
     streams: (j.streams ?? []).map((s) => {
@@ -923,6 +933,12 @@ async function verify(backend: MediaBackend, out: string, kind: OutputKind, res:
     fail('E_RENDER_VERIFY', `${out} is ${p.duration.toFixed(2)} s long; expected ${res.seconds.toFixed(2)} s.`, 'render again with segments: 1; if it repeats, report it with the project file.');
   }
   return p;
+}
+
+/** The start timecode note, only when the file carries it (ffmpeg drops a timecode it cannot write, without an error). */
+function verifyTimecode(probe: ProbeReport | undefined, want: string, rate: Rate, out: string): string {
+  if (probe?.timecode === want) return `start timecode ${want}`;
+  return fail('E_RENDER_VERIFY', `${out} was written without the start timecode ${want}${probe?.timecode ? ` (it carries ${probe.timecode})` : ''}.`, `check the timecode against the comp rate (${(rate.num / rate.den).toFixed(3)} fps): drop-frame ";" works at 29.97 and 59.94 only; otherwise use ":" (e.g. ${want.replace(';', ':')}).`);
 }
 
 // ------------------------------------------------------------------------------------------- subtitles

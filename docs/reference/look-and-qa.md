@@ -80,6 +80,23 @@ Tag a clip `qa-ignore:<rule>` (or `qa-ignore:all`) and that rule skips it: credi
 burned-in timecode outside the safe zone, leader black. Short aliases: `safe-zone`, `cut-off`, `off-frame`,
 `overlap`, `covered`, `black`, `silence`, `frozen`, `levels`. Tags are a list: `clip.set tc tags='["qa-ignore:safe-zone"]'`.
 
+A tag covers its own clip and the timeline under it:
+
+- findings about the tagged clip itself are skipped for any matching tag, `qa-ignore:all` included;
+- timeline findings (`black-frames`, `trailing-black`, `gaps`, `long-silence`, `luma-range`) at a frame where
+  the tagged clip plays are skipped when the tag names the rule or an alias (`qa-ignore:black`);
+- project-scoped findings with no clip or frame, such as `clipping` and `loudness` on the whole mix, are only
+  silenced by a tag that names the rule (`qa-ignore:loudness`) on any clip of the comp, never by
+  `qa-ignore:all`, so an `all` on a credits clip cannot hide clipping in the mix. There is no project-level
+  ignore list.
+
+Watermarks: a clip tagged `role:watermark` (or `watermark`), a layer at opacity 0.35 or less, or one with a
+non-normal blend counts as a see-through overlay, and the overlap rules (`caption-overlap`, `overlap-alpha`)
+skip it: text over or under it stays readable.
+
+`gaps` also flags a main track that ends before the overlays above it (captions, titles, lower thirds that run
+on over an empty frame): extend the last main clip or trim the overlays.
+
 ```sh
 mgl edit qa.mgl.json clip.set title tags='["qa-ignore:safe-zone"]'
 mgl check qa.mgl.json

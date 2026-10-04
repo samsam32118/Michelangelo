@@ -160,8 +160,8 @@ describe('new checks', () => {
       tracks: [{ id: 'V1', comp: 'main' }, { id: 'M', comp: 'main' }],
       clips: [
         { id: 'shot', track: 'V1', at: 0, len: 330, asset: 'bgv' },
-        { id: 'matte-top', track: 'M', at: 0, len: 330, shape: { type: 'rect', size: [1080, 200] } },
-        { id: 'matte-bot', track: 'M', at: 330, len: 330, shape: { type: 'rect', size: [1080, 200] } },
+        { id: 'matte-top', track: 'M', at: 0, len: 330, shape: { type: 'rect', size: [1080, 200], fill: '#000000' } },
+        { id: 'matte-bot', track: 'M', at: 330, len: 330, shape: { type: 'rect', size: [1080, 200], fill: '#000000' } },
       ],
     } as Partial<ProjectFile>);
     const f = runCheck('trailing-black', p);
@@ -230,10 +230,14 @@ describe('check and look agree; fixes and messages', () => {
   it('black-frames: skipped for audio-only comps; transparent comps get the alpha hint, not a bg fix', () => {
     const audioOnly = shortsProject({ tracks: [{ id: 'A1', comp: 'main', audio: true }], clips: [{ id: 'vo', track: 'A1', at: 0, len: 300, asset: 'bgv' }] } as Partial<ProjectFile>);
     expect(runCheck('black-frames', audioOnly, { frames: new Map([[30, img([0, 0, 0])]]), layers: new Map([[30, []]]) })).toEqual([]);
-    const gfx = shortsProject({ clips: [{ id: 'dot', track: 'T1', at: 0, len: 300, shape: { type: 'ellipse', size: [20, 20] } }] } as Partial<ProjectFile>);
-    const f = runCheck('black-frames', gfx, { frames: new Map([[30, img([0, 0, 0])]]), layers: layersAt(30, [L('dot', 'shape', [530, 950, 20, 20])]) });
-    expect(f[0]!.message).toContain('Intended for alpha? ignore with tag qa-ignore:black-frames');
-    expect(f[0]!.fix).toBe('mgl edit <file> clip.set dot \'tags=["qa-ignore:black-frames"]\'');
+    const gfx = shortsProject({ clips: [{ id: 'dark', track: 'T1', at: 0, len: 300, color: '#000000' }] } as Partial<ProjectFile>);
+    const at30 = { frames: new Map([[30, img([0, 0, 0])]]), layers: layersAt(30, [L('dark', 'solid', [0, 0, 1080, 1920])]) };
+    // an --alpha render: transparent on purpose, so the hint is an ignore tag
+    const f = runCheck('black-frames', gfx, { ...at30, alpha: true });
+    expect(f[0]!.message).toContain('--alpha');
+    expect(f[0]!.fix).toBe('mgl edit <file> clip.set dark \'tags=["qa-ignore:black-frames"]\'');
+    // not an alpha render: a transparent comp renders black, so the fix is a bg (never a tag that hides it)
+    expect(runCheck('black-frames', gfx, at30)[0]!.fix).toBe('mgl edit <file> comp.set main bg=#202020');
   });
 
   it('text-cut-off: text that moves across the edge (a crawl) is info with no fix; static text is an error', () => {

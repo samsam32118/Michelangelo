@@ -67,6 +67,18 @@ normalisation, so stems still sum to the mix.
 mgl edit mix.mgl.json audio.normalize lufs=-14
 ```
 
+## Processing order
+
+Each clip's sound is processed in this order: trim and speed (`in`, `len`, `speed`), then `gain`, then the clip's
+`fx` in list order, then the fades. The `fx` run as one chain over the whole clip (not per segment), and their
+delay (for example a limiter's lookahead) is compensated, so the clip stays in sync. Gain comes before the
+effects, so a `limiter` or `compressor` at the end of a clip's `fx` sees the boosted signal and its ceiling holds.
+
+Each bus then mixes its tracks and processes the sum in this order: the bus's own `fx` in list order, then the
+`duck`, then the bus `gain` and mute. A compressor on a ducked bus works on the signal before the duck, so it does
+not shrink the duck depth and the bus keeps the requested `db`. Buses route to `master`, where the mix gets master's `fx`, `gain` and finally the
+`loudness` normalisation (target and true-peak ceiling).
+
 ## Cutting silences
 
 `audio.cut-silences <clip>` analyses the clip's audio, finds silences longer than `min` (default 0.6 s)

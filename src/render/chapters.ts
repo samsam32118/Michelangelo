@@ -14,7 +14,8 @@ export const YT_MIN_SECONDS = 10;
 
 /**
  * The chapters of a comp in `range` (frames; times relative to its start): markers with a note, sorted by time.
- * When none starts at 0 an "Intro" chapter is added there (noted). Notes also warn about YouTube's rules.
+ * When none starts at 0 an "Intro" chapter is added there (noted). Notes also warn about YouTube's rules (the last
+ * chapter's length runs to the end of the range, when known).
  */
 export function chapterList(project: ProjectFile, compId: string, range?: [number, number]): { chapters: Chapter[]; notes: string[] } {
   const comp = project.comps.find((c) => c.id === compId);
@@ -37,7 +38,9 @@ export function chapterList(project: ProjectFile, compId: string, range?: [numbe
     notes.push('added an "Intro" chapter at 0:00 (the first chapter must start at 0:00); add a marker at 0 with a note to name it');
   } else chapters[0]!.start = 0;
   if (chapters.length < YT_MIN_CHAPTERS) notes.push(`warning: ${chapters.length} chapter${chapters.length > 1 ? 's' : ''}; YouTube needs at least ${YT_MIN_CHAPTERS} to show chapters`);
-  const short = chapters.filter((c, i) => i + 1 < chapters.length && chapters[i + 1]!.start - c.start < YT_MIN_SECONDS);
+  // the last chapter runs to the end of the range (or of a comp with a fixed length)
+  const end = Number.isFinite(r1) ? framesToSeconds(r1 - r0, rate) : typeof comp.length === 'number' ? framesToSeconds(comp.length - r0, rate) : undefined;
+  const short = chapters.filter((c, i) => (i + 1 < chapters.length ? chapters[i + 1]!.start : end ?? Infinity) - c.start < YT_MIN_SECONDS);
   if (short.length) notes.push(`warning: ${short.map((c) => `"${c.title}" (${ytStamp(c.start)})`).join(', ')} ${short.length > 1 ? 'are' : 'is'} shorter than ${YT_MIN_SECONDS} s; YouTube ignores chapter lists with chapters under ${YT_MIN_SECONDS} s`);
   return { chapters, notes };
 }

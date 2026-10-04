@@ -20,3 +20,5 @@ Notes:
 | 2026-10-04 | m3-round2 | main | claude-opus-5-5 | 30 | 29 | 96.7 % | 0.9917 | 10.6 | 403.1k | 50.8 | 0 | 0 | 0 | baseline 0.0556, delta 0.9361; 40 permission denials; M3 after fix round 2 |
 | 2026-10-04 | m3-round2 | heldout | claude-opus-5-5 | 10 | 8 | 80 % | 0.9133 | 17.5 | 740.3k | 100 | 0 | 0 | 0 | baseline 0.04, delta 0.8733; 27 permission denials; M3 held-out v1 (exposed; regression) |
 | 2026-10-04 | m3-round2 | heldout2 | claude-opus-5-5 | 10 | 8 | 80 % | 0.9667 | 19.6 | 831k | 113.6 | 0 | 0 | 1 | baseline 0, delta 0.9667; 36 permission denials; M3 held-out v2 |
+| 2026-10-04 | m4-final | main | claude-opus-5-5 | 30 | 28 | 93.3 % | 0.9667 | 11.4 | 434.7k | 58.5 | 0 | 0 | 4 | baseline 0.0556, delta 0.9111; 36 permission denials; M4 after fix round 3 |
+| 2026-10-04 | m4-final | heldout | claude-opus-5-5 | 10 | 7 | 70 % | 0.8933 | 19.8 | 828k | 118.8 | 0 | 0 | 12 | baseline 0.04, delta 0.8533; 30 permission denials; M4 held-out v1 (exposed; regression) |

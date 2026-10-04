@@ -133,7 +133,7 @@ test('NASA fetch resolves the asset list: the ~large MP4 for video, the original
 test('Smithsonian with a key: the live API, CC0 images only, author from the record', async () => {
   const { items, ctx } = await search('image', 'jazz', { source: 'smithsonian', env: { SMITHSONIAN_API_KEY: 'test-key' } });
   assert.ok(items.length >= 2);
-  assert.match(ctx.calls[0]!.url, /q=jazz%20AND%20media_usage%3ACC0%20AND%20online_media_type%3AImages/);
+  assert.match(ctx.calls[0]!.url, /q=jazz%20AND%20media_usage%3ACC0%20AND%20online_media_type%3AImages%20AND%20NOT%20unit_code%3ANMNH\*/);
   const it = items[0]!;
   assert.equal(it.licence.id, 'cc0');
   assert.equal(it.source, 'Smithsonian National Museum of African American History and Culture');

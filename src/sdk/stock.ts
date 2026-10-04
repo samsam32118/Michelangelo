@@ -75,6 +75,8 @@ export function stockService(projectDir: string, registry: PluginRegistry | unde
     }));
   };
 
+  const shownFile = () => join(root, 'shown', `${createHash('sha1').update(projectDir).digest('hex').slice(0, 16)}.json`);
+
   const target = (rel: string): string => {
     if (!STOCK_PATH.test(rel)) fail('E_PATH', `open media goes in media/stock/<kind>/, not "${rel}".`, 'use media.fetch; it names the file.');
     return confined(projectDir, rel);
@@ -106,7 +108,34 @@ export function stockService(projectDir: string, registry: PluginRegistry | unde
       return { items, failed, notes };
     },
 
+    async setShown(kind, ids) {
+      const file = shownFile();
+      let all: Record<string, string[]> = {};
+      try { all = JSON.parse(await readFile(file, 'utf8')) as Record<string, string[]>; } catch { /* first search */ }
+      let list = all[kind] ?? [];
+      // keep handles short: start over after 500 of a kind
+      if (list.length + ids.length > 500) list = [];
+      const handles = ids.map((id) => {
+        let i = list.indexOf(id);
+        if (i < 0) { list.push(id); i = list.length - 1; }
+        return `${kind[0]}${i + 1}`;
+      });
+      all[kind] = list;
+      await mkdir(dirname(file), { recursive: true });
+      await writeFile(file, JSON.stringify(all));
+      return handles;
+    },
+
     async item(id) {
+      // a short handle from a search of that kind in this project: s1 (sfx), m1 (music), i1 (image), v1 (video)
+      const h = /^([smiv])(\d{1,3})$/.exec(id);
+      if (h) {
+        const kind = ({ s: 'sfx', m: 'music', i: 'image', v: 'video' } as Record<string, string>)[h[1]!]!;
+        let all: Record<string, string[]> = {};
+        try { all = JSON.parse(await readFile(shownFile(), 'utf8')) as Record<string, string[]>; } catch { return undefined; }
+        const full = all[kind]?.[Number(h[2]) - 1];
+        return full ? svc.item(full) : undefined;
+      }
       if (memory.has(id)) return memory.get(id);
       const file = join(root, 'items', itemKey(id) + '.json');
       try {
@@ -171,7 +200,7 @@ export function stockService(projectDir: string, registry: PluginRegistry | unde
       try { return JSON.parse(await readFile(target(rel), 'utf8')) as Record<string, unknown>; } catch { return undefined; }
     },
 
-    async sheet(items) {
+    async sheet(items, handles) {
       const shown = items.filter((it) => it.preview).slice(0, 12);
       if (!shown.length) return undefined;
       const { createCanvas, loadImage } = await import('@napi-rs/canvas');
@@ -195,8 +224,8 @@ export function stockService(projectDir: string, registry: PluginRegistry | unde
         } catch { /* a missing preview leaves the tile empty */ }
         ctx.fillStyle = '#ffd400';
         ctx.font = `bold ${Math.round(label * 0.5)}px "JetBrains Mono", "Inter", sans-serif`;
-        const n = items.indexOf(it) + 1;
-        ctx.fillText(`${n}`, x + 6, y + tile + label / 2);
+        const n = items.indexOf(it);
+        ctx.fillText(handles?.[n] ?? `${it.kind[0]}${n + 1}`, x + 6, y + tile + label / 2);
         ctx.fillStyle = '#e8e8ec';
         ctx.font = `${Math.round(label * 0.32)}px "JetBrains Mono", "Inter", sans-serif`;
         const size = it.width && it.height ? `${it.width}x${it.height}` : it.seconds ? `${it.seconds.toFixed(1)}s` : '';

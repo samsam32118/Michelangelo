@@ -72,6 +72,11 @@ export interface StockService {
   search(q: import('../../plugin/api.js').StockQuery & { provider?: string }): Promise<{ items: import('../../plugin/api.js').StockItem[]; failed: { provider: string; error: string }[]; notes: string[] }>;
   /** an item from a recent search (cached for 30 days), else from its provider's item() */
   item(id: string): Promise<import('../../plugin/api.js').StockItem | undefined>;
+  /**
+   * remember what a search showed and return each item's short handle ("s1", "i3": kind letter + number). Handles are
+   * stable in a project: a later search continues the numbering, and an item shown before keeps its handle.
+   */
+  setShown(kind: string, ids: string[]): Promise<string[]>;
   /** download an item to `rel` (media/stock/<kind>/<name>); refuses HTML error pages; returns bytes and sha256 */
   download(item: import('../../plugin/api.js').StockItem, rel: string): Promise<{ bytes: number; sha256: string }>;
   exists(rel: string): Promise<boolean>;
@@ -81,7 +86,7 @@ export interface StockService {
   writeSidecar(rel: string, data: unknown): Promise<void>;
   readSidecar(rel: string): Promise<Record<string, unknown> | undefined>;
   /** a numbered contact sheet (PNG) of the items' previews */
-  sheet?(items: import('../../plugin/api.js').StockItem[]): Promise<Uint8Array | undefined>;
+  sheet?(items: import('../../plugin/api.js').StockItem[], handles?: string[]): Promise<Uint8Array | undefined>;
 }
 
 /** A word with times in seconds (from a speak or transcribe provider). */

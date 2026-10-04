@@ -760,18 +760,18 @@ mgl edit video.mgl.json media.credits card=true
 
 ### media.fetch
 
-Download one media.search result into media/stock/<kind>/ (reused when already there) with a licence sidecar (<file>.json), add it as an asset with its licence and credit line, and with at= also a clip: music on a music-bus track, sfx on an sfx-bus track, images and video on a new top visual track (len: images 3 s, video up to 10 s, sounds their length). Sounds are described as text (loudness, peak, where it starts and peaks, tonal/noisy, dark/bright, tempo); align=onset starts the clip so the sound's first audible moment lands on at=. Refuses licences media.search would hide (licences=[...] allows share-alike or non-commercial). Credit attribution licences with media.credits.
+Download one media.search result (its short handle such as i1, stable within the project, or its full id) into media/stock/<kind>/ (reused when already there) with a licence sidecar (<file>.json), add it as an asset with its licence and credit line, and with at= also a clip: music on a music-bus track, sfx on an sfx-bus track, images and video on a new top visual track (len: images 3 s, video up to 10 s, sounds their length). Sounds are described as text (loudness, peak, where it starts and peaks, tonal/noisy, dark/bright, tempo); align=onset starts the clip so the sound's first audible moment lands on at=. Refuses licences media.search would hide (licences=[...] allows share-alike or non-commercial). Credit attribution licences with media.credits.
 
 fields: `id` string (bare word); `as?` string; `at?` time; `len?` time; `track?` string; `comp?` string; `clip?` string; `gain?` number; `align?` "start"\|"onset" = `"start"`; `licences?` ("free"\|"attribution"\|"share-alike"\|"non-commercial"\|"no-derivatives"\|"unknown")[]
 
 ```text
-mgl edit video.mgl.json media.fetch open-media:openverse-audio:6f1c2b0e-0000-4000-8000-000000000000 at=2s align=onset
-{"op":"media.fetch","id":"open-media:openverse-audio:6f1c2b0e-0000-4000-8000-000000000000","at":"2s","align":"onset"}
+mgl edit video.mgl.json media.fetch s1 at=2s align=onset
+{"op":"media.fetch","id":"s1","at":"2s","align":"onset"}
 ```
 
 ### media.search
 
-Search openly licensed media through the project's stock providers (a plugin, e.g. open-media): kind image|video|music|sfx, query; optional provider, source (one archive of a provider), orientation, minSeconds/maxSeconds, minWidth (default for image/video: half the comp's long side), limit (default 8), page. Changes nothing. Only CC0, public domain and CC BY results are shown unless licences=[...] allows share-alike or non-commercial; no-derivatives and unknown licences are never shown. Prints numbered results (id, title, length or size, licence, author, source); the full list goes to .mgl/<name>/search.json and, for images and video, a numbered preview sheet to .mgl/<name>/search.png. Then: media.fetch id=<id>.
+Search openly licensed media through the project's stock providers (a plugin, e.g. open-media): kind image|video|music|sfx, query; optional provider, source (one archive of a provider), orientation, minSeconds/maxSeconds, minWidth (default for image/video: half the comp's long side), limit (default 8), page. Changes nothing. Only CC0, public domain and CC BY results are shown unless licences=[...] allows share-alike or non-commercial; no-derivatives and unknown licences are never shown. Prints one line per result led by a short handle (s… sfx, m… music, i… image, v… video; stable within the project, a later search continues the numbering; title, length or size, licence, author, source); full ids and URLs go to .mgl/<name>/search.json and, for images and video, a numbered preview sheet to .mgl/<name>/search.png. Then: media.fetch id=i1.
 
 fields: `kind` "image"\|"video"\|"music"\|"sfx"; `query` string (bare word); `provider?` string; `source?` string; `orientation?` "portrait"\|"landscape"\|"square"; `minSeconds?` number; `maxSeconds?` number; `minWidth?` int; `limit?` int = `8`; `page?` int; `licences?` ("free"\|"attribution"\|"share-alike"\|"non-commercial"\|"no-derivatives"\|"unknown")[]
 

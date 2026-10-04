@@ -145,7 +145,7 @@ cut, transition and entrance); all generated offline. Speech needs a provider pl
 offline drafts): `audio.speak text="..."` then `captions.from-speech` (word-timed captions, in sync by default;
 `mgl docs audio`). A recorded voice-over with its script: `captions.from-text voice=<clip> file=script.txt`. Real images, footage,
 music and sound effects with a stock plugin (open-media): `media.search kind=image|video|music|sfx query=...`,
-`media.fetch id=... at=...`, then `media.credits card=true` (licences checked, sounds described as text; `mgl docs media`).
+`media.fetch id=i1 at=...` (the handle from the list), then `media.credits card=true` (licences checked, sounds described as text; `mgl docs media`).
 `mgl docs commands` lists all of them; `mgl docs <op>` prints one with its fields and an example.
 
 ## Look and QA

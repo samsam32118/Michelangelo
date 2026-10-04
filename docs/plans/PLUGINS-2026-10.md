@@ -281,3 +281,7 @@ Before each push: `npm run typecheck`, `npm test`, `npm run docs:check`, `mgl pl
 - Eval: `examples/plugins/open-media/evals/open-media-short` (network allowlist in its meta.json), not yet run.
 - Versioning: `main` took plugin API 1.4.0 for speech timing (the kokoro-voice work) while this was in review, so these
   additions ship as **1.5.0** (minor = additive); the plan text above still says 1.4.
+- Review against the goal (fewer tokens, better results): results carry stable short handles (`s1`, `i3`) instead of
+  long ids; licence names are short in lists; the Smithsonian API skips natural-history specimen units; tempo only for
+  music. Found by a local test reel (jet-engine fan meets Japanese garden, 10 s, Kokoro voice): about 25 commands,
+  QA clean, final render 21 s (2.1× real time).

@@ -27,14 +27,14 @@ function needStock(ctx: CommandContext, op: string, kind?: StockKind): StockServ
 const fmtSecs = (s: number) => (s >= 60 ? `${Math.floor(s / 60)}:${(s % 60).toFixed(0).padStart(2, '0')}` : `${s.toFixed(s < 10 ? 1 : 0)}s`);
 const clipText = (t: string, n: number) => (t.length > n ? t.slice(0, n - 1) + '…' : t);
 
-/** An id as one shell word (quoted when it has spaces or quotes). */
-const shellWord = (s: string) => (/^[\w:.%@+-]+$/.test(s) ? s : `'${s.replace(/'/g, `'\\''`)}'`);
+/** A licence as few tokens as possible for result lists (credits keep the full name). */
+const licenceShort = (id: string) => ({ 'pd-us-gov': 'PD (US gov)', pdm: 'PDM', nkr: 'no known restrictions', 'public-domain': 'PD' } as Record<string, string>)[id] ?? licenceName(id);
 
-/** One numbered result line for the agent. */
-function resultLine(it: StockItem, i: number): string {
+/** One result line for the agent, led by its short handle (the full id is in search.json). */
+function resultLine(it: StockItem, h: string): string {
   const size = it.width && it.height ? `${it.width}x${it.height}` : '';
   const dur = it.seconds !== undefined ? fmtSecs(it.seconds) : '';
-  return `${String(i + 1).padStart(2)}. ${shellWord(it.id)} · ${clipText(it.title || 'untitled', 48)} · ${[dur, size].filter(Boolean).join(' ')}${dur || size ? ' · ' : ''}${licenceName(it.licence.id)}${it.author ? ` · ${clipText(it.author, 28)}` : ''} · ${it.source}`;
+  return `${h.padStart(3)} · ${clipText(it.title || 'untitled', 48)} · ${[dur, size].filter(Boolean).join(' ')}${dur || size ? ' · ' : ''}${licenceShort(it.licence.id)}${it.author ? ` · ${clipText(it.author, 28)}` : ''} · ${it.source}`;
 }
 
 const orient = (it: StockItem) => (!it.width || !it.height ? undefined : it.width > it.height * 1.1 ? 'landscape' : it.height > it.width * 1.1 ? 'portrait' : 'square');
@@ -50,7 +50,7 @@ function longSide(ctx: CommandContext): number | undefined {
 
 defineCommand({
   op: 'media.search', group: 'media',
-  doc: 'Search openly licensed media through the project\'s stock providers (a plugin, e.g. open-media): kind image|video|music|sfx, query; optional provider, source (one archive of a provider), orientation, minSeconds/maxSeconds, minWidth (default for image/video: half the comp\'s long side), limit (default 8), page. Changes nothing. Only CC0, public domain and CC BY results are shown unless licences=[...] allows share-alike or non-commercial; no-derivatives and unknown licences are never shown. Prints numbered results (id, title, length or size, licence, author, source); the full list goes to .mgl/<name>/search.json and, for images and video, a numbered preview sheet to .mgl/<name>/search.png. Then: media.fetch id=<id>.',
+  doc: 'Search openly licensed media through the project\'s stock providers (a plugin, e.g. open-media): kind image|video|music|sfx, query; optional provider, source (one archive of a provider), orientation, minSeconds/maxSeconds, minWidth (default for image/video: half the comp\'s long side), limit (default 8), page. Changes nothing. Only CC0, public domain and CC BY results are shown unless licences=[...] allows share-alike or non-commercial; no-derivatives and unknown licences are never shown. Prints one line per result led by a short handle (s… sfx, m… music, i… image, v… video; stable within the project, a later search continues the numbering; title, length or size, licence, author, source); full ids and URLs go to .mgl/<name>/search.json and, for images and video, a numbered preview sheet to .mgl/<name>/search.png. Then: media.fetch id=i1.',
   schema: z.strictObject({
     kind: z.enum(KINDS), query: z.string().min(1), provider: z.string().min(1).optional(), source: z.string().min(1).optional(),
     orientation: z.enum(['portrait', 'landscape', 'square']).optional(), minSeconds: z.number().min(0).optional(), maxSeconds: z.number().positive().optional(),
@@ -85,12 +85,13 @@ defineCommand({
       return true;
     });
     const shown = kept.slice(0, p.limit);
-    const lines = shown.map(resultLine);
+    const handles = await s.setShown(p.kind, shown.map((it) => it.id));
+    const lines = shown.map((it, i) => resultLine(it, handles[i]!));
     let sheet: string | undefined, list: string | undefined;
     if (ctx.services.writeWork) {
-      list = await ctx.services.writeWork('search.json', new TextEncoder().encode(JSON.stringify({ query: q, items: shown, more: kept.length - shown.length, failed, notes }, null, 1) + '\n'));
+      list = await ctx.services.writeWork('search.json', new TextEncoder().encode(JSON.stringify({ query: q, items: shown.map((it, i) => ({ handle: handles[i], ...it })), more: kept.length - shown.length, failed, notes }, null, 1) + '\n'));
       if (visual && s.sheet && shown.length) {
-        const png = await s.sheet(shown).catch(() => undefined);
+        const png = await s.sheet(shown, handles).catch(() => undefined);
         if (png) sheet = await ctx.services.writeWork('search.png', png);
       }
     }
@@ -105,8 +106,8 @@ defineCommand({
     for (const f of failed) tail.push(`provider ${f.provider} failed: ${f.error}`);
     for (const n of notes.slice(0, 6)) tail.push(`note: ${n}`);
     if (notes.length > 6) tail.push(`note: … ${notes.length - 6} more in search.json`);
-    if (sheet) tail.push(`previews: ${sheet} (numbered like the list)`);
-    if (shown.length) tail.push(`next: media.fetch id=${shellWord(shown[0]!.id)}${p.kind === 'sfx' || p.kind === 'music' ? ' at=<time>' : ''}`);
+    if (sheet) tail.push(`previews: ${sheet} (labelled with the handles)`);
+    if (shown.length) tail.push(`next: media.fetch id=${handles[0]}${p.kind === 'sfx' || p.kind === 'music' ? ' at=<time>' : ''}`);
     else tail.push(`try other words, a broader query, ${minWidth && visual ? `minWidth=0, ` : ''}or another kind`);
     ctx.summary([head, ...lines, ...tail].join('\n'));
   },
@@ -123,16 +124,16 @@ function soundLine(s: SoundFacts): string {
 
 defineCommand({
   op: 'media.fetch', group: 'media',
-  doc: 'Download one media.search result into media/stock/<kind>/ (reused when already there) with a licence sidecar (<file>.json), add it as an asset with its licence and credit line, and with at= also a clip: music on a music-bus track, sfx on an sfx-bus track, images and video on a new top visual track (len: images 3 s, video up to 10 s, sounds their length). Sounds are described as text (loudness, peak, where it starts and peaks, tonal/noisy, dark/bright, tempo); align=onset starts the clip so the sound\'s first audible moment lands on at=. Refuses licences media.search would hide (licences=[...] allows share-alike or non-commercial). Credit attribution licences with media.credits.',
+  doc: 'Download one media.search result (its short handle such as i1, stable within the project, or its full id) into media/stock/<kind>/ (reused when already there) with a licence sidecar (<file>.json), add it as an asset with its licence and credit line, and with at= also a clip: music on a music-bus track, sfx on an sfx-bus track, images and video on a new top visual track (len: images 3 s, video up to 10 s, sounds their length). Sounds are described as text (loudness, peak, where it starts and peaks, tonal/noisy, dark/bright, tempo); align=onset starts the clip so the sound\'s first audible moment lands on at=. Refuses licences media.search would hide (licences=[...] allows share-alike or non-commercial). Credit attribution licences with media.credits.',
   schema: z.strictObject({
-    id: z.string().min(3), as: Id.optional(), at: TimeArg.optional(), len: TimeArg.optional(), track: Id.optional(), comp: Id.optional(),
+    id: z.string().min(2), as: Id.optional(), at: TimeArg.optional(), len: TimeArg.optional(), track: Id.optional(), comp: Id.optional(),
     clip: Id.optional(), gain: z.number().min(-60).max(12).optional(), align: z.enum(['start', 'onset']).default('start'), licences: Allow,
   }),
-  primary: 'id', example: { id: 'open-media:openverse-audio:6f1c2b0e-0000-4000-8000-000000000000', at: '2s', align: 'onset' },
+  primary: 'id', example: { id: 's1', at: '2s', align: 'onset' },
   async apply(ctx, p) {
     const s = needStock(ctx, 'media.fetch');
     const item = await s.item(p.id);
-    if (!item) return fail('E_ARG', `unknown media id "${p.id}" (not in a recent search, and its provider cannot look it up).`, 'run media.search first and copy an id from its list.');
+    if (!item) return fail('E_ARG', `unknown media id "${p.id}" (not in the last search of its kind, or a full id its provider cannot look up).`, 'run media.search and use a handle from its list (s1, m1, i1, v1).');
     const cls = licenceClass(item.licence.id), why = refusal(cls, [...DEFAULT_ALLOWED, ...(p.licences ?? [])]);
     if (why) fail('E_LICENCE', `${item.id} (${licenceName(item.licence.id)}) is refused: ${why}.`, 'pick another result (media.search shows only usable ones by default).');
     const provider = item.id.split(':')[0]!.replace(/[^A-Za-z0-9-]/g, '');
@@ -166,7 +167,12 @@ defineCommand({
     // sounds: described as text, kept in the sidecar
     let sound = meta!.sound as SoundFacts | undefined;
     if ((item.kind === 'sfx' || item.kind === 'music') && !sound && ctx.services.describeSound) {
-      try { sound = await ctx.services.describeSound(rel); meta!.sound = sound; } catch { /* described when possible */ }
+      try {
+        sound = await ctx.services.describeSound(rel);
+        // a tempo means something for music only (an engine drone or a crowd has "beats" too)
+        if (item.kind !== 'music') delete sound.bpm;
+        meta!.sound = sound;
+      } catch { /* described when possible */ }
     }
     if (!reused || sound) await s.writeSidecar(`${rel}.json`, meta);
 

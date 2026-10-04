@@ -26,9 +26,9 @@ mgl plugin trust plugins/open-media
 mgl edit video.mgl.json project.set plugins='{"open-media": "^1.0.0"}'
 
 mgl edit video.mgl.json media.search kind=sfx query=whoosh maxSeconds=2
-mgl edit video.mgl.json media.fetch id=<id> at=2.5s align=onset
+mgl edit video.mgl.json media.fetch id=s1 at=2.5s align=onset
 mgl edit video.mgl.json media.search kind=image query="steam locomotive"   # then look at .mgl/video/search.png
-mgl edit video.mgl.json media.fetch id=<id> at=0 len=3s
+mgl edit video.mgl.json media.fetch id=i2 at=0 len=3s
 mgl edit video.mgl.json media.credits card=true
 ```
 
@@ -50,7 +50,7 @@ Measured on a cloud container (2026-10-04): the five default units (Cooper Hewit
 Art, Asian Art, African American History) streamed 0.58 GB in about 13 s and indexed 91,700 CC0 images into 5.3 MB;
 a search of it takes about 2 s with no network. Herbarium sheets and specimen photos (most of the dump) are never
 indexed by default; `nmah` (2.5 GB) and `sia` (2 GB) are opt-in. With `SMITHSONIAN_API_KEY` set (free from
-api.data.gov) the live API is used instead (1,000 requests an hour). Images download at full size (up to 4000 px)
+api.data.gov) the live API is used instead (1,000 requests an hour; natural-history specimen units excluded, as in the index). Images download at full size (up to 4000 px)
 without a key either way. Smithsonian Libraries' book scans are not in Open Access (53 images); they live in the
 Biodiversity Heritage Library and Internet Archive.
 

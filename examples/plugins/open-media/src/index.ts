@@ -302,8 +302,9 @@ const smithsonian: Source = {
   async search(q, ctx, n) {
     const key = ctx.env('SMITHSONIAN_API_KEY');
     if (key) {
+      // natural-history specimens (herbarium sheets, specimen photos) swamp ordinary words and are rarely footage material
       const terms = q.query.replace(/[():"]/g, ' ').trim();
-      const d = await getJson(ctx, `https://api.si.edu/openaccess/api/v1.0/search?${qs({ q: `${terms} AND media_usage:CC0 AND online_media_type:Images`, rows: Math.min(100, n), start: q.page ? (q.page - 1) * n : undefined, api_key: key })}`);
+      const d = await getJson(ctx, `https://api.si.edu/openaccess/api/v1.0/search?${qs({ q: `${terms} AND media_usage:CC0 AND online_media_type:Images AND NOT unit_code:NMNH*`, rows: Math.min(100, n), start: q.page ? (q.page - 1) * n : undefined, api_key: key })}`);
       return (d.response?.rows ?? []).map(siRecord).filter(Boolean).map((e: SiEntry) => siItem(e));
     }
     return siSearch(await siLoad(ctx.cacheDir), q.query, n).map(siItem);

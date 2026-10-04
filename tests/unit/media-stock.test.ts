@@ -159,30 +159,30 @@ describe('media.search', () => {
     const r = await edit({ op: 'media.search', kind: 'sfx', query: 'whoosh' });
     const text = r.summary.join('\n');
     expect(text).toMatch(/^sfx for "whoosh": 3 shown \(providers: fake, broken\)/);
-    expect(text).toContain(' 1. fake:w1 · Deep Whoosh #1 · 1.0s · CC0 · bigdog · Fake Sounds');
-    expect(text).toContain('fake:w2');
-    expect(text).not.toMatch(/fake:w3|fake:w4|fake:w5/);
+    expect(text).toContain(' s1 · Deep Whoosh #1 · 1.0s · CC0 · bigdog · Fake Sounds');
+    expect(text).toContain(' s2 · Whoosh by');
+    expect(text).not.toMatch(/Shared whoosh|Long rain|ND whoosh/);
     expect(text).toMatch(/hidden: .*1 share-alike.*1 no-derivatives.*1 too long|hidden: .*1 share-alike/);
     expect(text).toContain('provider broken failed: HTTP 503 from broken.test');
-    expect(text).toContain('next: media.fetch id=fake:w1 at=<time>');
+    expect(text).toContain('next: media.fetch id=s1 at=<time>');
     expect(seen[0]!.ua).toMatch(/^michelangelo\//);
     const saved = JSON.parse(readFileSync(join(work, 'search.json'), 'utf8'));
-    expect(saved.items.map((i: StockItem) => i.id)).toEqual(['fake:w1', 'fake:w2', 'fake:gone']);
+    expect(saved.items.map((i: StockItem & { handle: string }) => [i.handle, i.id])).toEqual([['s1', 'fake:w1'], ['s2', 'fake:w2'], ['s3', 'fake:gone']]);
   });
 
   it('licences=["share-alike"] shows share-alike; no-derivatives never', async () => {
     const { edit } = setup();
     const r = await edit({ op: 'media.search', kind: 'sfx', query: 'whoosh', licences: ['share-alike', 'no-derivatives'] });
-    expect(r.summary.join('\n')).toContain('fake:w3');
-    expect(r.summary.join('\n')).not.toContain('fake:w5');
+    expect(r.summary.join('\n')).toContain('Shared whoosh');
+    expect(r.summary.join('\n')).not.toContain('ND whoosh');
   });
 
   it('images below half the comp long side are hidden, and a numbered preview sheet is written', async () => {
     const { edit, work } = setup();
     const r = await edit({ op: 'media.search', kind: 'image', query: 'blue' });
     const text = r.summary.join('\n');
-    expect(text).toContain('fake:p1');
-    expect(text).not.toContain('fake:p2');
+    expect(text).toContain(' i1 · Blue field');
+    expect(text).not.toContain('Tiny thumb');
     expect(text).toMatch(/1 too small/);
     expect(text).toMatch(/previews: .*search\.png/);
     expect(existsSync(join(work, 'search.png'))).toBe(true);
@@ -214,8 +214,13 @@ describe('media.fetch', () => {
     expect(60 - clip.at).toBeGreaterThanOrEqual(8);
     expect(60 - clip.at).toBeLessThanOrEqual(11);
     expect(r.summary.join('\n')).toMatch(/sound: 1\.00s, -?\d+\.\d LUFS, peak .* starts 0\.\d\ds, .*noisy/);
-    // a second fetch reuses the file
-    const again = await edit({ op: 'media.fetch', id: 'fake:w2' });
+    // a second fetch reuses the file; the short handle names the same item
+    const again = await edit({ op: 'media.fetch', id: 's2' });
+    // handles are stable: a second search continues the numbering, a result shown before keeps its handle
+    const second = await edit({ op: 'media.search', kind: 'sfx', query: 'whoosh', licences: ['share-alike'] });
+    const text2 = second.summary.join('\n');
+    expect(text2).toContain(' s1 · Deep Whoosh #1');
+    expect(text2).toMatch(/ s4 · Shared whoosh/);
     expect((again.out[0] as Record<string, unknown>).reused).toBe(true);
   });
 

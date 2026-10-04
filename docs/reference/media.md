@@ -17,9 +17,9 @@ mgl plugin trust plugins/open-media
 mgl edit video.mgl.json project.set plugins='{"open-media": "^1.0.0"}'
 
 mgl edit video.mgl.json media.search kind=sfx query=whoosh maxSeconds=2
-mgl edit video.mgl.json media.fetch id=<id from the list> at=2.5s align=onset
+mgl edit video.mgl.json media.fetch id=s1 at=2.5s align=onset
 mgl edit video.mgl.json media.search kind=image query="steam locomotive" orientation=portrait
-mgl edit video.mgl.json media.fetch id=<id> at=0 len=3s
+mgl edit video.mgl.json media.fetch id=i2 at=0 len=3s
 mgl edit video.mgl.json media.credits card=true
 ```
 
@@ -27,9 +27,11 @@ mgl edit video.mgl.json media.credits card=true
 
 `kind` is `image`, `video`, `music` or `sfx`; `query` is words. It changes nothing in the project.
 
-- Prints at most `limit` (default 8) numbered lines: `id · title · length or size · licence · author · source`.
-  The full list (with URLs, tags, dates) is `.mgl/<name>/search.json`; for images and video a numbered preview sheet
-  is `.mgl/<name>/search.png`: **look at it** before you fetch.
+- Prints at most `limit` (default 8) lines: `handle · title · length or size · licence · author · source`. A handle is
+  the kind's letter and a number (`s1` sound effect, `m1` music, `i1` image, `v1` video); `media.fetch id=i3` takes
+  it. Handles are stable within a project: a later search continues the numbering and a result shown before keeps its
+  handle, so you can search several times before fetching. Full ids, URLs, tags and dates are in `.mgl/<name>/search.json`; for
+  images and video a preview sheet labelled with the handles is `.mgl/<name>/search.png`: **look at it** before you fetch.
 - Only **CC0, public domain and CC BY** results are shown. `licences=["share-alike"]` adds CC BY-SA (the finished
   video must then be released under CC BY-SA too); `licences=["non-commercial"]` adds NC licences (never in a
   commercial video). **No-derivatives and unknown licences are never shown**: an edit is a derivative.
@@ -42,7 +44,7 @@ mgl edit video.mgl.json media.credits card=true
 
 ## media.fetch
 
-`id` is a result id. It downloads the file to `media/stock/<kind>/<provider>-<hash>.<ext>` (reused if already
+`id` is a handle from a search (`i3`) or a full id from search.json. It downloads the file to `media/stock/<kind>/<provider>-<hash>.<ext>` (reused if already
 there), writes `<file>.json` next to it (title, author, source, landing page, licence id, name, URL and class,
 credit line, size or length, fetch date, sha256), and adds an asset with `licence` and `credit`.
 

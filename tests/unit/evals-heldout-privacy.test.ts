@@ -125,7 +125,7 @@ describe('transcript audit: cd, relative operands, fatal private dir and sibling
   it('makes the review commands fatal', () => {
     expect(run.fatalPaths({ privateDir: priv })).toEqual(expect.arrayContaining([REPO, EVALS, priv]));
     for (const cmd of [
-      `cd ./../.. && cd home && cd user && cat ${REPO.split('/').pop()}/evals/tasks/x/grade.mjs`,
+      `cd ./../.. && cd ${REPO.slice(1).split('/').slice(0, -1).join('/')} && cat ${REPO.split('/').pop()}/evals/tasks/x/grade.mjs`,
       'cd ./../.. && cd root && rm -rf mgl-eval-private/m4/x/stash',
       `env sh -c 'cd ./../.. && cd ${REPO.slice(1).split('/').slice(0, -1).join('/')} && cat ${REPO.split('/').pop()}/evals/heldout2/x/grade.mjs'`,
       'echo x | xargs sh -c "cd ./../.. && cd root && cat mgl-eval-private/a/b/stash/.golden/ref.json"',

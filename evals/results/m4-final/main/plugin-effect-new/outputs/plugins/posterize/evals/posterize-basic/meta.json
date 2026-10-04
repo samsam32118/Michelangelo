@@ -1,0 +1,16 @@
+{
+  "id": "posterize-basic",
+  "tags": [
+    "plugins",
+    "effect"
+  ],
+  "timeout_min": 15,
+  "expects_weak": false,
+  "fixtures": [
+    "demo.mgl.json (a 1080x1920 30 fps comp with a testsrc2 clip)"
+  ],
+  "checks": [
+    "demo.mgl.json names the plugin and the clip has fx posterize levels=3",
+    "out/posterize.png: each colour channel holds at most 3 values (0, 128, 255)"
+  ]
+}

@@ -1,0 +1,19 @@
+{
+  "name": "iris",
+  "version": "0.1.0",
+  "description": "An iris transition: a circle grows from the centre revealing the next clip.",
+  "type": "module",
+  "main": "src/index.ts",
+  "michelangelo": {
+    "api": "^1.2.0",
+    "kinds": [
+      "transition"
+    ]
+  },
+  "scripts": {
+    "test": "node --test test/*.test.ts"
+  },
+  "peerDependencies": {
+    "michelangelo": "*"
+  }
+}

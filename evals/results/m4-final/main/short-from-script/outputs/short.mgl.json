@@ -1,0 +1,42 @@
+{"michelangelo": 1,
+"project": {"platform": "shorts"},
+"assets": [
+{"id": "vo-wav", "src": "vo.wav"},
+{"id": "bg-mp4", "src": "bg.mp4"}
+],
+"comps": [
+{"id": "main", "size": [1080, 1920], "fps": 30}
+],
+"tracks": [
+{"id": "V1", "comp": "main"},
+{"id": "T1", "comp": "main"},
+{"id": "V2", "comp": "main"},
+{"id": "A1", "comp": "main", "audio": true, "bus": "dialogue"},
+{"id": "A2", "comp": "main", "audio": true, "bus": "music"}
+],
+"clips": [
+{"id": "bg", "track": "V1", "at": 0, "len": 328, "asset": "bg-mp4", "fit": "cover"},
+{"id": "title", "track": "T1", "at": 0, "len": 60, "text": "3 Tips to Focus Better", "style": "title", "animate": {"in": "pop", "by": "word"}},
+{"id": "subs", "track": "V2", "at": 0, "len": 328, "captions": true, "style": {"highlight": "#ff3b8b", "base": "karaoke"}},
+{"id": "vo", "track": "A1", "at": 0, "len": 328, "asset": "vo-wav"}
+],
+"cues": [
+{"id": "c1", "clip": "subs", "at": 7, "len": 15, "text": "Want to", "words": [0, 9]},
+{"id": "c2", "clip": "subs", "at": 22, "len": 27, "text": "focus better?", "words": [0, 11]},
+{"id": "c3", "clip": "subs", "at": 57, "len": 26, "text": "Try these", "words": [0, 10]},
+{"id": "c4", "clip": "subs", "at": 83, "len": 30, "text": "three tips.", "words": [0, 15]},
+{"id": "c5", "clip": "subs", "at": 122, "len": 5, "text": "One.", "words": [0]},
+{"id": "c6", "clip": "subs", "at": 127, "len": 17, "text": "Put your phone", "words": [0, 5, 10]},
+{"id": "c7", "clip": "subs", "at": 144, "len": 18, "text": "in another room.", "words": [0, 3, 12]},
+{"id": "c8", "clip": "subs", "at": 172, "len": 8, "text": "Two.", "words": [0]},
+{"id": "c9", "clip": "subs", "at": 180, "len": 23, "text": "Work in short", "words": [0, 8, 13]},
+{"id": "c10", "clip": "subs", "at": 203, "len": 25, "text": "sprints with a", "words": [0, 13, 21]},
+{"id": "c11", "clip": "subs", "at": 228, "len": 11, "text": "timer.", "words": [0]},
+{"id": "c12", "clip": "subs", "at": 248, "len": 11, "text": "Three.", "words": [0]},
+{"id": "c13", "clip": "subs", "at": 267, "len": 20, "text": "Take a real", "words": [0, 8, 12]},
+{"id": "c14", "clip": "subs", "at": 287, "len": 29, "text": "break every hour.", "words": [0, 9, 19]}
+],
+"buses": [
+{"id": "master", "loudness": {"lufs": -14, "peak": -1}}
+]
+}

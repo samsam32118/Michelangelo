@@ -1,0 +1,563 @@
+{
+ "label": "m4-final",
+ "set": "heldout",
+ "model": "claude-opus-5-5",
+ "date": "2026-10-04T09:55:13.476Z",
+ "dryRun": false,
+ "sandbox": false,
+ "isolation": "audit",
+ "packageVersion": "0.1.0",
+ "timeoutScale": 1,
+ "tasks": 10,
+ "passed": 7,
+ "successRate": 0.7,
+ "meanScore": 0.8933,
+ "meanTurns": 19.8,
+ "meanTokens": 828030,
+ "totalTokens": 8280300,
+ "totalOutputTokens": 61469,
+ "totalCostUsd": 5.48,
+ "meanWallSec": 118.8,
+ "timeouts": 0,
+ "bashTimeouts": 0,
+ "failedEdits": 0,
+ "permissionDenials": 30,
+ "violations": 12,
+ "fatalViolations": 0,
+ "violationFails": 0,
+ "meanBaselineScore": 0.04,
+ "meanDeltaScore": 0.8533,
+ "baselineTasks": 10,
+ "topErrors": [
+  [
+   "E_OVERLAP",
+   18
+  ],
+  [
+   "E_ARG",
+   1
+  ],
+  [
+   "E_FORMAT",
+   1
+  ]
+ ],
+ "topVerbs": [
+  [
+   "docs",
+   44
+  ],
+  [
+   "edit",
+   28
+  ],
+  [
+   "render",
+   25
+  ],
+  [
+   "check",
+   22
+  ],
+  [
+   "show",
+   18
+  ],
+  [
+   "look",
+   15
+  ],
+  [
+   "plugin",
+   10
+  ],
+  [
+   "new",
+   7
+  ]
+ ],
+ "results": [
+  {
+   "task": "h-3975d1",
+   "pass": true,
+   "score": 1,
+   "wallSec": 83.378,
+   "timedOut": false,
+   "timeoutMin": 25,
+   "expectsWeak": true,
+   "baselineScore": 0,
+   "exitCode": 0,
+   "outputs": 2,
+   "dirRemoved": true,
+   "deltaScore": 1,
+   "checks": 4,
+   "harnessError": false,
+   "metrics": {
+    "turns": 18,
+    "inputTokens": 32,
+    "outputTokens": 3694,
+    "cacheReadTokens": 738185,
+    "cacheCreationTokens": 30053,
+    "costUsd": 0.46324600000000005,
+    "toolCalls": 16,
+    "toolCounts": {
+     "Skill": 1,
+     "Bash": 12,
+     "Read": 3
+    },
+    "bashTimeouts": 0,
+    "failedEdits": 0,
+    "permissionDenials": 2,
+    "errorCodes": {},
+    "verbs": {
+     "docs": 2,
+     "new": 2,
+     "edit": 15,
+     "show": 2,
+     "check": 2,
+     "look": 2,
+     "render": 1
+    },
+    "violations": 0,
+    "fatalViolations": 0,
+    "resultSubtype": "success",
+    "isError": false,
+    "apiMs": 52470,
+    "results": 1
+   }
+  },
+  {
+   "task": "h-196311",
+   "pass": false,
+   "score": 0.8,
+   "wallSec": 234.911,
+   "timedOut": false,
+   "timeoutMin": 15,
+   "expectsWeak": false,
+   "baselineScore": 0,
+   "exitCode": 0,
+   "outputs": 4,
+   "dirRemoved": true,
+   "deltaScore": 0.8,
+   "checks": 5,
+   "harnessError": false,
+   "metrics": {
+    "turns": 36,
+    "inputTokens": 56,
+    "outputTokens": 14211,
+    "cacheReadTokens": 1612379,
+    "cacheCreationTokens": 48701,
+    "costUsd": 0.9977598,
+    "toolCalls": 35,
+    "toolCounts": {
+     "Bash": 28,
+     "Write": 5,
+     "Read": 2
+    },
+    "bashTimeouts": 0,
+    "failedEdits": 0,
+    "permissionDenials": 6,
+    "errorCodes": {},
+    "verbs": {
+     "docs": 7,
+     "edit": 2,
+     "check": 4,
+     "render": 6,
+     "look": 2
+    },
+    "violations": 7,
+    "fatalViolations": 0,
+    "resultSubtype": "success",
+    "isError": false,
+    "apiMs": 154704,
+    "results": 1
+   }
+  },
+  {
+   "task": "h-a70a9d",
+   "pass": true,
+   "score": 1,
+   "wallSec": 75.896,
+   "timedOut": false,
+   "timeoutMin": 20,
+   "expectsWeak": false,
+   "baselineScore": 0.2,
+   "exitCode": 0,
+   "outputs": 3,
+   "dirRemoved": true,
+   "deltaScore": 0.8,
+   "checks": 5,
+   "harnessError": false,
+   "metrics": {
+    "turns": 13,
+    "inputTokens": 18,
+    "outputTokens": 3075,
+    "cacheReadTokens": 372358,
+    "cacheCreationTokens": 22121,
+    "costUsd": 0.31425059999999994,
+    "toolCalls": 12,
+    "toolCounts": {
+     "Bash": 11,
+     "Read": 1
+    },
+    "bashTimeouts": 0,
+    "failedEdits": 0,
+    "permissionDenials": 2,
+    "errorCodes": {
+     "E_ARG": 1
+    },
+    "verbs": {
+     "docs": 1,
+     "check": 2,
+     "render": 6
+    },
+    "violations": 1,
+    "fatalViolations": 0,
+    "resultSubtype": "success",
+    "isError": false,
+    "apiMs": 37578,
+    "results": 1
+   }
+  },
+  {
+   "task": "h-4f4e79",
+   "pass": true,
+   "score": 1,
+   "wallSec": 95.496,
+   "timedOut": false,
+   "timeoutMin": 25,
+   "expectsWeak": true,
+   "baselineScore": 0,
+   "exitCode": 0,
+   "outputs": 3,
+   "dirRemoved": true,
+   "deltaScore": 1,
+   "checks": 4,
+   "harnessError": false,
+   "metrics": {
+    "turns": 19,
+    "inputTokens": 32,
+    "outputTokens": 5366,
+    "cacheReadTokens": 746482,
+    "cacheCreationTokens": 33989,
+    "costUsd": 0.5298274,
+    "toolCalls": 18,
+    "toolCounts": {
+     "Bash": 12,
+     "Read": 4,
+     "Write": 2
+    },
+    "bashTimeouts": 0,
+    "failedEdits": 0,
+    "permissionDenials": 2,
+    "errorCodes": {},
+    "verbs": {
+     "show": 1,
+     "check": 1,
+     "look": 2,
+     "render": 1
+    },
+    "violations": 1,
+    "fatalViolations": 0,
+    "resultSubtype": "success",
+    "isError": false,
+    "apiMs": 68846,
+    "results": 1
+   }
+  },
+  {
+   "task": "h-39c107",
+   "pass": false,
+   "score": 0.333,
+   "wallSec": 160.265,
+   "timedOut": false,
+   "timeoutMin": 25,
+   "expectsWeak": false,
+   "baselineScore": 0,
+   "exitCode": 0,
+   "outputs": 4,
+   "dirRemoved": true,
+   "deltaScore": 0.333,
+   "checks": 6,
+   "harnessError": false,
+   "metrics": {
+    "turns": 19,
+    "inputTokens": 32,
+    "outputTokens": 6060,
+    "cacheReadTokens": 841269,
+    "cacheCreationTokens": 40414,
+    "costUsd": 0.6141228,
+    "toolCalls": 17,
+    "toolCounts": {
+     "Skill": 1,
+     "Bash": 13,
+     "Write": 1,
+     "Read": 1,
+     "Edit": 1
+    },
+    "bashTimeouts": 0,
+    "failedEdits": 0,
+    "permissionDenials": 2,
+    "errorCodes": {},
+    "verbs": {
+     "docs": 11,
+     "new": 3,
+     "show": 1,
+     "check": 1,
+     "look": 2
+    },
+    "violations": 0,
+    "fatalViolations": 0,
+    "resultSubtype": "success",
+    "isError": false,
+    "apiMs": 69617,
+    "results": 1
+   }
+  },
+  {
+   "task": "h-74418a",
+   "pass": true,
+   "score": 1,
+   "wallSec": 82.918,
+   "timedOut": false,
+   "timeoutMin": 20,
+   "expectsWeak": true,
+   "baselineScore": 0,
+   "exitCode": 0,
+   "outputs": 2,
+   "dirRemoved": true,
+   "deltaScore": 1,
+   "checks": 4,
+   "harnessError": false,
+   "metrics": {
+    "turns": 15,
+    "inputTokens": 28,
+    "outputTokens": 5101,
+    "cacheReadTokens": 615618,
+    "cacheCreationTokens": 25518,
+    "costUsd": 0.43057960000000006,
+    "toolCalls": 14,
+    "toolCounts": {
+     "Bash": 13,
+     "Write": 1
+    },
+    "bashTimeouts": 0,
+    "failedEdits": 0,
+    "permissionDenials": 5,
+    "errorCodes": {},
+    "verbs": {
+     "docs": 3,
+     "new": 1,
+     "edit": 3,
+     "show": 1,
+     "render": 1,
+     "check": 1,
+     "look": 1
+    },
+    "violations": 0,
+    "fatalViolations": 0,
+    "resultSubtype": "success",
+    "isError": false,
+    "apiMs": 60950,
+    "results": 1
+   }
+  },
+  {
+   "task": "h-7305d1",
+   "pass": true,
+   "score": 1,
+   "wallSec": 114.878,
+   "timedOut": false,
+   "timeoutMin": 20,
+   "expectsWeak": false,
+   "baselineScore": 0,
+   "exitCode": 0,
+   "outputs": 4,
+   "dirRemoved": true,
+   "deltaScore": 1,
+   "checks": 6,
+   "harnessError": false,
+   "metrics": {
+    "turns": 22,
+    "inputTokens": 32,
+    "outputTokens": 5487,
+    "cacheReadTokens": 735773,
+    "cacheCreationTokens": 31049,
+    "costUsd": 0.5066086000000001,
+    "toolCalls": 20,
+    "toolCounts": {
+     "Skill": 1,
+     "Bash": 14,
+     "Write": 2,
+     "Read": 3
+    },
+    "bashTimeouts": 0,
+    "failedEdits": 0,
+    "permissionDenials": 2,
+    "errorCodes": {},
+    "verbs": {
+     "docs": 3,
+     "show": 8,
+     "new": 1,
+     "check": 2,
+     "look": 2,
+     "render": 1
+    },
+    "violations": 1,
+    "fatalViolations": 0,
+    "resultSubtype": "success",
+    "isError": false,
+    "apiMs": 65688,
+    "results": 1
+   }
+  },
+  {
+   "task": "h-040ad4",
+   "pass": true,
+   "score": 1,
+   "wallSec": 154.779,
+   "timedOut": false,
+   "timeoutMin": 30,
+   "expectsWeak": false,
+   "baselineScore": 0.2,
+   "exitCode": 0,
+   "outputs": 10,
+   "dirRemoved": true,
+   "deltaScore": 0.8,
+   "checks": 5,
+   "harnessError": false,
+   "metrics": {
+    "turns": 30,
+    "inputTokens": 48,
+    "outputTokens": 9381,
+    "cacheReadTokens": 1279790,
+    "cacheCreationTokens": 43347,
+    "costUsd": 0.791782,
+    "toolCalls": 29,
+    "toolCounts": {
+     "Bash": 21,
+     "Write": 2,
+     "Read": 2,
+     "Edit": 4
+    },
+    "bashTimeouts": 0,
+    "failedEdits": 0,
+    "permissionDenials": 5,
+    "errorCodes": {},
+    "verbs": {
+     "docs": 9,
+     "plugin": 10,
+     "edit": 3,
+     "show": 2,
+     "check": 2,
+     "render": 4
+    },
+    "violations": 0,
+    "fatalViolations": 0,
+    "resultSubtype": "success",
+    "isError": false,
+    "apiMs": 114127,
+    "results": 1
+   }
+  },
+  {
+   "task": "h-eef6e4",
+   "pass": false,
+   "score": 0.8,
+   "wallSec": 64.118,
+   "timedOut": false,
+   "timeoutMin": 20,
+   "expectsWeak": false,
+   "baselineScore": 0,
+   "exitCode": 0,
+   "outputs": 3,
+   "dirRemoved": true,
+   "deltaScore": 0.8,
+   "checks": 5,
+   "harnessError": false,
+   "metrics": {
+    "turns": 12,
+    "inputTokens": 18,
+    "outputTokens": 4489,
+    "cacheReadTokens": 388336,
+    "cacheCreationTokens": 28307,
+    "costUsd": 0.39517420000000003,
+    "toolCalls": 10,
+    "toolCounts": {
+     "Skill": 1,
+     "Bash": 7,
+     "Write": 1,
+     "Read": 1
+    },
+    "bashTimeouts": 0,
+    "failedEdits": 0,
+    "permissionDenials": 1,
+    "errorCodes": {
+     "E_OVERLAP": 18
+    },
+    "verbs": {
+     "docs": 3,
+     "check": 3,
+     "look": 3,
+     "render": 1
+    },
+    "violations": 0,
+    "fatalViolations": 0,
+    "resultSubtype": "success",
+    "isError": false,
+    "apiMs": 46498,
+    "results": 1
+   }
+  },
+  {
+   "task": "h-8f98bf",
+   "pass": true,
+   "score": 1,
+   "wallSec": 121.355,
+   "timedOut": false,
+   "timeoutMin": 20,
+   "expectsWeak": false,
+   "baselineScore": 0,
+   "exitCode": 0,
+   "outputs": 3,
+   "dirRemoved": true,
+   "deltaScore": 1,
+   "checks": 4,
+   "harnessError": false,
+   "metrics": {
+    "turns": 14,
+    "inputTokens": 24,
+    "outputTokens": 4605,
+    "cacheReadTokens": 555215,
+    "cacheCreationTokens": 29607,
+    "costUsd": 0.44129300000000005,
+    "toolCalls": 13,
+    "toolCounts": {
+     "Bash": 10,
+     "Write": 2,
+     "Read": 1
+    },
+    "bashTimeouts": 0,
+    "failedEdits": 0,
+    "permissionDenials": 3,
+    "errorCodes": {
+     "E_FORMAT": 1
+    },
+    "verbs": {
+     "docs": 5,
+     "edit": 5,
+     "show": 3,
+     "check": 4,
+     "render": 4,
+     "look": 1
+    },
+    "violations": 2,
+    "fatalViolations": 0,
+    "resultSubtype": "success",
+    "isError": false,
+    "apiMs": 50803,
+    "results": 1
+   }
+  }
+ ]
+}

@@ -68,7 +68,9 @@ down, into the area clear of all of them. Error for text, warning for stickers: 
 comp layer under 40 % of the frame and narrower than 90 % of its width and height, or any clip tagged `sticker`), `text-cut-off`, `tiny-text`, `caption-overlap`,
 `overlap-alpha`, `layer-hidden` (a layer fully covered by an opaque one above it), `media-off-frame`, `gaps`,
 `trailing-black`, `clip-past-end`, `clip-past-source` (a media clip longer than its source: the last frame holds
-or the sound stops; uses probed durations), `keyframes-outside`, `alpha-with-bg`, `music-over-voice`; in `look`
+or the sound stops; uses probed durations), `keyframes-outside`, `alpha-with-bg`, `music-over-voice`, `caption-timing`
+(a cue on screen under 0.3 s or faster than 35 characters/s, or captions blinking off for under 0.5 s between two
+cues; the fix stretches the cue); in `look`
 also `black-frames`, `frozen` (only pixels you can see), `luma-range` (picture outside 16–235: use `legalize`),
 `clipping`, `loudness`, `long-silence`. Retention and legibility rules: `static-visuals` (in a 9:16 comp nothing big
 moves for over 2.5 s: no video, keyframed motion, cut or animated generator; fix: a slow `clip.punch-in` on the

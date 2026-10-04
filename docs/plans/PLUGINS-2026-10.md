@@ -279,3 +279,5 @@ Before each push: `npm run typecheck`, `npm test`, `npm run docs:check`, `mgl pl
   - API 1.4 also gained `StockResults` (a search may return notes: a skipped or failing archive) and
     `testStockContext` in `michelangelo/testing`.
 - Eval: `examples/plugins/open-media/evals/open-media-short` (network allowlist in its meta.json), not yet run.
+- Versioning: `main` took plugin API 1.4.0 for speech timing (the kokoro-voice work) while this was in review, so these
+  additions ship as **1.5.0** (minor = additive); the plan text above still says 1.4.

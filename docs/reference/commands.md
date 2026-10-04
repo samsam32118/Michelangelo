@@ -135,7 +135,7 @@ mgl edit video.mgl.json audio.sfx whoosh at=2s
 
 ### audio.speak
 
-Text to speech through the project's speak provider (a plugin, e.g. flite-voice): writes media/generated/vo-<hash>.wav (reused when text, voice and speed repeat), adds it as an asset + clip on the dialogue bus (after the previous voice line unless at= is given), and stores word timings for captions.from-speech. voice and speed (0.5..2) are provider-specific; E_NO_PROVIDER when the project has none.
+Text to speech through the project's speak provider (a plugin, e.g. kokoro-voice or flite-voice): writes media/generated/vo-<hash>.wav (reused when text, voice and speed repeat), adds it as an asset + clip on the dialogue bus (after the previous voice line unless at= is given), and stores word timings for captions.from-speech (the provider's, with phrase onsets snapped to the sound, or the text aligned to the sound when it gives none). voice and speed (0.5..2) are provider-specific; E_NO_PROVIDER when the project has none.
 
 fields: `text` string (bare word); `voice?` string; `speed?` number; `track?` string; `at?` time; `id?` string; `comp?` string; `gain?` number
 
@@ -170,7 +170,7 @@ mgl edit video.mgl.json bus.set music gain=-8
 
 ### captions.from-speech
 
-Word-timed caption cues from voice clips (clip=, clips=[...], or by default every voice clip on the dialogue bus, into one captions clip): uses the timings audio.speak stored, else the project's transcribe provider (a plugin), else (clips made by audio.speak) estimates them from the text. Cues of at most maxWords words (default 4) break at sentences, commas and pauses. Fills `id` (a captions clip, cues replaced) or creates one. E_NO_PROVIDER when nothing can time the words (fallback: captions.from-text voice=<clip> text=...).
+Word-timed caption cues from voice clips (clip=, clips=[...], or by default every voice clip on the dialogue bus, into one captions clip): uses the timings audio.speak stored, else the project's transcribe provider (a plugin), else (clips made by audio.speak) aligns the stored text to the sound. Cues of at most maxWords words (default 4) break at sentences, commas and pauses, appear just before their first word and stay long enough to read (CUE_TIMING: mgl docs text-and-captions). Fills `id` (a captions clip, cues replaced) or creates one. E_NO_PROVIDER when nothing can time the words (fallback: captions.from-text voice=<clip> text=...).
 
 fields: `clip?` string (bare word); `clips?` string[]; `style?` string\|object; `maxWords?` int; `id?` string; `track?` string; `lang?` string
 

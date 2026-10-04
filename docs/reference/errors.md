@@ -42,7 +42,7 @@ exception is `E_INTERNAL` (exit 1). Below: each code with one example message an
 | `E_LOCKED_FILE` | 1 | the project is locked by another process (…). | wait for the other command to finish, or delete the lock file if no other command runs. |
 | `E_MASK` | 1 | a path mask on "…" needs d (SVG path data). | e.g. d="M0 0 L500 0 L250 400 Z" |
 | `E_MATTE` | 1 | clip "…" cannot be its own matte. | use another clip of the same comp as the matte. |
-| `E_MEDIA` | 1 | analysing … failed: … | check the file with mgl show <file>. |
+| `E_MEDIA` | 1 | cannot analyse the sound of "…" (…). | check the file with mgl show, or omit voice to spread the cues evenly. |
 | `E_MEDIA_FILE` | 1 | … did not download as …. | pick another result (media.search). |
 | `E_MEDIA_MISSING` | 1 | media file … does not exist. | check the path (relative to the project file) or relink the asset: mgl edit <project> asset.relink <id> src=<path>. |
 | `E_MISSING` | 1 | … is required. | add "…" to the entity. |

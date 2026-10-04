@@ -96,11 +96,11 @@ defineProvider({ kind: 'transcribe', id, describe, transcribe({ file, lang? }) â
   Example: `examples/plugins/flite-voice` in the repository (ffmpeg's flite engine, zero downloads), and the
   20-line version in audio.md. `mgl doctor <file>` lists the providers a project has. `mgl plugin new provider
   <name>` scaffolds a working speak provider (manifest kind `provider`; a provider-only plugin is fine).
-- **Stock providers** (API 1.4, `kind: 'stock'`) serve `media.search` / `media.fetch`: openly licensed images,
+- **Stock providers** (API 1.5, `kind: 'stock'`) serve `media.search` / `media.fetch`: openly licensed images,
   video, music and sound effects with canonical licence ids (`canonicalLicence`); core owns downloads, licence rules,
   sidecars and credits. Test them offline with `testStockContext({ routes })` from `michelangelo/testing`. Details and
   the interface: media.md; example: `examples/plugins/open-media`.
-- **Checks** (API 1.4) also get `ctx.uiZones(platform?)`: the TikTok / Reels / Shorts interface panels in comp px.
+- **Checks** (API 1.5) also get `ctx.uiZones(platform?)`: the TikTok / Reels / Shorts interface panels in comp px.
 - Commands are named `<plugin>.<verb>`, have a zod schema, a doc sentence and an example, and change the
   project only through `ctx` (so they are undoable and dry-runnable).
 
@@ -124,7 +124,7 @@ plus `test` and `assert` (node:test).
   is refused.
 - Plugin code imports `michelangelo/plugin` and `michelangelo/testing`; they resolve to the Michelangelo that
   is running (global install, npx or a project dependency), so a plugin folder needs no `node_modules`.
-- The manifest's `api` range must include this Michelangelo's plugin API (1.4.0; `mgl --version` prints it), and the version must
+- The manifest's `api` range must include this Michelangelo's plugin API (1.5.0; `mgl --version` prints it), and the version must
   satisfy the project's range; otherwise the plugin is refused with the reason and a fix.
 - **Plugins are code that runs on your machine with no sandbox.** Read a plugin before trusting it.
 - `mgl plugin list [file]` shows what is loaded, versions and sources, and every plugin problem.

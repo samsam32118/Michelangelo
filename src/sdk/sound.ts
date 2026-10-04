@@ -1,5 +1,5 @@
 /**
- * A sound described as text (plugin API 1.4, `describeSound`): loudness, peak, where it starts and peaks, tonal or
+ * A sound described as text (plugin API 1.5, `describeSound`): loudness, peak, where it starts and peaks, tonal or
  * noisy, dark or bright, tempo. From the existing analysis (ebur128 loudness, onsets/tempo) and the 16-band levels at
  * 100 values per second. Labels are coarse on purpose; the numbers are in the result.
  */

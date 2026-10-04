@@ -9,6 +9,7 @@
  */
 import { definePlugin, defineCheck, licenceClass, licenceName, type CheckContext, type CheckDef, type Finding } from '../../plugin/api.js';
 import { retentionChecks } from './retention.js';
+import { captionTiming } from './captions.js';
 
 type Project = CheckContext['project'];
 type Clip = NonNullable<Project['clips']>[number];
@@ -1287,7 +1288,7 @@ const longSilence = defineCheck({
 });
 
 export const builtinChecks: CheckDef[] = [gaps, textOutsideSafe, uiOverlap, tinyText, captionOverlap, clipPastEnd, keyframesOutside,
-  layerHidden, mediaOffFrame, trailingBlack, clipPastSource, alphaWithBg, textCutOff, musicOverVoice,
+  layerHidden, mediaOffFrame, trailingBlack, clipPastSource, alphaWithBg, textCutOff, musicOverVoice, captionTiming,
   stockCredits, stockLicence, blackFrames, frozen, overlapAlpha, lumaRange, clipping, loudness, longSilence, ...retentionChecks];
 
-export default definePlugin({ name: 'builtin-checks', version: '1.2.0', checks: builtinChecks });
+export default definePlugin({ name: 'builtin-checks', version: '1.3.0', checks: builtinChecks });

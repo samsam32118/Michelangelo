@@ -1,6 +1,6 @@
 # open-media
 
-A **stock provider** (plugin API 1.4) for `media.search` / `media.fetch` / `media.credits`: openly licensed images,
+A **stock provider** (plugin API 1.5) for `media.search` / `media.fetch` / `media.credits`: openly licensed images,
 footage, music and sound effects from public archives. Nothing is bundled; every file is fetched when you ask for it.
 The core applies the licence rules (CC0, public domain and CC BY by default; share-alike and non-commercial only when
 asked; no-derivatives and unknown licences never), writes a licence sidecar next to each file and writes credits.

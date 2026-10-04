@@ -1,7 +1,7 @@
 import { definePlugin, defineProvider, defineCommand, canonicalLicence, z, type StockContext, type StockItem, type StockKind, type StockProvider, type StockQuery } from 'michelangelo/plugin';
 
 /**
- * open-media: openly licensed images, footage, music and sound effects for media.search / media.fetch (plugin API 1.4).
+ * open-media: openly licensed images, footage, music and sound effects for media.search / media.fetch (plugin API 1.5).
  *
  * One stock provider, many sources. Each source maps an archive's API to StockItems with canonical licence ids and
  * drops anything it cannot map (fail closed); core applies the licence rules, downloads, sidecars and credits.

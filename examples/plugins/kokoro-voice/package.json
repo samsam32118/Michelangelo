@@ -1,0 +1,11 @@
+{
+  "name": "kokoro-voice",
+  "version": "1.0.0",
+  "description": "Natural text to speech for audio.speak with Kokoro-82M (kokoro-js, ONNX on the CPU): 28 English voices, word timings from the model.",
+  "type": "module",
+  "main": "src/index.ts",
+  "michelangelo": { "api": "^1.4.0", "kinds": ["provider", "command"] },
+  "scripts": { "test": "node --test test/*.test.ts" },
+  "dependencies": { "kokoro-js": "1.2.1" },
+  "peerDependencies": { "michelangelo": ">=0.1.0" }
+}

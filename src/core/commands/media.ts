@@ -1,5 +1,5 @@
 /**
- * Open media (plugin API 1.4): media.search (find openly licensed images, footage, music and sound effects through
+ * Open media (plugin API 1.5): media.search (find openly licensed images, footage, music and sound effects through
  * the project's 'stock' providers), media.fetch (download one into media/stock/, with a licence sidecar, as an asset
  * and optionally a clip; sounds are described as text) and media.credits (attribution lines for what is used, as a
  * file and/or a credits card). Licence rules live in core (src/core/licence.ts) so every source obeys them.

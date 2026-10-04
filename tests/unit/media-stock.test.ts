@@ -1,5 +1,5 @@
 // @vitest-environment node
-/** Open media in core (plugin API 1.4): licence rules, media.search / media.fetch / media.credits, sound as text, stock QA rules. */
+/** Open media in core (plugin API 1.5): licence rules, media.search / media.fetch / media.credits, sound as text, stock QA rules. */
 import { execFileSync } from 'node:child_process';
 import { existsSync, mkdtempSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';

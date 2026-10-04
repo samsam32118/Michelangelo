@@ -70,8 +70,9 @@ look: `caption` (plain), `karaoke` (the spoken word in `highlight`), `maxWords` 
 
 - `captions.import <file.srt|vtt>`: cues from subtitles (file times are comp times; `offset=` shifts them;
   VTT inline timestamps give word timings, `words=true` estimates them otherwise).
-- `captions.from-text text="..."` or `file=script.txt`: split a script into cues of ≤ `maxWords` words,
-  timed to the speech of a voice clip (`voice=<clip>`, silences skipped) or spread over `at`+`len`.
+- `captions.from-text text="..."` or `file=script.txt`: split a script into cues of ≤ `maxWords` words. With
+  `voice=<clip>` every word of the script is aligned to that clip's sound (a recorded voice-over and its script
+  give karaoke captions without any plugin); without it the cues are spread over `at`+`len`.
 - `captions.from-speech [clip=<voice clip>]`: word-timed cues from speech: the timings `audio.speak` stored, or
   a transcribe provider plugin (audio.md, "Speech"); with no `clip`, every voice clip on the dialogue bus.
 - `captions.style <id> style=karaoke` or `style='{"highlight": "#00e5ff", "maxWords": 3}'`.
@@ -94,6 +95,40 @@ mgl edit text.mgl.json captions.style subs style='{"highlight": "#00e5ff", "emph
 mgl render text.mgl.json out/subs.vtt
 mgl show text.mgl.json --at 2.5s
 ```
+
+### Captions in sync with speech
+
+Both `captions.from-speech` and `captions.from-text voice=` time cues the same way, by rules that read as in
+sync to people (`src/core/cue-timing.ts`, `CUE_TIMING`):
+
+| setting | value | why |
+|---|---|---|
+| `lead` | 0.05 s | a cue appears just before its first word: text after the voice reads as late, a frame or two early reads as in sync |
+| `wordLead` | 0.05 s | each karaoke word lights at its onset, by the same margin |
+| `tail` | 0.3 s | a cue stays after its last word ends |
+| `bridge` | 0.5 s | a shorter gap between two cues is closed (no flicker); a real pause leaves the screen clear |
+| `minLen` | 0.7 s | the shortest a cue is shown, when the silence after it allows |
+| `maxCps` | 17 | reading speed (characters per second) a cue is stretched towards, when the silence allows |
+
+Word times come from the speak provider (checked against the sound: a word that starts a phrase starts where the
+voice does), from a transcribe provider, or from **word alignment** (`src/core/align.ts`): the voice's loudness
+every 10 ms is cut into voiced runs at pauses, the words are matched to the runs in order (lengths fit the
+syllables, pauses fall at punctuation), and each boundary inside a run moves to the quietest point near it. It
+needs no model and works in any language written with spaces. Its settings (`ALIGN_DEFAULTS`):
+
+| setting | value | meaning |
+|---|---|---|
+| `hop` | 0.01 s | one loudness value per 10 ms |
+| `minPause` | 0.08 s | a quieter stretch this long separates two voiced runs |
+| `minRun` | 0.03 s | shorter bursts (clicks, breaths) are ignored |
+| `snap` | 0.06 s | how far a boundary moves to the quietest point |
+| `maxGroup` | 14 | most words or runs matched as one group |
+
+Measured on Kokoro speech (8 two-sentence lines, 5 voices; truth: the model's own word times with phrase starts
+moved to the sound): 72 % of words start within 100 ms and 90 % within 210 ms of the truth, phrase starts are
+exact; spreading words over the line by their letters (what Michelangelo did before) gets 24 % and 421 ms. A
+provider that reports word times, or a transcriber, is more exact inside a phrase; alignment is the fallback that
+makes every voice captionable. `silenceDb=` on `captions.from-text` overrides the pause level for a noisy recording.
 
 Keep captions inside the platform's safe area: `mgl check` reports text crossing it (by measured text
 boxes) with a `fix:` (usually a `style.maxWidth` or a `y`). `mgl look` also reports captions that

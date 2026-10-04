@@ -56,6 +56,10 @@ export async function resolve(spec, ctx, next) {
   if (spec.startsWith('michelangelo/') && !spec.includes('..')) {
     try { return await next(spec, ctx); } catch { return next(new URL(spec.slice(13), root).href, ctx); }
   }
+  // a plugin's own "./x.js" import of its x.ts source (TypeScript's convention; Node runs the .ts directly)
+  if ((spec.startsWith('./') || spec.startsWith('../')) && spec.endsWith('.js')) {
+    try { return await next(spec, ctx); } catch (e) { try { return await next(spec.slice(0, -3) + '.ts', ctx); } catch { throw e; } }
+  }
   return next(spec, ctx);
 }`;
 }

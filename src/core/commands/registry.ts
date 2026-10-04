@@ -17,7 +17,7 @@ export interface CommandServices {
   /** probe a media file (relative to the project dir) */
   probe?(src: string): Promise<ProbeInfo>;
   /** speech/silence analysis of an audio range of an asset */
-  analyzeAudio?(src: string, opts?: { silenceDb?: number; minSilence?: number }): Promise<AudioAnalysis>;
+  analyzeAudio?(src: string, opts?: { silenceDb?: number; minSilence?: number; envelope?: boolean }): Promise<AudioAnalysis>;
   /** motion-centroid track of a media asset (normalised 0..1 per sampled frame) */
   trackMotion?(src: string, opts: { fps: number; inFrames: number; lenFrames: number; rate: Rate }): Promise<{ frame: number; x: number; y: number }[]>;
   /** read a text file relative to the project dir */
@@ -32,17 +32,17 @@ export interface CommandServices {
   speak?: SpeakService;
   /** (API 1.3) speech-to-text: the first 'transcribe' provider of the plugin registry; `file` is relative to the project folder */
   transcribe?: TranscribeService;
-  /** (API 1.4) open media: every 'stock' provider of the plugin registry, bound to the project folder (media/stock/) */
+  /** (API 1.5) open media: every 'stock' provider of the plugin registry, bound to the project folder (media/stock/) */
   stock?: StockService;
-  /** (API 1.4) write a report file into the project's work folder .mgl/<name>/; returns its path relative to the cwd */
+  /** (API 1.5) write a report file into the project's work folder .mgl/<name>/; returns its path relative to the cwd */
   writeWork?(name: string, data: Uint8Array): Promise<string>;
-  /** (API 1.4) write a .txt or .md file inside the project folder (credits); returns the absolute path */
+  /** (API 1.5) write a .txt or .md file inside the project folder (credits); returns the absolute path */
   writeProjectText?(rel: string, text: string): Promise<string>;
-  /** (API 1.4) a sound described as text for an agent that cannot listen (`src` relative to the project folder) */
+  /** (API 1.5) a sound described as text for an agent that cannot listen (`src` relative to the project folder) */
   describeSound?(src: string): Promise<SoundFacts>;
 }
 
-/** (API 1.4) What an agent needs to judge a sound without hearing it. */
+/** (API 1.5) What an agent needs to judge a sound without hearing it. */
 export interface SoundFacts {
   duration: number;
   /** integrated loudness (LUFS) and true peak (dBTP) */
@@ -65,7 +65,7 @@ export interface SoundFacts {
   silences: { start: number; end: number }[];
 }
 
-/** (API 1.4) A stock search as commands see it. */
+/** (API 1.5) A stock search as commands see it. */
 export interface StockService {
   providers: { id: string; describe: string; media: string[]; sources?: string[] }[];
   /** search every provider serving `kind` (or one), in parallel; providers that fail are reported, not fatal */
@@ -152,6 +152,8 @@ export interface AudioAnalysis {
   /** onset/beat times in seconds, and a tempo estimate */
   beats?: number[];
   bpm?: number;
+  /** RMS dBFS per 10 ms (only when asked for with `envelope: true`): word alignment (src/core/align.ts) reads it */
+  envelope?: number[];
 }
 
 export interface CommandContext {

@@ -16,8 +16,14 @@ export { defineCommand } from '../core/commands/registry.js';
 export type { CommandDef, TemplateDef, TemplateOutput, CommandContext } from '../core/commands/registry.js';
 export type { FilterSpec } from '../render/types.js';
 export { LICENCE_CLASSES, licenceClass, canonicalLicence, licenceName, licenceUrl, creditLine, type LicenceClass } from '../core/licence.js';
+/**
+ * (API 1.4) Speech timing, for speak and transcribe providers: align a text to a voice's loudness envelope, check
+ * word times against the sound, and the caption timing defaults Michelangelo times cues with.
+ */
+export { alignWords, snapToOnsets, voicedRuns, textWords, ALIGN_DEFAULTS } from '../core/align.js';
+export { CUE_TIMING, timeCues } from '../core/cue-timing.js';
 
-export const PLUGIN_API_VERSION = '1.4.0';
+export const PLUGIN_API_VERSION = '1.5.0';
 
 /** A CanvasRenderingContext2D-compatible drawing context (Skia today; a GPU renderer provides the same contract). */
 export type Canvas2D = SKRSContext2D;
@@ -131,7 +137,7 @@ export interface CheckContext {
   alpha?: boolean;
   safeArea(platform?: string): { x: number; y: number; w: number; h: number };
   /**
-   * (API 1.4) the platform's interface overlays in comp px: header, action buttons, caption panel (none for youtube /
+   * (API 1.5) the platform's interface overlays in comp px: header, action buttons, caption panel (none for youtube /
    * none). Lets a check say which panel a layer sits under.
    */
   uiZones?(platform?: string): { name: string; rect: { x: number; y: number; w: number; h: number } }[];
@@ -201,11 +207,11 @@ export interface MotionPresetDef {
 /** A provider of an AI or media capability. The library ships the interfaces; models come as plugins. */
 export type ProviderDef = SpeakProvider | TranscribeProvider | StockProvider;
 
-/** (API 1.4) Kinds of open media: pictures, footage, music beds and sound effects. */
+/** (API 1.5) Kinds of open media: pictures, footage, music beds and sound effects. */
 export type StockKind = 'image' | 'video' | 'music' | 'sfx';
 export const STOCK_KINDS: readonly StockKind[] = ['image', 'video', 'music', 'sfx'];
 
-/** (API 1.4) One search result of a stock provider. */
+/** (API 1.5) One search result of a stock provider. */
 export interface StockItem {
   /** provider-scoped and stable: "<provider>:<source id>" (media.fetch id=...) */
   id: string;
@@ -234,7 +240,7 @@ export interface StockItem {
   date?: string;
 }
 
-/** (API 1.4) What media.search asks a provider for. Providers filter what their API can; core filters the rest. */
+/** (API 1.5) What media.search asks a provider for. Providers filter what their API can; core filters the rest. */
 export interface StockQuery {
   kind: StockKind;
   query: string;
@@ -252,10 +258,10 @@ export interface StockQuery {
   licences?: string[];
 }
 
-/** (API 1.4) A search result with notes for the agent (a source that was skipped or failed, a missing key). */
+/** (API 1.5) A search result with notes for the agent (a source that was skipped or failed, a missing key). */
 export interface StockResults { items: StockItem[]; notes?: string[] }
 
-/** (API 1.4) What core gives a stock provider: HTTP with a proper User-Agent and timeouts, environment keys, a cache folder. */
+/** (API 1.5) What core gives a stock provider: HTTP with a proper User-Agent and timeouts, environment keys, a cache folder. */
 export interface StockContext {
   fetch(url: string, init?: { method?: string; headers?: Record<string, string>; body?: string }): Promise<Response>;
   /** an environment variable (API keys); undefined when unset */
@@ -265,7 +271,7 @@ export interface StockContext {
 }
 
 /**
- * (API 1.4) A source of openly licensed media for media.search / media.fetch. Core owns paths, caching, licence rules,
+ * (API 1.5) A source of openly licensed media for media.search / media.fetch. Core owns paths, caching, licence rules,
  * sidecars and credits; a provider maps a source's API to StockItems with canonical licence ids, and drops any result
  * whose licence it cannot map.
  */

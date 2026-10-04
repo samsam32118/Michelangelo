@@ -1,5 +1,5 @@
 /**
- * Open-media services (plugin API 1.4) behind media.search / media.fetch: every 'stock' provider of the registry,
+ * Open-media services (plugin API 1.5) behind media.search / media.fetch: every 'stock' provider of the registry,
  * HTTP with a descriptive User-Agent and timeouts, a 30-day item cache (so media.fetch can find what media.search
  * showed), confined downloads into <project>/media/stock/, sidecars, and a numbered contact sheet of previews.
  */

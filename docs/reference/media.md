@@ -1,7 +1,7 @@
 # Open media: images, footage, music and sound effects you may use
 
 Three commands find, fetch and credit openly licensed media through the project's **stock providers** (plugin
-API 1.4). A provider is a plugin: `examples/plugins/open-media` in the Michelangelo repository searches Openverse
+API 1.5). A provider is a plugin: `examples/plugins/open-media` in the Michelangelo repository searches Openverse
 (Freesound effects, Jamendo and ccMixter music, Flickr, museum collections), Wikimedia Commons, NASA, the
 Smithsonian, the Library of Congress, several museums, Internet Archive (Prelinger films, Musopen) and, with keys,
 Pexels, Pixabay, Unsplash, Freesound and Europeana. Nothing is bundled: every file is fetched when you ask for it.

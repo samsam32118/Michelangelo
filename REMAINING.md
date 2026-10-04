@@ -39,7 +39,8 @@ Status as of 2026-10-04 (branch `claude/michelangelo-v1`, draft PR #1). Measured
 7. **Colour.** Colour effect, LUTs and a broadcast legaliser only; no lift/gamma/gain wheels, curves or scopes in
    `look` (a luma-range QA check exists).
 8. **AI hooks.** Plugin API 1.3 has `speak` and `transcribe` providers (`audio.speak`, `captions.from-speech`,
-   example plugin `flite-voice`). No model-backed provider (e.g. Whisper, neural TTS) or segmentation ships yet.
+   example plugins `flite-voice` and `piper-voice`, a neural TTS that runs a Piper install you provide). No
+   transcription provider (e.g. Whisper) or segmentation ships yet.
 9. **Importers/exporters.** The plugin kinds exist; no EDL/FCPXML/OTIO importer or exporter is shipped.
 10. **Grader coverage.** Some main-set graders give credit to an untouched sandbox for invariants (reported as
     the baseline score). The vision judge (`--vision`) exists but has not been run across the full sets.

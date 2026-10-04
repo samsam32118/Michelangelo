@@ -1,0 +1,10 @@
+{
+  "name": "piper-voice",
+  "version": "1.0.0",
+  "description": "Text to speech for audio.speak with the offline Piper neural engine: natural voices, models you download once.",
+  "type": "module",
+  "main": "src/index.ts",
+  "michelangelo": { "api": "^1.3.0", "kinds": ["provider", "command"] },
+  "scripts": { "test": "node --test test/*.test.ts" },
+  "peerDependencies": { "michelangelo": ">=0.1.0" }
+}

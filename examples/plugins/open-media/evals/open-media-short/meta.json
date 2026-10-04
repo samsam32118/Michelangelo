@@ -1,0 +1,19 @@
+{
+  "id": "open-media-short",
+  "tags": ["plugins", "provider", "open-media", "network"],
+  "timeout_min": 25,
+  "expects_weak": false,
+  "network": ["api.openverse.org", "cdn.freesound.org", "commons.wikimedia.org", "upload.wikimedia.org", "images-api.nasa.gov", "images-assets.nasa.gov", "www.loc.gov", "tile.loc.gov", "collectionapi.metmuseum.org", "images.metmuseum.org", "openaccess-api.clevelandart.org", "openaccess-cdn.clevelandart.org", "api.wellcomecollection.org", "iiif.wellcomecollection.org", "api.smk.dk", "iip.smk.dk", "archive.org", "smithsonian-open-access.s3-us-west-2.amazonaws.com", "ids.si.edu"],
+  "compare_with": "script-only-short",
+  "fixtures": ["script.txt (a 6-line script about the first steam railways)", "short.mgl.json (an empty 1080x1920 30 fps comp)", "plugins/open-media"],
+  "checks": [
+    "out/short.mp4: 20-30 s, 1080x1920, H.264 + AAC",
+    "short.mgl.json names the open-media plugin; at least 3 assets under media/stock/ with a licence and a credit, each with its <file>.json sidecar",
+    "at least 2 stock images or videos are visible for at least 2 s each (pixels differ from a plain background)",
+    "at least 1 stock sound effect or music bed is in the mix (sfx or music bus clip)",
+    "no asset has a no-derivatives, non-commercial or unknown licence; every CC BY asset is in project.credits.assets",
+    "credits.txt exists, or the last 2 s show a credits card",
+    "QA: no ui-overlap, stock-credits or stock-licence findings (mgl check)",
+    "vision score >= 7 (real imagery that fits the script; on-screen text clear of the platform interface)"
+  ]
+}

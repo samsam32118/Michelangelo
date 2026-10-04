@@ -248,7 +248,12 @@ export interface StockQuery {
   minWidth?: number;
   /** a provider with several sources may be narrowed to one ("openverse", "smithsonian", ...) */
   source?: string;
+  /** licence classes the caller will accept (core filters anyway; a source may use it to ask its API for less) */
+  licences?: string[];
 }
+
+/** (API 1.4) A search result with notes for the agent (a source that was skipped or failed, a missing key). */
+export interface StockResults { items: StockItem[]; notes?: string[] }
 
 /** (API 1.4) What core gives a stock provider: HTTP with a proper User-Agent and timeouts, environment keys, a cache folder. */
 export interface StockContext {
@@ -271,7 +276,7 @@ export interface StockProvider {
   media: StockKind[];
   /** source names this provider can be narrowed to with media.search source=... */
   sources?: string[];
-  search(q: StockQuery, ctx: StockContext): Promise<StockItem[]>;
+  search(q: StockQuery, ctx: StockContext): Promise<StockItem[] | StockResults>;
   /** look one item up by id (media.fetch of an id not seen in a search this session) */
   item?(id: string, ctx: StockContext): Promise<StockItem | undefined>;
   /** download `item` to the absolute path `out`; default: core downloads item.file */

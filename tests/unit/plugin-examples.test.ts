@@ -6,7 +6,7 @@ import { loadRegistry } from '../../src/plugin/loader.js';
 import { testProject } from '../../src/plugin/testing.js';
 import { REPO, tempProjectDir } from './plugin-fixtures.js';
 
-const EXAMPLES = ['glitch', 'clock-wipe', 'confetti', 'lower-third-pro', 'on-air', 'flite-voice', 'collage-kit'];
+const EXAMPLES = ['glitch', 'clock-wipe', 'confetti', 'lower-third-pro', 'on-air', 'flite-voice', 'collage-kit', 'open-media'];
 let dir: string;
 const results = new Map<string, PluginTestResult>();
 
@@ -31,7 +31,8 @@ describe('example plugins', () => {
 
   it.each(EXAMPLES)('%s imports only the public API', (n) => {
     const root = join(REPO, 'examples', 'plugins', n);
-    for (const sub of ['src', 'test']) for (const f of readdirSync(join(root, sub))) {
+    // TypeScript files only (recorded fixtures such as test/fixtures/*.json are data)
+    for (const sub of ['src', 'test']) for (const f of readdirSync(join(root, sub), { recursive: true }).map(String).filter((x) => x.endsWith('.ts'))) {
       const imports = [...readFileSync(join(root, sub, f), 'utf8').matchAll(/from '([^']+)'/g)].map((m) => m[1]);
       expect(imports.every((s) => s === 'michelangelo/plugin' || s === 'michelangelo/testing'), `${n}/${sub}/${f}: ${imports.join(', ')}`).toBe(true);
     }
@@ -43,5 +44,6 @@ describe('example plugins', () => {
     expect(r.problems).toEqual([]);
     expect(r.effects.has('glitch') && r.transitions.has('clock-wipe') && r.generators.has('confetti') && r.templates.has('lower-third-pro') && r.effects.has('telephone') && r.generators.has('level-meter')).toBe(true);
     expect(r.commands.has('lower-third-pro.add')).toBe(true);
+    expect(r.providers.get('stock')?.has('open-media')).toBe(true);
   });
 });

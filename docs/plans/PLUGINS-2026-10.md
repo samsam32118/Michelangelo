@@ -1,6 +1,7 @@
 # Plan: platform safe zones in core, and the open-media plugin (2026-10-04)
 
-Status: **proposal, awaiting the owner's go-ahead**. Nothing here is built yet. Revised 2026-10-04 after review:
+Status: **built** on branch `claude/clever-shannon-664zsj` (samsam32118/Michelangelo#9), 2026-10-04. What changed while building is in
+"As built" at the end; the plan below is kept as approved. Revised 2026-10-04 after review:
 one `open-media` plugin (images, video, music, sound effects) instead of three, safe zones moved into core, svg-prop
 and cutout deferred, laya dropped for now, public-domain archives and Smithsonian access added.
 
@@ -257,3 +258,24 @@ Before each push: `npm run typecheck`, `npm test`, `npm run docs:check`, `mgl pl
    `SMITHSONIAN_API_KEY` (free, tested) the live API is used.
 4. **Network in evals:** allow the open-media hosts for the `open-media-short` eval only.
 5. **Smithsonian index default units:** `chndm`, `npg`, `saam`, `fsg`, `nmaahc` (about 0.5 GB to stream once).
+
+## As built (2026-10-04)
+
+- **A** as planned: `ui-overlap`, `CheckContext.uiZones`, `look --safe` (outlines on the sheet; under each crop a legend
+  of the panels it sits under, so labels never cover the picture). A layer spanning ≥ 90 % of the frame's width or
+  height is picture, not a sticker (a full-width landscape image is not flagged), unless tagged `sticker`.
+- **B** as planned, with these differences found by building and running it live:
+  - Sources: **Art Institute of Chicago dropped** (its image server answers cloud containers with a bot challenge);
+    **Rijksmuseum via Openverse** (the Linked Art API needs three requests per result); **Musopen dropped** from
+    Internet Archive (ZIP archives; Commons audio carries many Musopen recordings). Library of Congress items use the
+    licence id `nkr` ("no known copyright restrictions", class free).
+  - Smithsonian keyless index: the five default units take about 13 s (0.58 GB streamed, 91,700 images, 5.3 MB),
+    so `open-media.index` runs synchronously; no detached mode was needed.
+  - Sound as text: texture from ffmpeg's per-bin spectral flatness, tone from a power-weighted log-frequency
+    centroid (the first version, from 16 log bands, called a whoosh "tonal").
+  - The credits card is paged to fit the area clear of all three platform interfaces and is exempt from the
+    static-visuals rule.
+  - Found and fixed in core: the project writer dropped unknown project keys on save.
+  - API 1.4 also gained `StockResults` (a search may return notes: a skipped or failing archive) and
+    `testStockContext` in `michelangelo/testing`.
+- Eval: `examples/plugins/open-media/evals/open-media-short` (network allowlist in its meta.json), not yet run.

@@ -65,7 +65,7 @@ sticker under the TikTok, Reels or Shorts interface: header, action buttons or c
 `project.platform` it checks all three at once, so a vertical video is covered by default; with one platform set, only
 that one. Each finding names the platforms and panels and by how many px; the fix moves the clip, or scales a sticker
 down, into the area clear of all of them. Error for text, warning for stickers: an image, generator, shape or nested
-comp layer under 40 % of the frame, or any clip tagged `sticker`), `text-cut-off`, `tiny-text`, `caption-overlap`,
+comp layer under 40 % of the frame and narrower than 90 % of its width and height, or any clip tagged `sticker`), `text-cut-off`, `tiny-text`, `caption-overlap`,
 `overlap-alpha`, `layer-hidden` (a layer fully covered by an opaque one above it), `media-off-frame`, `gaps`,
 `trailing-black`, `clip-past-end`, `clip-past-source` (a media clip longer than its source: the last frame holds
 or the sound stops; uses probed durations), `keyframes-outside`, `alpha-with-bg`, `music-over-voice`; in `look`

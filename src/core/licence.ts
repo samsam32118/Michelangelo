@@ -2,7 +2,8 @@
  * Licence rules for open media (media.search / media.fetch / media.credits and the stock QA checks). Pure.
  *
  * Every source maps its own licence strings to a canonical id ("cc0", "pdm", "pd-us-gov", "cc-by-4.0",
- * "cc-by-sa-3.0", "cc-by-nc-4.0", ..., or a platform licence such as "pexels") and core decides what may be used.
+ * "cc-by-sa-3.0", "cc-by-nc-4.0", ..., "nkr" (an archive's "no known copyright restrictions"), or a platform licence such as
+ * "pexels") and core decides what may be used.
  * Unknown licences are refused (fail closed).
  */
 
@@ -16,7 +17,7 @@ const PLATFORM_FREE = new Set(['pexels', 'pixabay', 'unsplash']);
 export function licenceClass(id: string | undefined): LicenceClass {
   const s = (id ?? '').toLowerCase().trim();
   if (!s) return 'unknown';
-  if (s === 'cc0' || s === 'pdm' || s.startsWith('pd-') || s === 'public-domain' || PLATFORM_FREE.has(s)) return 'free';
+  if (s === 'cc0' || s === 'pdm' || s.startsWith('pd-') || s === 'public-domain' || s === 'nkr' || PLATFORM_FREE.has(s)) return 'free';
   if (!/^cc-by(-|$)/.test(s)) return 'unknown';
   if (/-nd(-|$)/.test(s)) return 'no-derivatives';
   if (/-nc(-|$)/.test(s)) return 'non-commercial';
@@ -60,6 +61,7 @@ export function licenceName(id: string): string {
   if (s === 'cc0') return 'CC0';
   if (s === 'pdm') return 'Public Domain Mark';
   if (s === 'pd-us-gov') return 'public domain (US government work)';
+  if (s === 'nkr') return 'no known copyright restrictions';
   if (s.startsWith('pd-') || s === 'public-domain') return 'public domain';
   if (PLATFORM_FREE.has(s)) return `${s[0]!.toUpperCase()}${s.slice(1)} licence`;
   const m = /^cc-([a-z-]+?)(?:-(\d\.\d|\d))?$/.exec(s);

@@ -85,11 +85,13 @@ export function stockService(projectDir: string, registry: PluginRegistry | unde
 
     async search(q) {
       const list = providers.filter((p) => p.media.includes(q.kind) && (!q.provider || p.id === q.provider));
-      const failed: { provider: string; error: string }[] = [];
+      const failed: { provider: string; error: string }[] = [], notes: string[] = [];
       const results = await Promise.all(list.map(async (p) => {
         try {
           const { provider: _drop, ...query } = q;
-          const items = await p.search(query as StockQuery, stockContext(p.id, o));
+          const res = await p.search(query as StockQuery, stockContext(p.id, o));
+          const items = Array.isArray(res) ? res : (res?.items ?? []);
+          if (!Array.isArray(res)) for (const n of res?.notes ?? []) notes.push(`${p.id}: ${n}`);
           // ids must carry the provider prefix so media.fetch finds the provider again
           return items.filter((it) => it && typeof it.id === 'string' && it.file && it.licence?.id).map((it) => (it.id.startsWith(`${p.id}:`) ? it : { ...it, id: `${p.id}:${it.id}` }));
         } catch (e) {
@@ -101,7 +103,7 @@ export function stockService(projectDir: string, registry: PluginRegistry | unde
       const items: StockItem[] = [];
       for (let i = 0; results.some((r) => i < r.length); i++) for (const r of results) if (i < r.length) items.push(r[i]!);
       await remember(items);
-      return { items, failed };
+      return { items, failed, notes };
     },
 
     async item(id) {

@@ -27,11 +27,14 @@ function needStock(ctx: CommandContext, op: string, kind?: StockKind): StockServ
 const fmtSecs = (s: number) => (s >= 60 ? `${Math.floor(s / 60)}:${(s % 60).toFixed(0).padStart(2, '0')}` : `${s.toFixed(s < 10 ? 1 : 0)}s`);
 const clipText = (t: string, n: number) => (t.length > n ? t.slice(0, n - 1) + '…' : t);
 
+/** An id as one shell word (quoted when it has spaces or quotes). */
+const shellWord = (s: string) => (/^[\w:.%@+-]+$/.test(s) ? s : `'${s.replace(/'/g, `'\\''`)}'`);
+
 /** One numbered result line for the agent. */
 function resultLine(it: StockItem, i: number): string {
   const size = it.width && it.height ? `${it.width}x${it.height}` : '';
   const dur = it.seconds !== undefined ? fmtSecs(it.seconds) : '';
-  return `${String(i + 1).padStart(2)}. ${it.id} · ${clipText(it.title || 'untitled', 48)} · ${[dur, size].filter(Boolean).join(' ')}${dur || size ? ' · ' : ''}${licenceName(it.licence.id)}${it.author ? ` · ${clipText(it.author, 28)}` : ''} · ${it.source}`;
+  return `${String(i + 1).padStart(2)}. ${shellWord(it.id)} · ${clipText(it.title || 'untitled', 48)} · ${[dur, size].filter(Boolean).join(' ')}${dur || size ? ' · ' : ''}${licenceName(it.licence.id)}${it.author ? ` · ${clipText(it.author, 28)}` : ''} · ${it.source}`;
 }
 
 const orient = (it: StockItem) => (!it.width || !it.height ? undefined : it.width > it.height * 1.1 ? 'landscape' : it.height > it.width * 1.1 ? 'portrait' : 'square');
@@ -68,7 +71,7 @@ defineCommand({
       ...(p.orientation ? { orientation: p.orientation } : {}), ...(p.minSeconds !== undefined ? { minSeconds: p.minSeconds } : {}),
       ...(maxSeconds !== undefined ? { maxSeconds } : {}), ...(minWidth ? { minWidth } : {}),
     };
-    const { items, failed } = await s.search(q);
+    const { items, failed, notes } = await s.search({ ...q, licences: allowed });
     const dropped = new Map<string, number>();
     const drop = (why: string) => dropped.set(why, (dropped.get(why) ?? 0) + 1);
     const kept = items.filter((it) => {
@@ -85,7 +88,7 @@ defineCommand({
     const lines = shown.map(resultLine);
     let sheet: string | undefined, list: string | undefined;
     if (ctx.services.writeWork) {
-      list = await ctx.services.writeWork('search.json', new TextEncoder().encode(JSON.stringify({ query: q, items: shown, more: kept.length - shown.length, failed }, null, 1) + '\n'));
+      list = await ctx.services.writeWork('search.json', new TextEncoder().encode(JSON.stringify({ query: q, items: shown, more: kept.length - shown.length, failed, notes }, null, 1) + '\n'));
       if (visual && s.sheet && shown.length) {
         const png = await s.sheet(shown).catch(() => undefined);
         if (png) sheet = await ctx.services.writeWork('search.png', png);
@@ -100,8 +103,10 @@ defineCommand({
     const tail: string[] = [];
     if (dropped.size) tail.push(`hidden: ${[...dropped].map(([k, n]) => `${n} ${k}`).join(', ')}${[...dropped.keys()].some((k) => k === 'share-alike' || k === 'non-commercial') ? ' (allow with licences=["share-alike"] or ["non-commercial"] if the video can carry them)' : ''}`);
     for (const f of failed) tail.push(`provider ${f.provider} failed: ${f.error}`);
+    for (const n of notes.slice(0, 6)) tail.push(`note: ${n}`);
+    if (notes.length > 6) tail.push(`note: … ${notes.length - 6} more in search.json`);
     if (sheet) tail.push(`previews: ${sheet} (numbered like the list)`);
-    if (shown.length) tail.push(`next: media.fetch id=${shown[0]!.id}${p.kind === 'sfx' || p.kind === 'music' ? ' at=<time>' : ''}`);
+    if (shown.length) tail.push(`next: media.fetch id=${shellWord(shown[0]!.id)}${p.kind === 'sfx' || p.kind === 'music' ? ' at=<time>' : ''}`);
     else tail.push(`try other words, a broader query, ${minWidth && visual ? `minWidth=0, ` : ''}or another kind`);
     ctx.summary([head, ...lines, ...tail].join('\n'));
   },
@@ -113,7 +118,7 @@ const ASSET_KIND: Record<StockKind, 'image' | 'video' | 'audio'> = { image: 'ima
 const slug = (t: string) => t.toLowerCase().normalize('NFKD').replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 24).replace(/-+$/, '') || 'media';
 
 function soundLine(s: SoundFacts): string {
-  return `${s.duration.toFixed(2)}s, ${Number.isFinite(s.lufs) && s.lufs > -70 ? `${s.lufs.toFixed(1)} LUFS` : 'silent'}, peak ${s.peak.toFixed(1)} dBTP, starts ${s.onset.toFixed(2)}s, loudest ${s.peakAt.toFixed(2)}s, ${s.texture}, ${s.tone}${s.bpm ? `, ~${s.bpm} BPM` : ''}`;
+  return `${s.duration.toFixed(2)}s, ${Number.isFinite(s.lufs) && s.lufs > -70 ? `${s.lufs.toFixed(1)} LUFS` : 'silent'}, peak ${s.peak.toFixed(1)} dBTP, starts ${s.onset.toFixed(2)}s, loudest ${s.peakAt.toFixed(2)}s, ${s.texture}, ${s.tone}${s.centroidHz ? ` (centroid ${s.centroidHz >= 1000 ? `${(s.centroidHz / 1000).toFixed(1)} kHz` : `${s.centroidHz} Hz`})` : ''}${s.bpm ? `, ~${s.bpm} BPM` : ''}`;
 }
 
 defineCommand({
@@ -194,7 +199,7 @@ defineCommand({
       }
       const end = compLength(ctx, comp);
       if (item.kind === 'music' && p.len === undefined && end !== undefined && at + len > end) len = Math.max(1, end - at);
-      const id = p.clip ?? ctx.newId(item.kind === 'sfx' ? `sfx-${slug(item.title)}` : slug(item.title));
+      const id = p.clip ?? ctx.newId(`${({ image: 'img', video: 'vid', music: 'mus', sfx: 'sfx' } as const)[item.kind]}-${slug(item.title)}`.slice(0, 24).replace(/-+$/, ''));
       if ((ctx.project.clips ?? []).some((c) => c.id === id)) fail('E_DUPLICATE_ID', `clip "${id}" already exists.`, 'choose another id with clip=, or omit it.');
       let track: string;
       if (item.kind === 'music' || item.kind === 'sfx') track = busTrack(ctx, comp, item.kind, at, at + len, item.kind === 'music' ? 'MUS' : 'SFX', p.track);
@@ -206,7 +211,7 @@ defineCommand({
       }
       const clip: Clip = { id, track, at, len, asset: asset.id, ...(inF ? { in: inF } : {}), ...(p.gain !== undefined ? { gain: p.gain } : {}) };
       (ctx.project.clips ??= []).push(clip);
-      if (end !== undefined && at + len > end && item.kind !== 'music') ctx.note(`the clip ends at frame ${at + len}, after the end of comp "${comp.id}" (${end}).`);
+      if (typeof comp.length === 'number' && at + len > comp.length && item.kind !== 'music') ctx.note(`the clip ends at frame ${at + len}, after the end of comp "${comp.id}" (${comp.length}); extend it with comp.set ${comp.id} length=${at + len} (or length=auto).`);
       ctx.out.clip = id; ctx.out.at = at; ctx.out.len = len;
       lines.push(`added clip "${id}" on ${track} at ${at}–${at + len}${inF ? ` (starts ${inF} frames into the file so the sound lands on the beat)` : ''}`);
     }
@@ -246,23 +251,45 @@ defineCommand({
       // replace an earlier credits card
       const old = new Set((ctx.project.clips ?? []).filter((c) => c.tags?.includes('credits') && ctx.compOfClip(c).id === comp.id).map((c) => c.id));
       ctx.project.clips = (ctx.project.clips ?? []).filter((c) => !old.has(c.id));
-      const at = compLength(ctx, comp) ?? 0;
+      const usedTracks = new Set((ctx.project.clips ?? []).map((c) => c.track));
+      ctx.project.tracks = (ctx.project.tracks ?? []).filter((t) => !(t.comp === comp.id && /^CREDITS\d*$/.test(t.id) && !usedTracks.has(t.id)));
+      const start = compLength(ctx, comp) ?? 0;
       const [W, H] = comp.size;
-      const track = ctx.newId('CREDITS');
-      (ctx.project.tracks ??= []).push({ id: track, comp: comp.id });
+      // the area clear of the TikTok / Reels / Shorts interface on a vertical comp, title-safe 90 % otherwise
+      const safe = H > W ? { x0: 0.05 * W, x1: 0.86 * W, y0: 0.1 * H, y1: 0.79 * H } : { x0: 0.05 * W, x1: 0.95 * W, y0: 0.05 * H, y1: 0.95 * H };
+      // legible: at least 2.6 % of the frame height (the tiny-text rule is 2.5 %)
+      const size = Math.round(Math.max(H, W) * (H > W ? 0.026 : 0.034) * (H > W ? 1 : Math.min(1, H / W) * 1.6));
+      const style = { size, color: '#f2f2f2', align: 'center' as const, lineHeight: 1.3, maxWidth: Math.round((safe.x1 - safe.x0) * 0.94) };
+      const budget = (safe.y1 - safe.y0) * 0.92;
+      const height = (text: string) => ctx.services.measureText?.(text, style).height
+        ?? text.split('\n').reduce((n, l) => n + Math.max(1, Math.ceil((l.length * size * 0.55) / style.maxWidth)), 0) * size * style.lineHeight;
+      // pages of lines that fit; "Credits" heads the first
+      const pages: string[][] = [];
+      let page: string[] = ['Credits'];
+      for (const l of lines) {
+        if (page.length > 1 && height([...page, l].join('\n\n')) > budget) { pages.push(page); page = []; }
+        page.push(l);
+      }
+      pages.push(page);
+      const bgTrack = ctx.newId('CREDITS');
+      (ctx.project.tracks ??= []).push({ id: bgTrack, comp: comp.id });
       const textTrack = ctx.newId('CREDITS');
       ctx.project.tracks.push({ id: textTrack, comp: comp.id });
-      // sizes that pass the library's own QA: text ≥ 2.6 % of the frame height, inside the safe area
-      const size = Math.max(Math.round(H * 0.026), Math.min(Math.round(H * 0.034), Math.floor((H * 0.6) / (lines.length + 2) / 1.3)));
-      (ctx.project.clips ??= []).push(
-        { id: ctx.newId('credits-bg'), track, at, len, color: '#101014', tags: ['credits'] },
-        { id: ctx.newId('credits'), track: textTrack, at, len, text: `Credits\n${lines.join('\n')}`, style: { size, color: '#f2f2f2', align: 'center', lineHeight: 1.3, maxWidth: Math.round(W * 0.78) }, x: Math.round(W / 2), y: Math.round(H * 0.45), tags: ['credits'] },
-      );
-      if (typeof comp.length === 'number' && comp.length < at + len) comp.length = at + len;
-      ctx.out.card = { at, len };
+      // credits hold still on purpose: the static-visuals rule skips them
+      const tags = ['credits', 'qa-ignore:static'];
+      pages.forEach((pg, i) => {
+        const at = start + i * len;
+        (ctx.project.clips ??= []).push(
+          { id: ctx.newId('credits-bg'), track: bgTrack, at, len, color: '#101014', tags },
+          { id: ctx.newId('credits'), track: textTrack, at, len, text: pg.join('\n\n'), style, x: Math.round((safe.x0 + safe.x1) / 2), y: Math.round((safe.y0 + safe.y1) / 2), tags },
+        );
+      });
+      const end = start + pages.length * len;
+      if (typeof comp.length === 'number' && comp.length < end) comp.length = end;
+      ctx.out.card = { at: start, len: end - start, pages: pages.length };
     }
     ctx.out.lines = lines;
     if (out) ctx.out.file = out;
-    ctx.summary([`credited ${lines.length} asset${lines.length > 1 ? 's' : ''}${out ? ` in ${out}` : ''}${p.card ? `${out ? ' and' : ''} on a credits card at the end` : ''}:`, ...lines.slice(0, 8).map((l) => `  ${l}`), ...(lines.length > 8 ? [`  … ${lines.length - 8} more`] : [])].join('\n'));
+    ctx.summary([`credited ${lines.length} asset${lines.length > 1 ? 's' : ''}${out ? ` in ${out}` : ''}${p.card ? `${out ? ' and' : ''} on ${(ctx.out.card as { pages: number }).pages > 1 ? `${(ctx.out.card as { pages: number }).pages} credits cards` : 'a credits card'} at the end` : ''}:`, ...lines.slice(0, 8).map((l) => `  ${l}`), ...(lines.length > 8 ? [`  … ${lines.length - 8} more`] : [])].join('\n'));
   },
 });

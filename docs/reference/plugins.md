@@ -96,6 +96,11 @@ defineProvider({ kind: 'transcribe', id, describe, transcribe({ file, lang? }) â
   Example: `examples/plugins/flite-voice` in the repository (ffmpeg's flite engine, zero downloads), and the
   20-line version in audio.md. `mgl doctor <file>` lists the providers a project has. `mgl plugin new provider
   <name>` scaffolds a working speak provider (manifest kind `provider`; a provider-only plugin is fine).
+- **Stock providers** (API 1.4, `kind: 'stock'`) serve `media.search` / `media.fetch`: openly licensed images,
+  video, music and sound effects with canonical licence ids (`canonicalLicence`); core owns downloads, licence rules,
+  sidecars and credits. Test them offline with `testStockContext({ routes })` from `michelangelo/testing`. Details and
+  the interface: media.md; example: `examples/plugins/open-media`.
+- **Checks** (API 1.4) also get `ctx.uiZones(platform?)`: the TikTok / Reels / Shorts interface panels in comp px.
 - Commands are named `<plugin>.<verb>`, have a zod schema, a doc sentence and an example, and change the
   project only through `ctx` (so they are undoable and dry-runnable).
 

@@ -64,6 +64,25 @@ describe('sound as text', () => {
   });
 });
 
+describe('sound as text on real audio (ffmpeg)', () => {
+  it('a sine is tonal, white noise is noisy and bright, brown noise is dark; a delayed hit reports its onset', async () => {
+    const { describeSound } = await import('../../src/sdk/sound.js');
+    const { getMediaBackend } = await import('../../src/media/index.js');
+    const dir = mkdtempSync(join(tmpdir(), 'mgl-sound-'));
+    const make = (name: string, src: string, af?: string) => { execFileSync('ffmpeg', ['-hide_banner', '-loglevel', 'error', '-y', '-f', 'lavfi', '-i', src, ...(af ? ['-af', af] : []), join(dir, name)]); return join(dir, name); };
+    const b = await getMediaBackend({ baseDir: dir });
+    const sine = await describeSound(make('sine.wav', 'sine=f=440:d=1'), b);
+    const white = await describeSound(make('white.wav', 'anoisesrc=d=1:c=white:a=0.5'), b);
+    const brown = await describeSound(make('brown.wav', 'anoisesrc=d=1:c=brown:a=0.5'), b);
+    const late = await describeSound(make('late.wav', 'anoisesrc=d=0.5:c=pink:a=0.5', 'adelay=400:all=1'), b);
+    expect([sine.texture, white.texture, white.tone, brown.tone]).toEqual(['tonal', 'noisy', 'bright', 'dark']);
+    expect(sine.flatness).toBeLessThan(0.02);
+    expect(white.centroidHz).toBeGreaterThan(2000);
+    expect(late.onset).toBeGreaterThan(0.37);
+    expect(late.onset).toBeLessThan(0.43);
+  });
+});
+
 // ------------------------------------------------------------------------------------------- commands with a fake provider
 
 type Fixture = { bytes: Buffer; type: string };
@@ -224,7 +243,7 @@ describe('media.fetch', () => {
     expect(project.data.tracks!.at(-1)!.id).toBe(clip.track);
     await edit({ op: 'media.search', kind: 'music', query: 'bed' });
     await edit({ op: 'media.fetch', id: 'fake:t1', at: '9s' });
-    const bed = project.data.clips!.find((c) => c.id.startsWith('tone-bed'))!;
+    const bed = project.data.clips!.find((c) => c.id.startsWith('mus-tone-bed'))!;
     expect(bed.at + bed.len).toBe(300);
     expect(project.data.tracks!.find((t) => t.id === bed.track)).toMatchObject({ bus: 'music' });
   });
@@ -252,7 +271,29 @@ describe('media.credits and the stock QA rules', () => {
     expect(project.data.comps[0]!.length).toBe(390);
     const card = project.data.clips!.filter((c) => c.tags?.includes('credits'));
     expect(card).toHaveLength(2);
-    expect(card.every((c) => c.at === 300 && c.len === 90)).toBe(true);
+    expect(card.every((c) => c.at === 300 && c.len === 90 && c.tags!.includes('qa-ignore:static'))).toBe(true);
+    // saved and read back: project.credits survives the file format
+    await project.save();
+    const back = await Project.open(join(dir, 'p.mgl.json'));
+    expect(back.data.project!.credits!.assets).toHaveLength(2);
+    // re-running replaces the card instead of adding another
+    await edit({ op: 'media.credits', card: true });
+    expect(project.data.clips!.filter((c) => c.tags?.includes('credits'))).toHaveLength(2);
+  });
+
+  it('a long credit list is paged over several cards that fit the safe area', async () => {
+    const { edit, project } = setup();
+    for (let i = 0; i < 14; i++) {
+      (project.data.assets ??= []).push({ id: `a${i}`, src: `media/stock/image/x${i}.png`, kind: 'image', licence: 'cc-by-4.0', credit: `“A rather long title for picture number ${i} of the series” by Somebody Withalongname (Some Archive via Openverse), CC BY 4.0` });
+      (project.data.clips ??= []).push({ id: `c${i}`, track: 'V1', at: i * 10, len: 10, asset: `a${i}` } as never);
+    }
+    if (!project.data.tracks?.some((t) => t.id === 'V1')) (project.data.tracks ??= []).push({ id: 'V1', comp: 'main' });
+    const r = await edit({ op: 'media.credits', card: true });
+    const card = (r.out[0] as { card: { pages: number; len: number } }).card;
+    expect(card.pages).toBeGreaterThan(1);
+    expect(card.len).toBe(card.pages * 90);
+    const texts = project.data.clips!.filter((c) => c.tags?.includes('credits') && c.text);
+    expect(texts.map((c) => c.text!.split('\n\n').length).reduce((a, b) => a + b, 0)).toBe(15);
   });
 
   it('stock-licence: no-derivatives is an error; non-commercial only in a commercial project; share-alike is a note', () => {

@@ -480,7 +480,8 @@ const uiOverlap = defineCheck({
       const b = l.box;
       if (!text) {
         const tagged = !!clip?.tags?.includes('sticker');
-        if (!STICKER_KINDS.has(l.kind) || (!tagged && area(intersect(b, frameBox(c))) >= 0.4 * c.W * c.H)) continue;
+        // stickers are small elements: a layer spanning (nearly) the full width or height is picture, not a sticker
+        if (!STICKER_KINDS.has(l.kind) || (!tagged && (area(intersect(b, frameBox(c))) >= 0.4 * c.W * c.H || b[2] >= 0.9 * c.W || b[3] >= 0.9 * c.H))) continue;
       }
       if (b[0] + b[2] <= 0 || b[1] + b[3] <= 0 || b[0] >= c.W || b[1] >= c.H) continue; // off-screen (animating in)
       if (ignores(clip, 'ui-overlap') || moving(ctx.project, every, l.clipId, samples, c)) { skip.add(l.clipId); continue; }

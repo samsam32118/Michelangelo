@@ -45,8 +45,11 @@ describe('ui-overlap', () => {
     expect(f[0]!.fix).toBe('mgl edit <file> clip.set emoji x=878');
   });
 
-  it('a sticker larger than the safe area is scaled down and moved in', () => {
-    const p = vertical([{ id: 'plate', track: 'T1', at: 0, len: 90, color: '#000000', x: 540, y: 1650 }]);
+  it('a sticker larger than the safe area is scaled down and moved in; a full-width layer counts only when tagged sticker', () => {
+    // full width is picture, not a sticker, unless tagged
+    const untagged = vertical([{ id: 'plate', track: 'T1', at: 0, len: 90, color: '#000000', x: 540, y: 1650 }]);
+    expect(runCheck('ui-overlap', untagged, { layers: layersAt(30, [bg, { clipId: 'plate', kind: 'solid', box: [0, 1500, 1080, 300] }]) })).toEqual([]);
+    const p = vertical([{ id: 'plate', track: 'T1', at: 0, len: 90, color: '#000000', x: 540, y: 1650, tags: ['sticker'] }]);
     const f = runCheck('ui-overlap', p, { layers: layersAt(30, [bg, { clipId: 'plate', kind: 'solid', box: [0, 1500, 1080, 300] }]) });
     expect(f[0]!.fix).toMatch(/^mgl edit <file> clip\.set plate scale=0\.79\d* x=\d+ y=\d+$/);
   });

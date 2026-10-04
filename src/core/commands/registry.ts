@@ -55,8 +55,9 @@ export interface SoundFacts {
   /** spectral flatness 0 (pure tone) .. 1 (white noise), and the label */
   flatness: number;
   texture: 'tonal' | 'mixed' | 'noisy';
-  /** energy-weighted mean band 0..1 (low → high), and the label */
+  /** power-weighted spectral centroid on the log-frequency scale 40 Hz … 11 kHz: 0..1, in Hz, and the label */
   brightness: number;
+  centroidHz?: number;
   tone: 'dark' | 'balanced' | 'bright';
   /** music: estimated tempo */
   bpm?: number;
@@ -68,7 +69,7 @@ export interface SoundFacts {
 export interface StockService {
   providers: { id: string; describe: string; media: string[]; sources?: string[] }[];
   /** search every provider serving `kind` (or one), in parallel; providers that fail are reported, not fatal */
-  search(q: import('../../plugin/api.js').StockQuery & { provider?: string }): Promise<{ items: import('../../plugin/api.js').StockItem[]; failed: { provider: string; error: string }[] }>;
+  search(q: import('../../plugin/api.js').StockQuery & { provider?: string }): Promise<{ items: import('../../plugin/api.js').StockItem[]; failed: { provider: string; error: string }[]; notes: string[] }>;
   /** an item from a recent search (cached for 30 days), else from its provider's item() */
   item(id: string): Promise<import('../../plugin/api.js').StockItem | undefined>;
   /** download an item to `rel` (media/stock/<kind>/<name>); refuses HTML error pages; returns bytes and sha256 */

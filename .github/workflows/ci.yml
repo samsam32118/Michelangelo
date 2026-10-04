@@ -22,7 +22,7 @@ jobs:
         run: |
           npm run build
           npm pack --dry-run --json > pack.json
-          node -e "const f=require('./pack.json')[0].files.map(x=>x.path);const bad=f.filter(p=>/ffmpeg|\.so$|\.dll$|\.exe$/i.test(p));if(bad.length){console.error('unexpected files in package:',bad);process.exit(1)}console.log(f.length+' files ok')"
+          node -e "const f=require('./pack.json')[0].files.map(x=>x.path);const bad=f.filter(p=>/(^|\/)(ffmpeg|ffprobe)(\.exe)?$|\.(so|dll|dylib|exe|tar\.xz|zip)$|^evals\//i.test(p));if(bad.length){console.error('unexpected files in package:',bad);process.exit(1)}console.log(f.length+' files ok')"
       - name: Smoke render
         run: |
           mkdir -p /tmp/smoke && cd /tmp/smoke

@@ -1,0 +1,148 @@
+{
+ "label": "smoke1",
+ "set": "main",
+ "model": "claude-opus-5-5",
+ "date": "2026-10-04T02:41:31.721Z",
+ "dryRun": false,
+ "sandbox": false,
+ "isolation": "audit",
+ "packageVersion": "0.1.0",
+ "timeoutScale": 1,
+ "tasks": 1,
+ "passed": 1,
+ "successRate": 1,
+ "meanScore": 1,
+ "meanTurns": 21,
+ "meanTokens": 778987,
+ "totalTokens": 778987,
+ "totalOutputTokens": 3853,
+ "totalCostUsd": 0.45,
+ "meanWallSec": 63,
+ "timeouts": 0,
+ "bashTimeouts": 0,
+ "failedEdits": 0,
+ "violations": 5,
+ "topErrors": [
+  [
+   "E_ENCODE",
+   2
+  ],
+  [
+   "E_CODE",
+   1
+  ],
+  [
+   "E_BUS_CYCLE",
+   1
+  ],
+  [
+   "E_FORMAT",
+   1
+  ],
+  [
+   "E_DUPLICATE_ID",
+   1
+  ],
+  [
+   "E_EMPTY",
+   1
+  ],
+  [
+   "E_EXISTS",
+   1
+  ],
+  [
+   "E_EXPORT",
+   1
+  ]
+ ],
+ "topVerbs": [
+  [
+   "docs",
+   5
+  ],
+  [
+   "render",
+   5
+  ],
+  [
+   "edit",
+   4
+  ],
+  [
+   "show",
+   2
+  ],
+  [
+   "check",
+   1
+  ]
+ ],
+ "results": [
+  {
+   "task": "gif-export",
+   "pass": true,
+   "score": 1,
+   "checks": [
+    {
+     "name": "out/clip.gif: width 480, 3 s +-0.2, loops, < 5 MB, animated",
+     "pass": true,
+     "detail": "gif 480x270, 45 frames, 3 s, loop 0, 0.52 MB; luma 0.49/0.494/0.496/0.499/0.501, max frame diff 14.11"
+    },
+    {
+     "name": "first frame matches the project at 3 s (SSIM > 0.6 at 480 px)",
+     "pass": true,
+     "detail": "SSIM 0.879 against the source at 3 s"
+    }
+   ],
+   "metrics": {
+    "turns": 21,
+    "inputTokens": 34,
+    "outputTokens": 3853,
+    "cacheReadTokens": 747940,
+    "cacheCreationTokens": 27160,
+    "costUsd": 0.445254,
+    "toolCalls": 20,
+    "toolCounts": {
+     "Bash": 17,
+     "Read": 3
+    },
+    "bashTimeouts": 0,
+    "failedEdits": 0,
+    "errorCodes": {
+     "E_CODE": 1,
+     "E_BUS_CYCLE": 1,
+     "E_ENCODE": 2,
+     "E_FORMAT": 1,
+     "E_DUPLICATE_ID": 1,
+     "E_EMPTY": 1,
+     "E_EXISTS": 1,
+     "E_EXPORT": 1
+    },
+    "verbs": {
+     "docs": 5,
+     "show": 2,
+     "render": 5,
+     "edit": 4,
+     "check": 1
+    },
+    "violations": [
+     "Bash: grep -c NETSCAPE2.0 out/clip.gif; python3 -c \"\nd=open('out/clip.gif','rb').read();i=d.find(b'NETSCAPE2.0');print(d[i:i+16])\"; ffmpeg -v error -i out/clip.gif -vf \"select='eq(n\\,0)+eq(n\\,44)',tile=2x1\" -frames:v 1 -y /tmp/claude-0/-tmp-mgl-eval-gif-export-6E2xlj/7bfc27cd-f80d-56c5-a33a-82740a69",
+     "Read: /tmp/claude-0/-tmp-mgl-eval-gif-export-6E2xlj/7bfc27cd-f80d-56c5-a33a-82740a693a5c/scratchpad/frames.png",
+     "Bash: npx mgl render demo.mgl.json /tmp/claude-0/-tmp-mgl-eval-gif-export-6E2xlj/7bfc27cd-f80d-56c5-a33a-82740a693a5c/scratchpad/s3.png --still 3s 2>&1 | tail -1",
+     "Read: /tmp/claude-0/-tmp-mgl-eval-gif-export-6E2xlj/7bfc27cd-f80d-56c5-a33a-82740a693a5c/scratchpad/s3.png",
+     "Bash: ffmpeg -v error -i out/clip.gif -vf \"select='eq(n\\,0)+eq(n\\,44)',tile=1x2\" -frames:v 1 -y /tmp/claude-0/-tmp-mgl-eval-gif-export-6E2xlj/7bfc27cd-f80d-56c5-a33a-82740a693a5c/scratchpad/frames.png; ffprobe -v error -show_entries stream=width,height,r_frame_rate,nb_frames:format=duration,size -of"
+    ],
+    "resultSubtype": "success",
+    "isError": false,
+    "apiMs": 48096
+   },
+   "wallSec": 63.015,
+   "timedOut": false,
+   "dir": "/tmp/mgl-eval-gif-export-6E2xlj",
+   "timeoutMin": 10,
+   "expectsWeak": false,
+   "exitCode": 0
+  }
+ ]
+}

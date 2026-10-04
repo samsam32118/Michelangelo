@@ -128,7 +128,7 @@ container on 2026-10-04:
 
 | Archive | What it has | Access | Licence filter |
 |---|---|---|---|
-| **Smithsonian Open Access** | 5M+ CC0 items across 21 museums and Smithsonian Libraries (natural-history plates, book scans, aircraft, portraits) | `api.si.edu`, needs a free api.data.gov key (`SMITHSONIAN_API_KEY`). The shared `DEMO_KEY` allows 10 requests and was exhausted after one, so it is not a usable default | `usage.access == "CC0"` |
+| **Smithsonian Open Access** | CC0 art, design, portraits, history and nature photography (details below) | keyless: a local index built from the public metadata dump on S3, images from `ids.si.edu` at full resolution; the `api.si.edu` search API is used instead when `SMITHSONIAN_API_KEY` is set | `usage.access == "CC0"` |
 | **Library of Congress** | photographs, prints, posters, maps (Prints & Photographs, FSA/OWI, HABS) | `loc.gov/photos/?fo=json`, keyless | only items whose rights say "No known restrictions on publication" (read per item; anything else dropped) |
 | **Metropolitan Museum** | 400k+ open-access works | keyless; `v1.1/search?isPublicDomain=true` (the old `v1/search` was retired on 2026-10-01, measured) | `isPublicDomain` |
 | **Art Institute of Chicago** | 60k+ public-domain works | keyless (`api.artic.edu`), IIIF images | `is_public_domain` |
@@ -137,6 +137,42 @@ container on 2026-10-04:
 | **Wellcome Collection** | medicine and science history: anatomy plates, botanical prints, old book scans | keyless (`api.wellcomecollection.org`), IIIF | PDM / CC0 / CC BY only |
 | **SMK (National Gallery of Denmark)** | paintings and prints | keyless (`api.smk.dk`) | `public_domain:true` |
 | **Europeana** | 13M+ items from European libraries and museums | `api2demo` key works for testing; real use needs a free key (`EUROPEANA_API_KEY`) | `reusability=open` |
+
+**Smithsonian without a key: the open-access dump.** The Smithsonian publishes all its open-access metadata on S3
+(`smithsonian-open-access.s3-us-west-2.amazonaws.com/metadata/edan/index.txt`). Measured on 2026-10-04:
+
+- 37 units (museums and archives), each split into 256 newline-delimited JSON shards; about **46 GB** in total
+  (estimated from shard sizes). Too big to search live, so the plugin builds a small local index once.
+- Most CC0 images are specimens, not footage material. In a sample of 18 units (14.3M records), 4.6M records carry
+  a CC0 image, and 3.6M of those are herbarium sheets (`nmnhbotany`). Bird, insect and fossil specimen photos
+  follow. **Smithsonian Libraries (`sil`) has almost no images** in the dump: about 930k catalogue records, about 256
+  with an image. Its book scans live in the Biodiversity Heritage Library and Internet Archive, not here.
+- The units that matter for video are small: Cooper Hewitt design (`chndm`, about 57k CC0 images, 0.23 GB of
+  metadata), Portrait Gallery (`npg`, ~12.5k), American Art (`saam`, ~11k), American History (`nmah`, ~14k, but
+  2.5 GB of metadata), Asian Art (`fsg`, ~5k), African American History (`nmaahc`, ~4.6k), the Archives (`sia`,
+  ~4k, 2 GB), plus Air and Space, Hirshhorn and the Zoo. Counts are from shard `00` × 256.
+- Images download keyless at full resolution: `ids.si.edu/ids/deliveryService?id=<idsId>&max=4000` gave
+  2283×3000 px.
+- Shards carry `Last-Modified` and `ETag` (latest refresh 2026-09-28), and the bucket can be listed with S3
+  `ListObjectsV2`, so a rebuild re-reads only the shards that changed.
+- Some records lack `descriptiveNonRepeating`; the indexer skips any record without a CC0 image instead of
+  failing.
+
+How the plugin uses it:
+
+- `open-media.index smithsonian [units=chndm,npg,saam,fsg,nmaahc] [refresh=true]` streams the chosen units' shards
+  once (never stored whole) and keeps only records with a CC0 image. Each entry holds the ids image id, title,
+  unit, date, object type, topics and place, written to `~/.cache/michelangelo/stock/smithsonian/<unit>.jsonl.gz`.
+  The default units are the five above: about 0.5 GB to stream, a few minutes, an index of roughly 10–15 MB. The
+  command prints the estimate first and runs detached (`--detach`, like `render`) when it is longer than about
+  a minute. `nmah`, `sia` and nature units (`nmnhbirds`, `nmnhento`, …) are opt-in, with their own estimate.
+  Herbarium sheets are never indexed by default.
+- `media.search kind=image source=smithsonian query=...` searches that index locally (token match on title, topics,
+  object type and place, ranked by field), with no network until fetch. Without an index, the result says so and
+  gives the build command and its estimate. With `SMITHSONIAN_API_KEY` set, the live API is used and the index is
+  optional.
+- The index is metadata built on the user's machine from the public dump. Nothing is bundled, and image files are
+  fetched only on `media.fetch`.
 
 Not added: **Biodiversity Heritage Library** and **NYPL Digital Collections** need registered keys (401 without);
 their best material is also reachable through Smithsonian, Openverse or Wikimedia Commons. **Internet Archive Book
@@ -198,6 +234,7 @@ Before each push: `npm run typecheck`, `npm test`, `npm run docs:check`, `mgl pl
 
 1. **Safe zones in core, not a plugin.** Recommended, so every vertical project is checked.
 2. **Share-alike media:** refused unless asked (it would bind the whole video).
-3. **Keyed sources** (Freesound API, Pexels, Pixabay, Unsplash, Smithsonian, Europeana): off unless their key is in
-   the environment. Smithsonian is the one most worth a key (free, instant from api.data.gov).
+3. **Keyed sources** (Freesound API, Pexels, Pixabay, Unsplash, Europeana; Smithsonian's live API): off unless
+   their key is in the environment. Smithsonian works without a key through the local index.
 4. **Network in evals:** allow the open-media hosts for the `open-media-short` eval only.
+5. **Smithsonian index default units:** `chndm`, `npg`, `saam`, `fsg`, `nmaahc` (about 0.5 GB to stream once).

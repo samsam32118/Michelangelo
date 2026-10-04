@@ -8,6 +8,7 @@
  * Clips tagged "qa-ignore:<rule>" (or "qa-ignore:all") are skipped by that rule (see IGNORE_ALIASES).
  */
 import { definePlugin, defineCheck, type CheckContext, type CheckDef, type Finding } from '../../plugin/api.js';
+import { retentionChecks } from './retention.js';
 
 type Project = CheckContext['project'];
 type Clip = NonNullable<Project['clips']>[number];
@@ -86,6 +87,7 @@ export const IGNORE_ALIASES: Record<string, string[]> = {
   'cut-off': ['text-cut-off'], 'off-frame': ['media-off-frame', 'text-cut-off'],
   black: ['black-frames', 'trailing-black'], silence: ['long-silence'],
   frozen: ['frozen', 'clip-past-source'], levels: ['luma-range'], broadcast: ['luma-range'],
+  static: ['static-visuals'], motion: ['static-visuals'], contrast: ['low-contrast'], legibility: ['low-contrast'], gap: ['edge-gap'], edge: ['edge-gap'],
 };
 
 /** Does a clip carry a qa-ignore tag for this rule? */
@@ -1163,6 +1165,6 @@ const longSilence = defineCheck({
 
 export const builtinChecks: CheckDef[] = [gaps, textOutsideSafe, tinyText, captionOverlap, clipPastEnd, keyframesOutside,
   layerHidden, mediaOffFrame, trailingBlack, clipPastSource, alphaWithBg, textCutOff, musicOverVoice,
-  blackFrames, frozen, overlapAlpha, lumaRange, clipping, loudness, longSilence];
+  blackFrames, frozen, overlapAlpha, lumaRange, clipping, loudness, longSilence, ...retentionChecks];
 
-export default definePlugin({ name: 'builtin-checks', version: '1.1.0', checks: builtinChecks });
+export default definePlugin({ name: 'builtin-checks', version: '1.2.0', checks: builtinChecks });

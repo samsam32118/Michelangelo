@@ -100,6 +100,90 @@ clip's beats (`on=beats clip=<id>`): for example `mgl edit v.mgl.json marker.bea
 `mgl edit v.mgl.json clip.sequence srcs='["a.mp4","b.mp4","c.mp4"]' on=markers fit=cover`.
 `mgl docs marker.beats` and `mgl docs clip.sequence` list every field.
 
+## Generated music and sound effects (no files needed)
+
+Everything here is synthesised offline and deterministically, written once to `media/generated/` (named by a hash
+of the parameters, so the same call reuses the file; a `.json` next to it describes it) and added as an asset +
+clip on a `music` or `sfx` bus track.
+
+- `audio.music mood=upbeat|chill|dramatic|corporate|lofi|epic len=30s [bpm=] [key=Am] [seed=] [energy=0..1 |
+  intensity='[["0s",0.4],["8s",1]]'] [markers=beats|bars]`: a looping music bed at −18 LUFS with a fade-out. Over a
+  voice it sits 6 dB lower and the music bus ducks 9 dB under dialogue (unless the mix already says how).
+  `markers=beats` adds exact beat markers for `clip.sequence on=markers`; the summary names the tempo, key and chords.
+- `audio.sfx type=<whoosh|swoosh|pop|click|hit|impact|riser|ding|bell|swipe|glitch|typing|camera> at=2s`: one
+  effect whose peak lands on `at` (a riser ends there); overlapping sounds go on extra sfx tracks.
+- `audio.auto-sfx`: fitting effects for the whole comp in one call: a whoosh on each transition, a hit on hard
+  cuts, a swoosh on template entrances, a pop on text entrances (`on=` picks the kinds, `map='{"text": "click",
+  "cuts": "none"}'` changes them). Each is linked to its source clip so it moves with it; running it again
+  replaces the previous ones.
+
+```sh
+mgl new shorts -o gen.mgl.json
+mgl edit gen.mgl.json clip.add id=bg track=V1 len=6s gen='{"type": "gradient", "colors": ["#0f172a", "#1e3a5f"]}'
+mgl edit gen.mgl.json clip.add id=hook track=T1 len=3s text="Stop scrolling" style=title
+mgl edit gen.mgl.json audio.music mood=chill len=6s seed=3 markers=bars
+mgl edit gen.mgl.json audio.sfx type=riser at=3s
+mgl edit gen.mgl.json audio.auto-sfx
+mgl show gen.mgl.json
+```
+
+## Speech: audio.speak and captions.from-speech
+
+Michelangelo ships the interfaces, not the models: text-to-speech and transcription come from **provider
+plugins** (plugin API 1.3, `providers: [...]`). With one in the project:
+
+- `audio.speak text="..." [voice=] [speed=0.5..2] [id=] [at=] [track=]` writes `media/generated/vo-<hash>.wav`
+  (reused when text, voice and speed repeat), adds it on the dialogue bus right after the previous voice line
+  (unless `at=`), and stores the provider's word timings next to it.
+- `captions.from-speech [clip=<voice clip> | clips=[...]] [style=karaoke] [maxWords=3]` makes word-timed cues,
+  by default from every voice clip on the dialogue bus into one captions clip: from the timings `audio.speak`
+  stored, else a `transcribe` provider, else (a clip `audio.speak` made without timings) estimated from its text.
+- No provider: both fail with `E_NO_PROVIDER` and the fix. The offline fallback without speech is a recorded
+  voice file plus `captions.from-text voice=<clip> text="..."`. `mgl doctor <file>` lists the providers.
+
+A complete speak provider is ~20 lines around ffmpeg's built-in **flite** engine (no downloads; voices `slt`,
+`kal`, `rms`, `awb`; robotic but clear, fine for drafts). The repository's `examples/plugins/flite-voice` is the
+fuller version (phrase-by-phrase synthesis, so its word timings follow the real phrase lengths).
+
+```sh
+mkdir -p plugins/my-voice/src
+cat > plugins/my-voice/package.json <<'JSON'
+{"name": "my-voice", "version": "1.0.0", "type": "module", "main": "src/index.ts",
+ "michelangelo": {"api": "^1.3.0", "kinds": ["command"]}}
+JSON
+cat > plugins/my-voice/src/index.ts <<'TS'
+import { execFileSync } from 'node:child_process';
+import { writeFileSync, rmSync } from 'node:fs';
+import { definePlugin, defineProvider, defineCommand, z } from 'michelangelo/plugin';
+
+const voices = [{ id: 'slt' }, { id: 'kal' }, { id: 'rms' }, { id: 'awb' }];
+const speak = defineProvider({
+  kind: 'speak', id: 'my-flite', describe: 'ffmpeg flite, offline',
+  async voices() { return voices; },
+  async speak({ text, voice = 'slt', speed = 1, out }) {
+    writeFileSync(`${out}.txt`, text); // a text file: no filter-graph escaping
+    execFileSync(process.env.MGL_FFMPEG || 'ffmpeg', ['-v', 'error', '-f', 'lavfi', '-i', `flite=textfile='${out}.txt':voice=${voice}`,
+      '-af', `aresample=48000,atempo=${speed}`, '-y', out]);
+    rmSync(`${out}.txt`);
+    return {}; // no word times: captions.from-speech estimates them from the text
+  },
+});
+const list = defineCommand({ op: 'my-voice.voices', group: 'audio', doc: 'List the voices.', schema: z.strictObject({}), example: {},
+  apply(ctx) { ctx.out.voices = voices; ctx.summary(voices.map((v) => v.id).join(', ')); } });
+export default definePlugin({ name: 'my-voice', version: '1.0.0', providers: [speak], commands: [list] });
+TS
+mgl new shorts -o talk.mgl.json
+mgl plugin trust plugins/my-voice
+mgl edit talk.mgl.json project.set plugins='{"my-voice": "^1.0.0"}'
+mgl edit talk.mgl.json audio.speak text="Three tips for better sleep. Keep your room cool." voice=slt id=line1
+mgl edit talk.mgl.json audio.speak text="Put the phone away an hour before bed." id=line2
+mgl edit talk.mgl.json captions.from-speech style=karaoke maxWords=3
+mgl show talk.mgl.json
+```
+
+The `my-voice.voices` command is there because a plugin must also provide one item of a kind its manifest lists.
+Plugins are code: run `mgl plugin trust` again after every change.
+
 ## Stems
 
 `mgl render <file> out/dialogue.wav --bus dialogue` renders one bus's contribution to the mix (other buses

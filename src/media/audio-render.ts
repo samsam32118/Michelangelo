@@ -107,6 +107,14 @@ function audioStage(filters: FilterSpec[] | undefined, baseDir?: string): string
   const L = fs.reduce((n, f) => n + filterLatency(f), 0);
   return L > 0 ? `apad=pad_len=${L},${body},atrim=start_sample=${L},asetpts=PTS-STARTPTS` : body;
 }
+/**
+ * Even 1024-sample frames on every lane and bus. A lane joined by concat (loop wraps, repeated clips) carries
+ * frames of uneven size once a source ends; ffmpeg 6.1's sidechaincompress and amix then stop pulling that
+ * input, so a ducked or mixed looping bed fell silent after the first pass of its source.
+ */
+const REFRAME = 'asetnsamples=n=1024:p=0';
+/** dB the master limiter aims under the true-peak ceiling (loudnorm ends ~0.1 dB over its TP target) */
+export const TP_MARGIN = 0.3;
 /** back to the mix format after effects (a pan to mono or a resample must not change the bus layout) */
 const AFTER_FX = `aresample=${SR},aformat=sample_fmts=fltp:sample_rates=${SR}:channel_layouts=stereo`;
 
@@ -221,7 +229,7 @@ export async function buildMixGraph(plan: AudioPlan, opts: GraphOptions = {}): P
     }
     for (const lane of lanes) {
       const l = `lane${laneN++}`;
-      lines.push(lane.parts.length === 1 ? `[${lane.parts[0]}]anull[${l}]` : `${lane.parts.map((p) => `[${p}]`).join('')}concat=n=${lane.parts.length}:v=0:a=1[${l}]`);
+      lines.push(lane.parts.length === 1 ? `[${lane.parts[0]}]${REFRAME}[${l}]` : `${lane.parts.map((p) => `[${p}]`).join('')}concat=n=${lane.parts.length}:v=0:a=1,${REFRAME}[${l}]`);
       if (!busInputs.has(bus)) busInputs.set(bus, []);
       busInputs.get(bus)!.push(l);
     }
@@ -273,8 +281,8 @@ export async function buildMixGraph(plan: AudioPlan, opts: GraphOptions = {}): P
     for (const x of ins) usedLanes.add(x);
     let cur = `bus_${id}_mix`;
     lines.push(ins.length === 1
-      ? `[${ins[0]}]apad=whole_len=${L},atrim=end_sample=${L}[${cur}]`
-      : `${ins.map((x) => `[${x}]`).join('')}amix=inputs=${ins.length}:normalize=0:duration=longest:dropout_transition=0,apad=whole_len=${L},atrim=end_sample=${L}[${cur}]`);
+      ? `[${ins[0]}]apad=whole_len=${L},atrim=end_sample=${L},${REFRAME}[${cur}]`
+      : `${ins.map((x) => `[${x}]`).join('')}amix=inputs=${ins.length}:normalize=0:duration=longest:dropout_transition=0,apad=whole_len=${L},atrim=end_sample=${L},${REFRAME}[${cur}]`);
     // the bus's own fx run before the duck, so ducking lowers the bus by the requested dB (a compressor after the
     // duck would shrink it); the duck, then the bus gain, come last
     const bfx = audioStage(b.filters, opts.baseDir);
@@ -373,7 +381,8 @@ export async function renderAudio(plan: AudioPlan, out: string, opts: RenderAudi
         gainDb = target.lufs - I;
         limited = TP + gainDb > target.peak;
         mixAf = limited
-          ? `loudnorm=I=${target.lufs}:TP=${target.peak}:LRA=11:measured_I=${m.input_i}:measured_TP=${m.input_tp}:measured_LRA=${m.input_lra}:measured_thresh=${m.input_thresh}:offset=${m.target_offset}:linear=true,aresample=${SR}`
+          // the limiter aims 0.3 dB under the ceiling: its true-peak estimate plus the resample overshoot by ~0.1 dB
+          ? `loudnorm=I=${target.lufs}:TP=${Math.max(-9, target.peak - TP_MARGIN)}:LRA=11:measured_I=${m.input_i}:measured_TP=${m.input_tp}:measured_LRA=${m.input_lra}:measured_thresh=${m.input_thresh}:offset=${m.target_offset}:linear=true,aresample=${SR}`
           : `volume=${gainDb.toFixed(3)}dB`;
       }
       if (!stems) {

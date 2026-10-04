@@ -8,6 +8,7 @@
 import { clipKind, type Clip, type Comp, type Cue, type ProjectFile, type TextStyle, type Track, type TransitionInstance } from '../core/schema/index.js';
 import { parseRate, parseSpeed, type Rate } from '../core/time.js';
 import { fail, suggest } from '../core/errors.js';
+import { emphasisWords } from '../core/captions.js';
 import type { PluginRegistry } from '../plugin/registry.js';
 import type {
   AdjustmentNode, CaptionWord, DisplayList, DisplayNode, FilterSpec, LayerBase, LayerNode, LayerSource, Matrix, MediaSource,
@@ -623,21 +624,28 @@ function captionsAt(cx: Ctx, c: Clip, t: number): { text: string; style: Resolve
   const q = (cx.ix.cuesByClip.get(c.id) ?? []).findLast((x) => t >= x.at && t < x.at + x.len);
   if (!q) return null;
   const style = textStyle(cx, c);
-  const all = q.text.split(/\s+/).filter(Boolean);
+  const marked = emphasisWords(q.text);
+  const all = marked.map((w) => w.text);
   if (!all.length) return null;
   const offs = q.words && q.words.length === all.length ? q.words : all.map((_, i) => Math.floor((i * q.len) / all.length));
   const rel = t - q.at;
   let active = -1;
   for (let i = 0; i < offs.length; i++) if (offs[i]! <= rel) active = i;
   let from = 0, to = all.length;
-  if (style.maxWords) {
-    from = Math.floor(Math.max(0, active) / style.maxWords) * style.maxWords;
-    to = Math.min(all.length, from + style.maxWords);
+  if (style.maxWords && all.length > style.maxWords) {
+    // balanced pages of at most maxWords (4 words at 3 → 2 + 2, 7 at 3 → 3 + 2 + 2): never one word left alone
+    const pages = Math.ceil(all.length / style.maxWords), base = Math.floor(all.length / pages), extra = all.length % pages;
+    const cur = Math.max(0, active);
+    for (let k = 0, start = 0; k < pages; k++) {
+      const size = base + (k < extra ? 1 : 0);
+      if (cur < start + size || k === pages - 1) { from = start; to = start + size; break; }
+      start += size;
+    }
   }
   const words: CaptionWord[] = [];
   for (let i = from; i < to; i++) {
     const start = offs[i]!, end = i + 1 < offs.length ? offs[i + 1]! : q.len;
-    words.push({ text: all[i]!, state: i < active ? 'past' : i === active ? 'active' : 'future', progress: i === active ? clamp01((rel - start) / Math.max(1, end - start)) : i < active ? 1 : 0 });
+    words.push({ text: all[i]!, state: i < active ? 'past' : i === active ? 'active' : 'future', progress: i === active ? clamp01((rel - start) / Math.max(1, end - start)) : i < active ? 1 : 0, ...(marked[i]!.emphasis ? { emphasis: true } : {}) });
   }
   return { text: words.map((w) => w.text).join(' '), style, words, cueId: q.id };
 }

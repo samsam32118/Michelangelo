@@ -138,13 +138,13 @@ export function parseCaptions(text: string, file = ''): ParsedCaptions {
 }
 
 export function toSrt(cues: CaptionCue[]): string {
-  return cues.map((c, i) => `${i + 1}\n${formatTimestamp(c.start, ',')} --> ${formatTimestamp(c.end, ',')}\n${c.text}\n`).join('\n');
+  return cues.map((c, i) => `${i + 1}\n${formatTimestamp(c.start, ',')} --> ${formatTimestamp(c.end, ',')}\n${stripEmphasis(c.text)}\n`).join('\n');
 }
 
 export function toVtt(cues: CaptionCue[]): string {
   const body = cues.map((c) => {
-    const words = c.text.split(/\s+/).filter(Boolean);
-    let text = c.text;
+    const words = emphasisWords(c.text).map((w) => w.text);
+    let text = stripEmphasis(c.text);
     if (c.words && c.words.length === words.length) text = words.map((w, i) => (i === 0 ? w : `<${formatTimestamp(c.words![i]!, '.')}>${w}`)).join(' ');
     if (c.speaker) text = `<v ${c.speaker}>${text}`;
     return `${formatTimestamp(c.start, '.')} --> ${formatTimestamp(c.end, '.')}\n${text}\n`;
@@ -154,6 +154,27 @@ export function toVtt(cues: CaptionCue[]): string {
 
 export function wordsOf(text: string): string[] {
   return text.split(/\s+/).filter(Boolean);
+}
+
+/**
+ * Cue words with their emphasis: `*word*` (or `*several words*`) in a cue's text marks emphasised words, which
+ * caption styles with `emphasisColor` draw in that colour. The asterisks are never shown or exported.
+ */
+export function emphasisWords(text: string): { text: string; emphasis: boolean }[] {
+  let open = false;
+  return wordsOf(text).map((t) => {
+    const starts = /^[^\p{L}\p{N}*]*\*(?=\S)/u.test(t), ends = /\S\*[^\p{L}\p{N}*]*$/u.test(t);
+    const emphasis = open || starts;
+    if (starts && !ends) open = true;
+    else if (ends) open = false;
+    const clean = t.replace(/\*/g, '');
+    return { text: clean || t, emphasis: emphasis && !!clean };
+  }).filter((w) => w.text);
+}
+
+/** Cue text without its emphasis marks (what a viewer reads; what .srt/.vtt get). */
+export function stripEmphasis(text: string): string {
+  return /\*/.test(text) ? text.split('\n').map((l) => emphasisWords(l).map((w) => w.text).join(' ')).join('\n') : text;
 }
 
 /**

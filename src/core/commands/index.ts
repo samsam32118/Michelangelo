@@ -12,3 +12,7 @@ import './audio.js';
 import './reframe.js';
 import './sequence.js';
 import './layout.js';
+import './recipe.js';
+import './motion.js';
+import './audio-gen.js';
+import './ai.js';

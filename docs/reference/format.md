@@ -105,7 +105,7 @@ effects `[{type, ...params}]`), `masks`, `matte` {clip, mode}, `transition` {in,
 **Text style fields:** `font` (Inter, Noto Sans, Anton, JetBrains Mono, or a font asset id), `size`,
 `weight`, `italic`, `color`, `align`, `lineHeight`, `letterSpacing`, `stroke`, `strokeWidth`, `shadow`,
 `shadowBlur`, `shadowOffset`, `bg`, `bgPadding`, `bgRadius`, `maxWidth`, `maxLines`, `box` [w, h],
-`uppercase`, `highlight` (captions: the spoken word), `maxWords` (captions: words shown at once), `base`.
+`uppercase`, `highlight` (captions: the spoken word), `emphasisColor` (captions: words marked `*like this*` in a cue), `maxWords` (captions: words shown at once), `base`.
 
 **Keyframes** replace a constant with `[[frame, value, easing?], ...]`: `"x": [[0, 540], [15, 700, "outCubic"]]`.
 The easing belongs to the segment that starts at that key: `linear`, `hold`, `in|out|inOut` ×

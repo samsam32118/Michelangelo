@@ -13,6 +13,8 @@ const PARAMS: Record<string, Record<string, unknown>> = {
   quote: { author: 'Leonardo da Vinci' },
   'end-card': {},
   'listicle-item': { text: 'Put your phone away' },
+  'hook-title': { kicker: '3 tips', text: 'Stop doing this', highlight: 'every morning' },
+  'follow-outro': { handle: '@studio.mia', title: 'Follow for daily tips', platform: 'tiktok' },
 };
 
 describe('built-in text passes QA text size and safe area', () => {

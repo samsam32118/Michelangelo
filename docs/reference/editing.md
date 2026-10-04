@@ -146,7 +146,10 @@ mgl show cut.mgl.json --frames
 - `clip.link ids='["a","a-audio"]'` links clips; `clip.nest ids='["a","b"]' id=intro` pre-composes clips
   into a new comp and puts one clip of it in their place.
 - Transitions sit on the incoming clip, centred on the cut, and use the media beyond each clip's end as
-  handles: `mgl edit cut.mgl.json transition.set c type=crossfade len=0.5s` (see effects.md).
+  handles: `mgl edit cut.mgl.json transition.set c type=crossfade len=0.5s` (see effects.md). Types: `crossfade`,
+  `dip`, `wipe`, `push`, `slide`, `zoom`, `blur`, `spin`, `flash`, and the social cuts `whip`
+  (a fast camera pan with motion blur, 0.3–0.5 s) and `zoom-punch` (zoom-blur rush, a short flash, punch out;
+  0.25–0.5 s, beat-synced cuts). `mgl docs transitions` lists them with their parameters.
 
 ## duplicate
 
@@ -180,3 +183,17 @@ mgl show cut.mgl.json --clip b-copy
 `clip.sequence srcs='["a.mp4","b.mp4"]'` places one clip per file back to back; `len=` gives each a length
 (default 2 s) and `full=true` plays each file's whole source; `on=markers` / `on=beats clip=<id>` cut to the
 beat; `transition={"type": "crossfade", "len": "0.5s"}` goes between items.
+
+## motion presets
+
+`motion.apply <id> in=<preset> out=<preset> emphasis=<preset>@<t> loop=<preset>` animates any visual layer with
+named presets, written as plain keyframes on x, y, scale, rotate and opacity (relative to the layer's rest
+values, merged with its own keys). `ids='["a","b","c"]' stagger=4` cascades several layers; re-applying a phase
+replaces it; `motion.clear <id>` removes them. Plugins add presets (plugin API 1.3, `motionPresets`).
+`mgl docs motion.apply` lists the presets (pop, slide-up, fade, punch, pulse, float, ken-burns-in, ...).
+
+```sh
+mgl edit cut.mgl.json clip.add id=title at=0 len=3s text="Three habits"
+mgl edit cut.mgl.json motion.apply title in=pop out=fade emphasis=punch@1.5s loop=float
+mgl show cut.mgl.json --clip title
+```

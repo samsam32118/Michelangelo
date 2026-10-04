@@ -19,7 +19,7 @@ describe('gradient', () => {
   it('three colours, radial, animated rotation', () => {
     const g = runGenerator('gradient', 64, 64, { colors: ['#000', '#fff', '#000'], angle: 0 });
     expect(px(g, 32, 32)[0]).toBeGreaterThan(240);
-    const r = runGenerator('gradient', 64, 64, { colors: ['#ffffff', '#000000'], type: 'radial' });
+    const r = runGenerator('gradient', 64, 64, { colors: ['#ffffff', '#000000'], shape: 'radial' });
     expect(px(r, 32, 32)[0]).toBeGreaterThan(240); expect(px(r, 0, 0)[0]).toBeLessThan(15);
     const a = runGenerator('gradient', 64, 64, { colors: ['#f00', '#00f'], animate: 90 }, 0), b = runGenerator('gradient', 64, 64, { colors: ['#f00', '#00f'], animate: 90 }, 30);
     expect(diff(a, b)).toBeGreaterThan(20);

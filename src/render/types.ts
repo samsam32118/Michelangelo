@@ -85,7 +85,7 @@ export interface MediaSource {
   size?: { w: number; h: number };
 }
 
-export interface CaptionWord { text: string; state: 'past' | 'active' | 'future'; /** 0..1 progress of the active word */ progress: number }
+export interface CaptionWord { text: string; state: 'past' | 'active' | 'future'; /** 0..1 progress of the active word */ progress: number; /** marked *like this* in the cue text */ emphasis?: boolean }
 
 export interface TextAnimationState {
   by: 'char' | 'word' | 'line' | 'all';

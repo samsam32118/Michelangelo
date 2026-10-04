@@ -61,7 +61,45 @@ Rules (each finding names its rule): `text-outside-safe`, `text-cut-off`, `tiny-
 `trailing-black`, `clip-past-end`, `clip-past-source` (a media clip longer than its source: the last frame holds
 or the sound stops; uses probed durations), `keyframes-outside`, `alpha-with-bg`, `music-over-voice`; in `look`
 also `black-frames`, `frozen` (only pixels you can see), `luma-range` (picture outside 16–235: use `legalize`),
-`clipping`, `loudness`, `long-silence`. Plugins add rules.
+`clipping`, `loudness`, `long-silence`. Retention and legibility rules: `static-visuals` (in a 9:16 comp nothing big
+moves for over 2.5 s: no video, keyframed motion, cut or animated generator; fix: a slow `clip.punch-in` on the
+dominant layer, or a drift for a still generator background), `edge-gap` (a picture meant to fill the frame is
+zoomed out or moved so the background shows; fix: the smallest scale that fills it) and, in `look`, `low-contrast`
+(rendered text against the pixels behind it under WCAG 3:1 with no outline, plate or shadow; fix: a contrasting
+stroke, or a translucent plate for small text). Plugins add rules.
+
+## Fixing automatically: --fix
+
+`mgl check <file> --fix` and `mgl look <file> --fix` apply the findings' `fix:` commands for you, verified: each
+fix is dry-run, applied to a scratch copy, and QA runs again; a fix is kept only if its finding disappears and no
+new error or warning appears. Rounds repeat until no fix helps (at most 10), then everything kept is written as
+**one edit: one undo step** (`mgl edit <file> undo` reverts the whole run). Errors and warnings are fixed; info
+findings and fixes that need a value you choose (`<path ...>`) are left to you. `look --fix` judges on rendered
+frames, so it also fixes `low-contrast`, `overlap-alpha` and the sound (`loudness`, `clipping`); `check --fix` is
+the fast pass. `--dry-run` shows what would be applied. The summary is at most 10 lines; `--json` has every
+applied and rejected fix with its reason, and the remaining findings. From a script: `fixCheck(p)` / `fixLook(p)`
+in the QA module do the same.
+
+```text
+$ mgl check still.mgl.json --fix
+fix: applied 1 fix in 1 round; findings 1 → 0 (one undo step: mgl edit still.mgl.json undo)
+  ok   static-visuals sky: clip.punch-in sky 'box=[49,87.5,982,1745]' at=0 len=120 ease=inOutSine
+remaining: none, QA is clean
+```
+
+A still picture in a Short is the typical case. `check` names it and prints the fix that `--fix` would apply:
+
+```sh
+ffmpeg -v error -f lavfi -i color=c=0xdfeaf5:s=1080x1920 -frames:v 1 -y media/sky.png
+mgl new shorts -o still.mgl.json
+mgl edit still.mgl.json clip.add src=media/sky.png id=sky track=V1 len=4s fit=cover
+mgl check still.mgl.json | grep "nothing moves"
+mgl edit still.mgl.json clip.punch-in sky 'box=[49,87.5,982,1745]' at=0 len=120 ease=inOutSine
+mgl check still.mgl.json
+```
+
+Tag a clip `qa-ignore:static` (or `qa-ignore:contrast`, `qa-ignore:gap`) when the stillness, the colours or the
+inset are intended.
 
 ## Several platforms at once
 

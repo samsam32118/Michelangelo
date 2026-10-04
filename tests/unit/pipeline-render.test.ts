@@ -115,6 +115,7 @@ describe('render to files', () => {
     await render(p, join(dir, 'subs.vtt'), { baseDir: dir });
     expect(readFileSync(join(dir, 'subs.vtt'), 'utf8')).toMatch(/^WEBVTT\n\n00:00:01\.000 --> 00:00:01\.500\nfirst line\n/);
     expect(formatSubtitles([], 'vtt')).toBe('WEBVTT\n\n');
+    expect(formatSubtitles([{ start: 0, end: 1, text: 'Three *big* wins' }], 'srt')).toBe('1\n00:00:00,000 --> 00:00:01,000\nThree big wins\n');
     await expect(render(solidText(), join(dir, 'none.srt'), { baseDir: dir })).rejects.toMatchObject({ code: 'E_NO_CUES' });
   });
 

@@ -1,7 +1,7 @@
 /** Structural checks of a plugin's exported definition (shared by the loader and `plugin test`). */
 import type { PluginDef } from './api.js';
 
-export const PLUGIN_KINDS = ['effect', 'transition', 'generator', 'template', 'command', 'check', 'importer', 'exporter', 'style', 'text-animation'] as const;
+export const PLUGIN_KINDS = ['effect', 'transition', 'generator', 'template', 'command', 'check', 'importer', 'exporter', 'style', 'text-animation', 'motion-preset', 'provider'] as const;
 export type PluginKind = (typeof PLUGIN_KINDS)[number];
 
 /** PluginDef field holding each kind's items, and the key each item is known by. */
@@ -16,6 +16,8 @@ export const KIND_FIELDS: Record<PluginKind, { field: keyof PluginDef; key: 'typ
   exporter: { field: 'exporters', key: 'id' },
   style: { field: 'styles', key: 'id' },
   'text-animation': { field: 'textAnimations', key: 'id' },
+  'motion-preset': { field: 'motionPresets', key: 'id' },
+  provider: { field: 'providers', key: 'id' },
 };
 
 interface ZodLike { safeParse(v: unknown): { success: boolean; error?: { issues: { path: PropertyKey[]; message: string }[] } } }
@@ -55,11 +57,15 @@ export function checkPluginDef(def: unknown, deep = false): string[] {
           }
         }
       }
-      const fn = { effect: o.draw ?? o.source ?? o.audio, transition: o.draw, generator: o.draw, template: o.build, command: o.apply, check: o.run, importer: o.import, exporter: o.export, style: true, 'text-animation': o.state }[kind as PluginKind];
-      if (typeof fn !== 'function' && fn !== true) out.push(`${where} has no ${kind === 'effect' ? 'draw, source or audio' : ({ transition: 'draw', generator: 'draw', template: 'build', command: 'apply', check: 'run', importer: 'import', exporter: 'export', 'text-animation': 'state' } as Record<string, string>)[kind]} function (fix: implement it).`);
+      if (kind === 'provider' && o.kind !== 'speak' && o.kind !== 'transcribe') { out.push(`${where} has kind ${JSON.stringify(o.kind)} (fix: kind: "speak" or kind: "transcribe").`); continue; }
+      if (kind === 'motion-preset' && !['in', 'out', 'emphasis', 'loop'].includes(o.phase as string)) out.push(`${where} has phase ${JSON.stringify(o.phase)} (fix: phase: "in", "out", "emphasis" or "loop").`);
+      const providerFn = o.kind === 'speak' ? 'speak' : 'transcribe';
+      const fn = { effect: o.draw ?? o.source ?? o.audio, transition: o.draw, generator: o.draw, template: o.build, command: o.apply, check: o.run, importer: o.import, exporter: o.export, style: true, 'text-animation': o.state, 'motion-preset': o.keys, provider: o[providerFn] }[kind as PluginKind];
+      if (typeof fn !== 'function' && fn !== true) out.push(`${where} has no ${kind === 'effect' ? 'draw, source or audio' : ({ transition: 'draw', generator: 'draw', template: 'build', command: 'apply', check: 'run', importer: 'import', exporter: 'export', 'text-animation': 'state', 'motion-preset': 'keys', provider: providerFn } as Record<string, string>)[kind]} function (fix: implement it).`);
+      if (kind === 'provider' && o.kind === 'speak' && typeof o.voices !== 'function') out.push(`${where} has no voices function (fix: implement voices(), it may return []).`);
     }
   }
-  if (!items && !out.length) out.push('the plugin defines nothing (fix: add effects, transitions, generators, templates, commands, checks, importers or exporters).');
+  if (!items && !out.length) out.push('the plugin defines nothing (fix: add effects, transitions, generators, templates, commands, checks, importers, exporters, styles, text animations, motion presets or providers).');
   return out;
 }
 

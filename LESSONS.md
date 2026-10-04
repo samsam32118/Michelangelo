@@ -41,6 +41,10 @@ Sources read (2026-10-03): `docs/AGENT-PLATFORM-PLAN.md` and `docs/spikes/render
 | Eval: regression set + held-out set; record failed edits, timeouts, bytes read | PLAN "Next steps", AGENT-PLATFORM-PLAN Phase 4 | DESIGN §11 |
 | FSL-1.1-ALv2 licence; GPL ffmpeg kept outside the package | D1, D2 | Licence; ffmpeg fetched at run time, never bundled |
 | Render split by frame range, audio rendered once | Phase 2 | Parallel segments, DESIGN §7.1 |
+| Verified, convergent auto-fix: apply each finding's fix only if QA confirms it, repeat until nothing helps (concept only) | `qaFixAll` | `check --fix` / `look --fix` (src/qa/fix.ts): one undo step |
+| QA rules for static visuals, low text contrast and edge gaps (concepts only) | FrameCraft QA rule list | `static-visuals`, `low-contrast`, edge-gap rules |
+| Motion presets (in / out / emphasis / loop) for any layer, and AI providers (speech, transcription) behind stable plugin interfaces | FrameCraft motion and provider features (concepts only) | Plugin API 1.3: `motionPresets`, `providers`; `motion.apply`, `audio.speak` |
+| Viral caption looks: keyword emphasis in a second colour, few words per page | FrameCraft caption presets (concept only) | Style `emphasisColor` + `*word*` cue marks; `hormozi`, `word-pop` styles |
 
 ## FrameCraft mistakes avoided
 

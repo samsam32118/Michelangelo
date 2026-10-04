@@ -108,6 +108,8 @@ export function makeSchemas<T extends TimeSchema>(Time: T) {
     uppercase: z.boolean().optional(),
     /** captions: colour of the word being spoken */
     highlight: Color.optional(),
+    /** captions: colour of emphasised words, marked *like this* in the cue text (the spoken word still uses highlight) */
+    emphasisColor: Color.optional(),
     /** captions: max words shown at once (pages of words) */
     maxWords: z.number().int().positive().optional(),
     /** at most this many lines; longer text shrinks to fit */
@@ -353,7 +355,7 @@ export const TIME_FIELDS: Record<TableName, string[]> = {
 /** Key order per table when writing (keys not listed follow in schema order, then alphabetically). */
 export const KEY_ORDER: Record<TableName, string[]> = {
   assets: ['id', 'src', 'kind', 'note'],
-  styles: ['id', 'base', 'font', 'size', 'weight', 'italic', 'color', 'align', 'lineHeight', 'letterSpacing', 'stroke', 'strokeWidth', 'shadow', 'shadowBlur', 'shadowOffset', 'bg', 'bgPadding', 'bgRadius', 'maxWidth', 'maxLines', 'box', 'uppercase', 'highlight', 'maxWords'],
+  styles: ['id', 'base', 'font', 'size', 'weight', 'italic', 'color', 'align', 'lineHeight', 'letterSpacing', 'stroke', 'strokeWidth', 'shadow', 'shadowBlur', 'shadowOffset', 'bg', 'bgPadding', 'bgRadius', 'maxWidth', 'maxLines', 'box', 'uppercase', 'highlight', 'emphasisColor', 'maxWords'],
   comps: ['id', 'size', 'fps', 'length', 'bg', 'note'],
   tracks: ['id', 'comp', 'audio', 'bus', 'hidden', 'muted', 'locked', 'note'],
   clips: ['id', 'track', 'at', 'len', ...CLIP_SOURCES, 'in', 'speed', 'loop', 'fit', 'crop', 'style', 'animate', 'x', 'y', 'anchor', 'scale', 'rotate', 'opacity',

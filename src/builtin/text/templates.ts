@@ -6,8 +6,8 @@
  */
 import { z, defineTemplate, type TemplateDef, type TemplateOutput } from '../../plugin/api.js';
 
-type Clip = NonNullable<TemplateOutput['clips']>[number];
-type Args = Parameters<TemplateDef['build']>[0];
+export type Clip = NonNullable<TemplateOutput['clips']>[number];
+export type Args = Parameters<TemplateDef['build']>[0];
 
 /** Safe areas as fractions of the frame. Vertical: the platform UI (buttons right, caption bottom). */
 export const SAFE_ZONES = {
@@ -27,7 +27,7 @@ export function safeRect(W: number, H: number): Rect {
 export const MIN_TEXT = 0.028;
 
 /** Layout helpers shared by every template. */
-function setup(a: Args, defaultSeconds: number) {
+export function setup(a: Args, defaultSeconds: number) {
   const [W, H] = a.comp.size;
   const f = (sec: number) => Math.round((sec * a.rate.num) / a.rate.den);
   const len = Math.max(f(0.5), a.len ?? f(defaultSeconds));
@@ -42,19 +42,19 @@ function setup(a: Args, defaultSeconds: number) {
 }
 
 /** Keyframes with strictly increasing frames (later duplicates are dropped). */
-function keys<V>(...ks: ([number, V] | [number, V, string])[]): never {
+export function keys<V>(...ks: ([number, V] | [number, V, string])[]): never {
   const out: ([number, V] | [number, V, string])[] = [];
   for (const k of ks) if (!out.length || k[0] > out[out.length - 1]![0]) out.push(k);
   return out as never;
 }
 
 /** A clip that starts `delay` frames into the template and ends with it. */
-function later(at: number, len: number, delay: number): { at: number; len: number } {
+export function later(at: number, len: number, delay: number): { at: number; len: number } {
   const d = Math.min(delay, Math.floor(len / 3));
   return { at: at + d, len: len - d };
 }
 
-const color = z.string().regex(/^(#[0-9a-fA-F]{3,8}|[a-z]+|rgba?\([^)]*\))$/, 'a colour like "#ffcc00"');
+export const color = z.string().regex(/^(#[0-9a-fA-F]{3,8}|[a-z]+|rgba?\([^)]*\))$/, 'a colour like "#ffcc00"');
 
 const intro = defineTemplate({
   id: 'intro',

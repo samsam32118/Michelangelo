@@ -4,6 +4,61 @@ Short, tested recipes for tasks agents often attempt. Every block below runs in 
 one folder (later recipes reuse media made earlier). Sizes are small so they run fast; use real presets for real
 work. `mgl docs <op>` prints every field of a command; `mgl docs <effect|generator|template>` one catalog entry.
 
+## One-call Short from a script (recipe.short)
+
+`mgl new shorts --script script.txt` builds a finished, QA-clean 9:16 Short in one call: animated backgrounds
+that change per sentence (or your b-roll with ken-burns and punch-ins every ~2-3 s), a hook title for the first
+sentence, word-highlighted captions (timed to `--vo` when given, else at 2.6 words/s), a progress bar, a CTA,
+transitions rotating among non-flash types, music (`--music bed.mp3`, else a generated `audio.music` bed;
+`--music none` for silence) ducked under the voice, whooshes and hits on the cuts (`audio.auto-sfx`), and loudness
+for the platform. `--style viral|bold|clean` (default viral), `--cta "Save this"|none`. It is one ordinary command
+(`recipe.short`), so `mgl edit <file> undo` reverts it and every clip stays editable; the caption and hook looks
+are project styles (`style.set viral-caption highlight=#00e5ff` retunes every caption). Then `mgl look` and
+`mgl check <file> --fix` (look-and-qa.md) before rendering.
+
+No voice file? Make one offline: with ffmpeg's flite as below (pass the WAV as `--vo`), or let the recipe speak
+the script: `--voice default` (or a voice id; `voice=true|<id>` on `recipe.short`) calls `audio.speak` through the
+project's speak provider plugin (e.g. `examples/plugins/flite-voice`, named in `mgl.config.json` next to the
+project and trusted), and the captions follow its word timings (`captions.from-speech`). Numbers in the script
+become emphasised caption keywords (`emphasisColor`); mark your own with `*word*`.
+
+```sh
+mkdir -p broll
+printf 'Most people waste their mornings. Here are three habits that changed mine. Try them for a week.\n' > script.txt
+ffmpeg -v error -f lavfi -i testsrc2=s=640x360:r=30:d=4 -c:v libx264 -pix_fmt yuv420p -y broll/city.mp4
+ffmpeg -v error -f lavfi -i "flite=textfile=script.txt:voice=slt" -ar 48000 -y vo.wav
+mgl new shorts --script script.txt --vo vo.wav --media broll/city.mp4 --style bold -o habits.mgl.json
+mgl check habits.mgl.json
+```
+
+From an existing empty project, or from the SDK, run the command itself (the script may be text or a file):
+
+```sh
+mgl new shorts -o plain.mgl.json
+mgl edit plain.mgl.json recipe.short script.txt style=clean cta="Follow for part 2"
+mgl render plain.mgl.json out-short.png --still 3s
+```
+
+## Hand-built Short: hook, motion presets, social cut, generated sound
+
+When the one-call Short is not the shape you need, the same pieces are single commands: a `hook-title` template,
+`motion.apply` on any layer, a `whip` (or `zoom-punch`) transition, a generated music bed, and `audio.auto-sfx`
+for a whoosh on every transition and a swoosh on template entrances. No media files are needed.
+
+```sh
+mgl new shorts -o polish.mgl.json
+mgl edit polish.mgl.json clip.add id=bg1 track=V1 len=3s gen='{"type": "gradient", "colors": ["#1b1035", "#3a1c71"], "animate": 12}'
+mgl edit polish.mgl.json clip.add id=bg2 after=bg1 len=3s gen='{"type": "noise", "colors": ["#13293d", "#006494"]}'
+mgl edit polish.mgl.json transition.set bg2 type=whip len=0.4s direction=left
+mgl edit polish.mgl.json template.apply hook-title at=0 params='{"kicker": "Focus", "text": "Stop multitasking", "highlight": "do one thing"}'
+mgl edit polish.mgl.json clip.add id=tip at=3.2s len=2.6s text="Phone in another room" style=pop y=1150
+mgl edit polish.mgl.json motion.apply tip in=pop emphasis=pulse@1.2s out=fade
+mgl edit polish.mgl.json audio.music mood=upbeat len=6s seed=2
+mgl edit polish.mgl.json audio.auto-sfx
+mgl edit polish.mgl.json audio.normalize lufs=-14
+mgl look polish.mgl.json -n 6
+```
+
 ## Multicam: sync angles by the audio onset, then cut between them
 
 Two cameras of the same take, synced on the clap. Put the master angle on V1 and the other on a track above;

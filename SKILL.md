@@ -11,6 +11,24 @@ with `mgl look` (a contact sheet image plus QA and a sound report) because you c
 Every command prints ≤ 40 lines (`--all` lifts the cap; `mgl docs <topic>` guides print whole); add `--json`
 for one machine-readable object.
 
+## Fastest: a finished Short in one call
+
+From a script (text file), `mgl new shorts --script` builds a complete, QA-clean 9:16 Short: moving backgrounds
+(or your `--media` b-roll), a hook title, word-highlighted captions, progress bar, CTA, transitions, a generated
+music bed ducked under the voice, SFX on the cuts and platform loudness. Then look, and render.
+
+```sh
+printf 'Most people waste their mornings. Here are three habits that changed mine. Try them for a week.\n' > script.txt
+mgl new shorts --script script.txt --style viral -o short.mgl.json
+mgl look short.mgl.json -n 6 --fix
+```
+
+Options: `--vo vo.wav` (captions follow the voice) or `--voice default|<id>` (speaks the script with a speak
+plugin, e.g. flite-voice, named in mgl.config.json), `--media a.mp4,b.jpg`, `--style viral|bold|clean`,
+`--music bed.mp3|none`, `--cta "Follow for more"|none`. Numbers in the script become emphasised caption
+keywords; mark your own as `*word*`. `look --fix` (and `check --fix`) applies verified QA fixes in one undo step. Every clip stays editable (`mgl edit ... undo` reverts
+it all). Start here for any Short; build by hand (below) only for other shapes. `mgl docs recipes`.
+
 ## The loop
 
 ```sh
@@ -121,6 +139,10 @@ Also: `asset.add`, `clip.add`, `clip.move`, `clip.slip`, `clip.roll`, `clip.slid
 `comp.reframe main preset=youtube to=wide`, `mask.add`, `style.add`, `clip.duplicate`, `clip.punch-in <clip>
 box=[x,y,w,h]` (zoom to a region), `layout.grid ids=[...]` (split screens), `fx.add bus=dialogue type=voice`
 (audio effects on a bus or a clip with sound).
+Motion and sound in one call each: `motion.apply <clip> in=pop emphasis=pulse@1s loop=float out=fade` (presets
+for any layer), `audio.music mood=upbeat len=30s`, `audio.sfx type=whoosh at=2s`, `audio.auto-sfx` (SFX on every
+cut, transition and entrance); all generated offline. Speech needs a provider plugin: `audio.speak text="..."`
+then `captions.from-speech` (word-timed captions; `mgl docs audio`).
 `mgl docs commands` lists all of them; `mgl docs <op>` prints one with its fields and an example.
 
 ## Look and QA
@@ -129,7 +151,8 @@ box=[x,y,w,h]` (zoom to a region), `layout.grid ids=[...]` (split screens), `fx.
 runs QA (safe zones per platform, text overlapping other elements, tiny or cut-off text, black or frozen
 stretches, gaps, clipping or off-target loudness, music over voice) and reports the sound as text
 (LUFS, true peak, silences, tempo). Each finding has a crop image, the file line and a `fix:` command.
-`mgl check` runs the checks that need no pixels. Both exit 0 with findings; `--strict` exits 1 on errors.
+`mgl check` runs the checks that need no pixels. Both exit 0 with findings; `--strict` exits 1 on errors;
+`--fix` applies the findings' fix commands for you and re-checks.
 `--platforms tiktok,reels,shorts` checks several platforms' safe zones at once. Tag a clip `qa-ignore:<rule>`
 (e.g. `tags='["qa-ignore:safe-zone"]'` on a burned-in timecode) when a finding is intended.
 
@@ -145,7 +168,7 @@ Errors print `error E_CODE: message` and `fix: ...`; do what the fix says. With 
 `{"ok": false, "error": {"code", "message", "fix", "line"}}`. Codes: `mgl docs errors`.
 No ffmpeg? `mgl doctor --fetch` downloads a pinned build.
 
-## Plugins (new effects, audio effects, transitions, generators, templates, commands, checks)
+## Plugins (effects, transitions, generators, templates, commands, checks, motion presets, AI providers)
 
 ```sh
 mgl plugin new effect posterize

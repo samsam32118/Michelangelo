@@ -88,13 +88,17 @@ A transition is the incoming clip's `in` (centred on the cut): `mgl edit video.m
   `turns?` number = `1` · total turns over the transition (negative = counter-clockwise)
 - **flash**: A bright flash of colour (white by default) that peaks at the cut.  
   `color?` string = `"white"`
+- **whip**: Whip pan: both clips fly in the given direction like a fast camera pan, smeared by motion blur that peaks at the cut (e.g. transition.set shot-2 type=whip len=0.4s direction=left; 0.3–0.5 s reads best).  
+  `direction?` "left"\|"right"\|"up"\|"down" = `"left"` · where the picture moves; `blur?` number = `1` · motion blur strength (1 = a smear of about 15% of the frame at the cut)
+- **zoom-punch**: Punch cut: the outgoing clip rushes into the centre with a zoom blur, hard-cuts on a short flash, and the incoming clip punches out from zoomed-in to rest (e.g. transition.set shot-2 type=zoom-punch len=0.35s; 0.25–0.5 s, made for beat-synced cuts).  
+  `scale?` number = `1.6` · zoom factor at the cut; `blur?` number = `0.6` · zoom blur strength (0 = sharp); `flash?` number = `0.35` · brightness of the white flash at the cut (0 = none)
 
 ## Generators
 
 Clips that draw: `{"gen": {"type": "gradient", "colors": ["#000", "#333"]}}`.
 
 - **gradient**: Linear or radial colour gradient background, optionally rotating over time.  
-  `colors?` string[] = `["#1e3c72","#2a5298"]` · two or more colours, evenly spaced; `angle?` number = `90` · direction of a linear gradient in degrees (0 = left to right, 90 = top to bottom); `type?` "linear"\|"radial" = `"linear"`; `animate?` number = `0` · degrees per second: rotates a linear gradient, orbits a radial one
+  `colors?` string[] = `["#1e3c72","#2a5298"]` · two or more colours, evenly spaced; `angle?` number = `90` · direction of a linear gradient in degrees (0 = left to right, 90 = top to bottom); `shape?` "linear"\|"radial" = `"linear"` · linear, or radial from the centre (a clip sets it as gen.shape; gen.type is the generator id); `animate?` number = `0` · degrees per second: rotates a linear gradient, orbits a radial one
 - **noise**: Animated smooth noise field (clouds, smoke, grain-field backgrounds) mapped onto a colour ramp.  
   `scale?` number = `160` · feature size in px; `speed?` number = `0.5` · how fast the field evolves (cycles per second); `seed?` int = `0`; `octaves?` int = `3`; `colors?` string[] = `["#000000","#ffffff"]`
 - **particles**: Deterministic drifting particles (dust, snow, bubbles, embers) that wrap around the frame.  
@@ -144,6 +148,10 @@ Clips that draw: `{"gen": {"type": "gradient", "colors": ["#000", "#333"]}}`.
   `title?` string = `"Untitled"`; `version?` string = `"v1"`; `date?` string = `""`; `duration?` string = `""`; `client?` string = `""`; `bg?` string = `"#111111"`; `accent?` string = `"#ffd400"`
 - **countdown**: Countdown leader: a number per second from `from` down to 1 with a sweeping hand (countdown-leader generator); the clip is `from` seconds long unless len is given.  
   `from?` int = `5`; `color?` string = `"#ffffff"`; `bg?` string = `"#202020"`
+- **hook-title**: Scroll-stopping hook for the first seconds of a Short: an optional kicker pill, a heavy upper-case line that snaps in word by word and a tilted highlight sticker line in the accent colour, over a soft dark scrim (3 s). e.g. template.apply hook-title params='{"kicker": "Productivity", "text": "Stop doing this", "highlight": "every morning"}'  
+  `text?` string = `"Stop scrolling if you"`; `highlight?` string = `"want more focus"` · second line on an accent sticker ("" for none); `kicker?` string = `""` · small label above the hook, e.g. "Part 1" or "3 tips"; `accent?` string = `"#ffe01b"`; `accentText?` string = `"#111111"` · text colour on the accent sticker; `position?` "top"\|"center" = `"top"` · top: upper third (leaves the middle for the subject); center: middle of the safe area; `scrim?` boolean = `true` · a soft dark gradient behind the text so it reads over busy footage
+- **follow-outro**: Outro card: animated gradient background, avatar ring with your initial, @handle, a headline and a Subscribe / Follow button that a pointer clicks (it turns into Subscribed / Following with a ripple) (5 s). platform sets the label and colour (youtube, tiktok, instagram). e.g. template.apply follow-outro params='{"handle": "@studio.mia", "title": "Follow for daily tips", "platform": "tiktok"}'  
+  `handle?` string = `"@yourchannel"`; `title?` string = `"Want more like this?"`; `platform?` "youtube"\|"tiktok"\|"instagram" = `"youtube"`; `label?` string = `""` · button text (default: Subscribe on youtube, Follow elsewhere); `doneLabel?` string = `""` · button text after the click (default: Subscribed / Following); `accent?` string · button colour (default: the platform colour); `bg?` string[] = `["#14102e","#3a1d6e","#0b0a1a"]` · background gradient colours; `click?` boolean = `true` · animate a pointer clicking the button
 
 ## Styles
 
@@ -158,10 +166,12 @@ Built-in text styles, usable as `"style": "<id>"` or as `base` of your own style
 - **lower-third**: Name line of a lower third: Inter 56 bold, left aligned, at most 2 lines (readable from 720p vertical to 4K). `{"font":"Inter","size":56,"weight":"bold","color":"#ffffff","align":"left","shadow":"#00000080","shadowBlur":6,"maxLines":2}`
 - **cta**: Call-to-action label: Inter Black 56, white, upper case. `{"font":"Inter","size":56,"weight":900,"color":"#ffffff","uppercase":true,"align":"center","letterSpacing":1}`
 - **label**: Small tag on a translucent dark box. `{"font":"Inter","size":36,"weight":"bold","color":"#ffffff","bg":"#000000b3","bgPadding":[16,8],"bgRadius":8,"align":"center"}`
+- **hormozi**: Viral talking-head captions: Montserrat Black 92, upper case, white with a heavy black outline and drop shadow, 3 words at a time, the spoken word in yellow, *marked* keywords in green. e.g. captions.from-text text="This one habit changed everything" style=hormozi `{"font":"Montserrat","size":92,"weight":900,"color":"#ffffff","stroke":"#000000","strokeWidth":11,"shadow":"#000000b3","shadowBlur":16,"shadowOffset":[0,6],"uppercase":true,"highlight":"#ffe01b","emphasisColor":"#39e75f","maxWords":3,"maxWidth":800,"maxLines":2,"align":"center","lineHeight":1.08,"letterSpacing":-1}`
+- **word-pop**: One word at a time, big and loud: Bebas Neue 168, white with a black outline and shadow (the spoken word is the only word shown). e.g. captions.from-text text="Wait for the ending" style=word-pop `{"font":"Bebas Neue","size":168,"weight":"normal","color":"#ffffff","stroke":"#000000","strokeWidth":10,"shadow":"#000000aa","shadowBlur":20,"shadowOffset":[0,8],"uppercase":true,"highlight":"#ffffff","maxWords":1,"maxWidth":800,"maxLines":1,"align":"center","lineHeight":1,"letterSpacing":2}`
 - **body**: Body text: Inter 44 regular, relaxed line height. `{"font":"Inter","size":44,"weight":"normal","color":"#ffffff","lineHeight":1.35,"align":"center"}`
 
 ## Text animations
 
 `text.animate <clip> in=<id> by=word` (char, word, line, all).
 
-**none** (No animation (shown at rest).) · **fade** (Fade in.) · **pop** (Scale 0.6 → 1.08 → 1 with a quick fade: a punchy overshoot.) · **slide-up** (Rise 40 px into place while fading in.) · **slide-down** (Drop 40 px into place while fading in.) · **slide-left** (Slide in 60 px from the right while fading in.) · **typewriter** (Each unit appears at once (use by: "char").) · **blur-in** (Sharpen from a 12 px blur while fading in.) · **bounce** (Fall 60 px and bounce to rest.) · **scale-in** (Grow from 0 to full size while fading in.) · **drop** (Drop 80 px from above with a slight overshoot.) · **wave** (Each unit hops up 24 px and lands (stagger makes a wave).)
+**none** (No animation (shown at rest).) · **fade** (Fade in.) · **pop** (Scale 0.6 → 1.08 → 1 with a quick fade: a punchy overshoot.) · **slide-up** (Rise 40 px into place while fading in.) · **slide-down** (Drop 40 px into place while fading in.) · **slide-left** (Slide in 60 px from the right while fading in.) · **typewriter** (Each unit appears at once (use by: "char").) · **blur-in** (Sharpen from a 12 px blur while fading in.) · **bounce** (Fall 60 px and bounce to rest.) · **scale-in** (Grow from 0 to full size while fading in.) · **drop** (Drop 80 px from above with a slight overshoot.) · **wave** (Each unit hops up 24 px and lands (stagger makes a wave).) · **snap** (Punch in from 1.6× to 1 with a small 0.96 undershoot and a fast fade: words land like hits (best with by: "word"). e.g. text.animate title in=snap by=word stagger=4)

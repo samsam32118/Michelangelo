@@ -115,6 +115,17 @@ expressions (replaced by keyframe-writing commands #6/#13), stabilize and corner
 add when a task needs them), structured `inspect(t)` (`show`, `--json` and crops already cover it), stock imagery
 (the agent fetches; the library only needs an `attribution` field on assets), human UI and share links.
 
+## 4a. Progress (round of 2026-10-04, plugin API 1.3)
+
+Landed in the library: #1 (`recipe.short`, `mgl new --script`), #3 (`check/look --fix`, see look-and-qa.md),
+#4 (`audio.music`), #6 (`motion.apply`, 37 presets), #7 (`audio.sfx`, `audio.auto-sfx`), #8 in part
+(`hook-title`, `follow-outro`), #9 (`static-visuals`, `low-contrast`, `edge-gap`), #10 in part (`hormozi`,
+`word-pop`), #11 in part (`whip`, `zoom-punch`), #12 in part (Montserrat, Bebas Neue). #2 and #5 have their
+extension point and commands: `providers` (`speak`, `transcribe`), `audio.speak` (stores word timings),
+`captions.from-speech`, `mgl doctor` lists providers, and `examples/plugins/flite-voice` (zero-download flite
+voice with phrase-timed words). Still open for #2/#5: a quality default model (Kokoro/Piper, whisper) as an
+opt-in plugin with pinned downloads; the core stays download-free.
+
 ## 5. Notes for implementation order
 
 - #2, #5 (and MusicGen if ever wanted) share one `ai.providers` extension point (REMAINING #8) with pinned,

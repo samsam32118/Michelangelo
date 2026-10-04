@@ -30,6 +30,15 @@ export const textAnimations: TextAnimationDef[] = [
   defineTextAnimation({ id: 'scale-in', describe: 'Grow from 0 to full size while fading in.', state: (p) => ({ scale: Math.max(0, p), opacity: c01(p) }) }),
   defineTextAnimation({ id: 'drop', describe: 'Drop 80 px from above with a slight overshoot.', easing: 'outBack', state: (p) => ({ dy: -(1 - p) * 80, opacity: c01(p * 2) }) }),
   defineTextAnimation({ id: 'wave', describe: 'Each unit hops up 24 px and lands (stagger makes a wave).', easing: 'linear', state: (p) => ({ dy: -Math.sin(c01(p) * Math.PI) * 24, opacity: c01(p * 3) }) }),
+  defineTextAnimation({
+    id: 'snap', describe: 'Punch in from 1.6× to 1 with a small 0.96 undershoot and a fast fade: words land like hits (best with by: "word"). e.g. text.animate title in=snap by=word stagger=4', easing: 'linear',
+    state: (p) => {
+      const q = c01(p);
+      // 0 → 0.55: 1.6 → 0.96 (out-cubic), 0.55 → 1: 0.96 → 1 (out-quad)
+      const scale = q < 0.55 ? 1.6 - 0.64 * (1 - (1 - q / 0.55) ** 3) : 0.96 + 0.04 * (1 - (1 - (q - 0.55) / 0.45) ** 2);
+      return { scale, opacity: c01(q * 4) };
+    },
+  }),
 ];
 
 export const TEXT_ANIMATION_IDS: string[] = textAnimations.map((a) => a.id);

@@ -41,6 +41,10 @@ export interface LookOptions {
   alpha?: boolean;
   /** how fixes name the project file (default: the file relative to the cwd when below it, else as opened) */
   displayFile?: string;
+  /** apply verified auto-fixes (one undo step) and report what remains; the result gains `fix` */
+  fix?: boolean;
+  /** with fix: find the fixes but do not write the project */
+  dryRun?: boolean;
 }
 
 export interface CheckOptions {
@@ -50,6 +54,10 @@ export interface CheckOptions {
   alpha?: boolean;
   /** how fixes name the project file (default: the file relative to the cwd when below it, else as opened) */
   displayFile?: string;
+  /** apply verified auto-fixes (one undo step) and report what remains; the report gains `fix` */
+  fix?: boolean;
+  /** with fix: find the fixes but do not write the project */
+  dryRun?: boolean;
 }
 
 /** What look returns (src/qa): the contact sheet, findings with fixes, the sound summary. */
@@ -98,6 +106,8 @@ export interface CheckReport {
   findings: { rule: string; severity: 'error' | 'warning' | 'info'; message: string; clip?: string; frame?: number; fix?: string; line?: number; platform?: string }[];
   /** errors (problems with severity error + findings with severity error) */
   errors: number;
+  /** with `fix: true`: the fixes applied and rejected (findings then hold what remains) */
+  fix?: { applied: { rule: string; clip?: string | undefined; message: string; fix: string; round: number }[]; rejected: { rule: string; clip?: string | undefined; message: string; fix?: string | undefined; reason: string }[]; rounds: number; before: number; remaining: unknown[]; dryRun?: boolean | undefined };
 }
 
 /** A project session with the plugin registry and the look / render / check verbs. */
@@ -245,8 +255,20 @@ export function parsePlatforms(v: string | string[]): string[] {
   return [...new Set(list)];
 }
 
-async function lookProject(p: MglProject, o: LookOptions) {
+async function lookProject(p: MglProject, o: LookOptions): Promise<LookResult> {
   assertRenderable(p);
+  if (o.fix) {
+    const { resolveComp } = await import('../render/pipeline.js');
+    const comp = resolveComp(p.data, o.comp);
+    const rate = parseRate(comp.fps);
+    const { fixLook, fixJson } = await import('../qa/fix.js');
+    const r = await fixLook(p, {
+      comp: comp.id, ...(o.at?.length ? { frames: o.at.map((t) => parseTime(t, rate, 'at')) } : {}), ...(o.frames !== undefined ? { n: o.frames } : {}),
+      ...(o.cuts ? { cuts: true } : {}), ...(o.audio === false ? { audio: false } : {}), ...(o.platforms?.length ? { platforms: parsePlatforms(o.platforms) } : {}),
+      ...(o.alpha ? { alpha: true } : {}), ...(o.displayFile ? { displayFile: o.displayFile } : {}), ...(o.dryRun ? { dryRun: true } : {}),
+    });
+    return { ...(r.report as unknown as LookResult), findings: r.remaining as LookResult['findings'], fix: fixJson(r) };
+  }
   const qa = await qaModule();
   if (!qa?.look) fail('E_NOT_AVAILABLE', 'look is not available in this build (src/qa is missing).', 'render stills instead: mgl render <file> frame.png --still 1s');
   const { resolveComp } = await import('../render/pipeline.js');
@@ -275,6 +297,15 @@ async function qaProbe(p: MglProject): Promise<(abs: string) => Promise<{ durati
 }
 
 async function checkProject(p: MglProject, o: CheckOptions = {}): Promise<CheckReport> {
+  if (o.fix) {
+    const { fixCheck, fixJson } = await import('../qa/fix.js');
+    const r = await fixCheck(p, { ...(o.platforms?.length ? { platforms: parsePlatforms(o.platforms) } : {}), ...(o.alpha ? { alpha: true } : {}), ...(o.displayFile ? { displayFile: o.displayFile } : {}), ...(o.dryRun ? { dryRun: true } : {}) });
+    const findings = r.remaining as CheckReport['findings'];
+    for (const f of findings) if (f.clip) { const l = p.line('clips', f.clip); if (l) f.line = l; }
+    const problems = [...p.problems];
+    const errors = problems.filter((x) => x.severity === 'error').length + findings.filter((f) => f.severity === 'error').length;
+    return { problems, findings, errors, fix: fixJson(r) };
+  }
   const qa = await qaModule();
   // with the QA module, plugin problems come back as findings (rule "plugin")
   const problems = qa?.checkProject ? [...p.problems] : [...p.problems, ...p.pluginProblems];

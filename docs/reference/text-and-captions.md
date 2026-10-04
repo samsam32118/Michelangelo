@@ -7,6 +7,7 @@ A text clip is `{"text": "...", "style": ...}` on a visual track. `x`, `y` place
 A line break is `\n` in the JSON string; on the command line pass the value as a JSON string
 (`text='"Line one\nLine two"'`), since an unquoted `\n` is kept as the two characters. Fonts bundled with
 Michelangelo render the same everywhere: **Inter**, **Noto Sans**, **Anton** (display),
+**Montserrat** (400/700/800/900: the heavy social-caption look), **Bebas Neue** (tall display caps),
 **JetBrains Mono**. Another font is an asset (`asset.add fonts/Brand.ttf id=brand-font`) used as
 `"font": "brand-font"`.
 
@@ -21,8 +22,9 @@ mgl edit text.mgl.json text.set title text="Three ways to focus"
 ## Styles
 
 `style` is a style id or an inline object. Ids come from the project's `styles` table or the built-ins:
-`title`, `subtitle`, `caption`, `karaoke`, `pop`, `boxed`, `lower-third`, `cta`, `label`, `body`
-(`mgl docs title` shows one). A style may inherit with `base`; an inline object may too, and overrides
+`title`, `subtitle`, `caption`, `karaoke`, `pop`, `boxed`, `lower-third`, `cta`, `label`, `body`, and two
+social caption looks: `hormozi` (Montserrat Black upper case, heavy outline, 3 words, the spoken word in yellow)
+and `word-pop` (one big Bebas Neue word at a time) (`mgl docs styles` lists them; `mgl docs title` shows one). A style may inherit with `base`; an inline object may too, and overrides
 field by field. When a clip's style is an inline object, change one field with a dotted path:
 `clip.set title style.color=#ffffff`; to restyle a clip that uses a style id, give an object with `base`.
 
@@ -33,20 +35,30 @@ mgl edit text.mgl.json style.set brand stroke=null
 
 ## Animation
 
-Three tools, from simplest to most control:
+Four tools, from simplest to most control:
 
 1. **Presets per unit**: `text.animate <id> in=<preset> out=<preset> by=char|word|line|all stagger=3 len=10`
    (frames). Presets: fade, pop, slide-up, slide-down, slide-left, typewriter, blur-in, bounce, scale-in,
-   drop, wave, none. Splitting a clip never restarts its animation (the second half keeps the clock).
+   drop, wave, snap (words punch in like hits; best `by=word`), none. Splitting a clip never restarts its animation (the second half keeps the clock).
 2. **Keyframes** on any numeric property: `key.set <id> prop=y at=0 value=700`, `key.set ... at=0.4s value=640 ease=outBack`.
    Times are clip-local. `key.clear <id> prop=y value=640` goes back to a constant.
 3. **Hand-written keyframes** on the line: `"scale": [[0, 0.8], [12, 1, "outBack"]]`.
+4. **Motion presets for any layer** (text, shapes, images, video, generators): `motion.apply <id> in=pop
+   out=fade emphasis=pulse@2s loop=float` writes ordinary keyframes relative to the clip's rest values (merged with
+   keys you set; applying a phase again replaces it; `motion.clear <id> [phase=]` removes them). `ids=[a,b,c]
+   stagger=4` animates several clips in turn; `len=`, `period=` (a loop cycle) and `params=` tune them. Presets:
+   in/out `fade`, `pop`, `slide-up|down|left|right`, `zoom`, `focus`, `drop`, `spin`, `whip`; emphasis `pulse`,
+   `punch`, `shake`, `wiggle`, `bounce`, `nod`, `flash`, `tada`; loop `float`, `breathe`, `sway`, `spin`, `drift`,
+   `ken-burns-in`, `ken-burns-out` (the authoritative list: `mgl docs motion.apply`). Plugins add presets
+   (`motionPresets`, plugin API 1.3).
 
 ```sh
 mgl edit text.mgl.json text.animate title in=pop by=word stagger=4
 mgl edit text.mgl.json key.set title prop=y at=0 value=700
 mgl edit text.mgl.json key.set title prop=y at=0.4s value=640 ease=outBack
 mgl edit text.mgl.json clip.split title at=1.5s
+mgl edit text.mgl.json clip.add id=badge at=0.5s len=3s shape='{"type": "ellipse", "size": [160, 160], "fill": "#ffd400"}' y=1100
+mgl edit text.mgl.json motion.apply badge in=pop emphasis=pulse@1.5s loop=float out=fade
 mgl show text.mgl.json
 ```
 
@@ -60,10 +72,15 @@ look: `caption` (plain), `karaoke` (the spoken word in `highlight`), `maxWords` 
   VTT inline timestamps give word timings, `words=true` estimates them otherwise).
 - `captions.from-text text="..."` or `file=script.txt`: split a script into cues of ≤ `maxWords` words,
   timed to the speech of a voice clip (`voice=<clip>`, silences skipped) or spread over `at`+`len`.
+- `captions.from-speech [clip=<voice clip>]`: word-timed cues from speech: the timings `audio.speak` stored, or
+  a transcribe provider plugin (audio.md, "Speech"); with no `clip`, every voice clip on the dialogue bus.
 - `captions.style <id> style=karaoke` or `style='{"highlight": "#00e5ff", "maxWords": 3}'`.
 - `captions.shift <id> by=-0.5s` (subtitles running late), `cue.set c3 text="..."`, `cue.split c3 word=3`,
   `cue.merge ids='["c3","c4"]'`, `cue.add clip=subs at=1s len=1.5s text="..."`, `cue.remove c3`.
 - `render <file> out.srt` (or `.vtt`) exports the cues.
+- Keywords: mark words in a cue as `*word*` (or `*several words*`); a style with `emphasisColor` draws them in
+  that colour (the spoken word still uses `highlight`). The marks are never shown or exported. `recipe.short`
+  marks the script's numbers for you (`hormozi` has a green `emphasisColor`).
 
 ```sh
 mkdir -p media
@@ -72,6 +89,8 @@ mgl edit text.mgl.json captions.import media/subs.srt id=subs style=karaoke word
 mgl edit text.mgl.json clip.set subs y=1300
 mgl edit text.mgl.json cue.set c1 text="Put the phone away"
 mgl edit text.mgl.json captions.style subs style='{"highlight": "#00e5ff", "maxWords": 3}'
+mgl edit text.mgl.json cue.set c2 text="Work in *short* sprints"
+mgl edit text.mgl.json captions.style subs style='{"highlight": "#00e5ff", "emphasisColor": "#4ade80", "maxWords": 3}'
 mgl render text.mgl.json out/subs.vtt
 mgl show text.mgl.json --at 2.5s
 ```

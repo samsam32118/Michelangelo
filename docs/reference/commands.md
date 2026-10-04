@@ -6,7 +6,7 @@ Every change to a project is a command `{"op": ..., fields}`, run with `mgl edit
 (`mgl edit <file> '{"op": ...}'`, `--batch f.jsonl`) or from the SDK (`p.edit({op, ...})`). Times accept frames (75),
 "2.5s", "1:02.5" and "00:01:02:15". `k=v` values are JSON when they parse, else strings. `mgl docs <op>` prints one entry.
 
-70 commands: [asset](#asset) · [audio](#audio) · [captions](#captions) · [clip](#clip) · [comp](#comp) · [effects](#effects) · [project](#project) · [keyframes](#keyframes) · [layout](#layout) · [marker](#marker) · [masks](#masks) · [text](#text) · [templates](#templates) · [track](#track)
+78 commands: [asset](#asset) · [audio](#audio) · [captions](#captions) · [clip](#clip) · [comp](#comp) · [effects](#effects) · [project](#project) · [keyframes](#keyframes) · [layout](#layout) · [marker](#marker) · [masks](#masks) · [motion](#motion) · [recipes](#recipes) · [text](#text) · [templates](#templates) · [track](#track)
 
 ## asset
 
@@ -44,6 +44,17 @@ mgl edit video.mgl.json asset.remove beach
 ```
 
 ## audio
+
+### audio.auto-sfx
+
+Place fitting generated SFX on a comp: whoosh on transitions, hit on hard cuts, swoosh on template entrances, pop on text entrances (on= picks the kinds; map={"text":"click","cuts":"none"} changes or disables them). Each is linked to its source clip so it moves with it; re-running replaces the previous auto SFX.
+
+fields: `on?` ("transitions"\|"cuts"\|"templates"\|"text")[]; `map?` object; `gain?` number; `seed?` int; `comp?` string; `min?` time
+
+```text
+mgl edit video.mgl.json audio.auto-sfx on='["transitions","text"]' map='{"text":"pop"}'
+{"op":"audio.auto-sfx","on":["transitions","text"],"map":{"text":"pop"}}
+```
 
 ### audio.cut-silences
 
@@ -89,6 +100,17 @@ mgl edit video.mgl.json audio.gain bed db=-6
 {"op":"audio.gain","id":"bed","db":-6}
 ```
 
+### audio.music
+
+Generate a music bed (offline, deterministic): mood upbeat|chill|dramatic|corporate|lofi|epic, optional bpm, key ("Am", "F# minor"), seed, intensity curve [[time, 0..1], ...] (times from the music start; layers enter as it rises) or energy 0..1, markers=beats|bars (exact grid markers); written to media/generated/ (reused when the parameters repeat), added as a looping clip on a music-bus track at -18 LUFS (re-running with the same id replaces it). marker.beats finds its beats.
+
+fields: `len?` time; `mood?` "upbeat"\|"chill"\|"dramatic"\|"corporate"\|"lofi"\|"epic"\|"energetic"\|"driving"\|"calm"\|"happy"\|"cinematic"\|"tense"\|"relaxed"\|"business" (bare word); `bpm?` number; `key?` string; `seed?` int; `intensity?` [time, number][]; `energy?` number; `track?` string; `at?` time; `gain?` number; `id?` string; `comp?` string; `markers?` "beats"\|"bars"
+
+```text
+mgl edit video.mgl.json audio.music upbeat len=30s seed=1
+{"op":"audio.music","mood":"upbeat","len":"30s","seed":1}
+```
+
 ### audio.normalize
 
 Set the loudness target of the mix (master bus), applied at render: lufs (default from the platform: -14 for shorts/tiktok/reels/youtube, else -16) and true-peak ceiling (default -1).
@@ -98,6 +120,28 @@ fields: `lufs?` number; `peak?` number
 ```text
 mgl edit video.mgl.json audio.normalize lufs=-14
 {"op":"audio.normalize","lufs":-14}
+```
+
+### audio.sfx
+
+Add a generated sound effect (offline, deterministic, seedable) on an sfx-bus track: type whoosh|swoosh|pop|click|hit|impact|riser|ding|bell|swipe|glitch|typing|camera; at = the moment of the hit (a whoosh peaks there, a riser ends there); overlapping sounds go on extra sfx tracks; gain in dB.
+
+fields: `type` "whoosh"\|"swoosh"\|"pop"\|"click"\|"hit"\|"impact"\|"riser"\|"ding"\|"bell"\|"swipe"\|"glitch"\|"typing"\|"camera" (bare word); `at` time; `gain?` number; `seed?` int; `track?` string; `id?` string; `comp?` string
+
+```text
+mgl edit video.mgl.json audio.sfx whoosh at=2s
+{"op":"audio.sfx","type":"whoosh","at":"2s"}
+```
+
+### audio.speak
+
+Text to speech through the project's speak provider (a plugin, e.g. flite-voice): writes media/generated/vo-<hash>.wav (reused when text, voice and speed repeat), adds it as an asset + clip on the dialogue bus (after the previous voice line unless at= is given), and stores word timings for captions.from-speech. voice and speed (0.5..2) are provider-specific; E_NO_PROVIDER when the project has none.
+
+fields: `text` string (bare word); `voice?` string; `speed?` number; `track?` string; `at?` time; `id?` string; `comp?` string; `gain?` number
+
+```text
+mgl edit video.mgl.json audio.speak 'Three tips for better sleep.' voice=slt
+{"op":"audio.speak","text":"Three tips for better sleep.","voice":"slt"}
 ```
 
 ### bus.add
@@ -123,6 +167,17 @@ mgl edit video.mgl.json bus.set music gain=-8
 ```
 
 ## captions
+
+### captions.from-speech
+
+Word-timed caption cues from voice clips (clip=, clips=[...], or by default every voice clip on the dialogue bus, into one captions clip): uses the timings audio.speak stored, else the project's transcribe provider (a plugin), else (clips made by audio.speak) estimates them from the text. Cues of at most maxWords words (default 4) break at sentences, commas and pauses. Fills `id` (a captions clip, cues replaced) or creates one. E_NO_PROVIDER when nothing can time the words (fallback: captions.from-text voice=<clip> text=...).
+
+fields: `clip?` string (bare word); `clips?` string[]; `style?` string\|object; `maxWords?` int; `id?` string; `track?` string; `lang?` string
+
+```text
+mgl edit video.mgl.json captions.from-speech style=karaoke maxWords=3
+{"op":"captions.from-speech","style":"karaoke","maxWords":3}
+```
 
 ### captions.from-text
 
@@ -690,13 +745,50 @@ mgl edit video.mgl.json matte.set shot1 clip=title mode=alpha
 {"op":"matte.set","id":"shot1","clip":"title","mode":"alpha"}
 ```
 
+## motion
+
+### motion.apply
+
+Animate clips with motion presets: in= (from the clip start), out= (ending on its last frame), emphasis= (one or a list, "pulse@2s" = clip-local start; default mid-clip), loop= (repeats seamlessly between the in and out on the same properties; ken-burns-* run once across it). len= sets in/out/emphasis length, period= a loop cycle, stagger= the delay between ids= (in and emphasis), params= preset params ({amount: 1.5, offscreen: true, "in.distance": 300}). Writes plain keyframes relative to the rest values, merged with existing keys; re-applying a phase replaces it. Presets: in= fade|pop|slide-up|slide-down|slide-left|slide-right|zoom|focus|drop|spin|whip; out= fade|pop|slide-up|slide-down|slide-left|slide-right|zoom|focus|drop|spin|whip; emphasis= pulse|punch|shake|wiggle|bounce|nod|flash|tada; loop= float|breathe|sway|spin|drift|ken-burns-in|ken-burns-out.
+
+fields: `id?` string (bare word); `ids?` string[]; `in?` string; `out?` string; `emphasis?` string\|string[]; `loop?` string; `len?` time; `period?` time; `stagger?` time; `params?` object
+
+```text
+mgl edit video.mgl.json motion.apply title in=pop out=fade emphasis=pulse@1.5s loop=float
+{"op":"motion.apply","id":"title","in":"pop","out":"fade","emphasis":"pulse@1.5s","loop":"float"}
+```
+
+### motion.clear
+
+Remove the keyframes motion.apply wrote on a clip: every phase, or phase=in|out|emphasis|loop; properties go back to their rest values (other keys are kept).
+
+fields: `id` string (bare word); `phase?` "in"\|"out"\|"emphasis"\|"loop"\|"all"
+
+```text
+mgl edit video.mgl.json motion.clear title phase=loop
+{"op":"motion.clear","id":"title","phase":"loop"}
+```
+
+## recipes
+
+### recipe.short
+
+Build a finished vertical Short in one call from a script (text or file): moving backgrounds per sentence (b-roll with ken-burns and punch-ins, or animated generators), a hook title, word-highlighted captions timed to the voice-over (a recording via vo=, or speech made from the script via voice= with a speak plugin; else reading speed), a progress bar, a CTA, music with ducking, platform loudness and rotating transitions. Needs an empty comp (mgl new shorts --script s.txt runs it).
+
+fields: `script` string · the narration: text, or a path to a .txt/.md file (relative to the project) (bare word); `vo?` string · voice-over: a clip id, an asset id or a file path; captions follow its speech; `voice?` true\|string · speak the script with the project's speak provider (a plugin, e.g. flite-voice): true = its default voice, or a voice id; captions follow the word timings; `media?` string[] · b-roll videos/images, cycled every ~2-3 s with ken-burns and punch-ins; `style?` "clean"\|"bold"\|"viral" · clean \| bold \| viral (default viral); `len?` time · total length (default: the voice-over, or the script at reading speed, plus the CTA); `music?` boolean\|string · true (default): a generated bed when the audio.music command exists; a path: that file; false: none; `captions?` boolean; `hook?` boolean; `cta?` string\|false · the end call-to-action label (default "Follow for more"); false: none; `platform?` "shorts"\|"tiktok"\|"reels"\|"youtube"\|"none"; `seed?` int · varies palettes, transitions and media order (default 0); `comp?` string
+
+```text
+mgl edit video.mgl.json recipe.short 'Most people waste their mornings. Here are three habits that changed mine. Try them for a week.' style=viral cta='Follow for more'
+{"op":"recipe.short","script":"Most people waste their mornings. Here are three habits that changed mine. Try them for a week.","style":"viral","cta":"Follow for more"}
+```
+
 ## text
 
 ### style.add
 
 Add a named text style to the project (any TextStyle field; base inherits from another style, e.g. base=caption). Clips use it with style=<id>.
 
-fields: `id` string (bare word); `font?` string; `size?` number; `weight?` number\|"normal"\|"bold"; `italic?` boolean; `color?` string; `align?` "left"\|"center"\|"right"; `lineHeight?` number; `letterSpacing?` number; `stroke?` string; `strokeWidth?` number; `shadow?` string; `shadowBlur?` number; `shadowOffset?` [number, number]; `bg?` string; `bgPadding?` number\|[number, number]; `bgRadius?` number; `maxWidth?` number; `uppercase?` boolean; `highlight?` string; `maxWords?` int; `maxLines?` int; `box?` [number, number]; `base?` string
+fields: `id` string (bare word); `font?` string; `size?` number; `weight?` number\|"normal"\|"bold"; `italic?` boolean; `color?` string; `align?` "left"\|"center"\|"right"; `lineHeight?` number; `letterSpacing?` number; `stroke?` string; `strokeWidth?` number; `shadow?` string; `shadowBlur?` number; `shadowOffset?` [number, number]; `bg?` string; `bgPadding?` number\|[number, number]; `bgRadius?` number; `maxWidth?` number; `uppercase?` boolean; `highlight?` string; `emphasisColor?` string; `maxWords?` int; `maxLines?` int; `box?` [number, number]; `base?` string
 
 ```text
 mgl edit video.mgl.json style.add brand base=caption color='#00e5ff' font=Inter size=70
@@ -718,7 +810,7 @@ mgl edit video.mgl.json style.remove brand
 
 Change fields of a project style; null removes a field (it then inherits from base or the defaults).
 
-fields: `font?` string\|null; `size?` number\|null; `weight?` number\|"normal"\|"bold"\|null; `italic?` boolean\|null; `color?` string\|null; `align?` "left"\|"center"\|"right"\|null; `lineHeight?` number\|null; `letterSpacing?` number\|null; `stroke?` string\|null; `strokeWidth?` number\|null; `shadow?` string\|null; `shadowBlur?` number\|null; `shadowOffset?` [number, number]\|null; `bg?` string\|null; `bgPadding?` number\|[number, number]\|null; `bgRadius?` number\|null; `maxWidth?` number\|null; `uppercase?` boolean\|null; `highlight?` string\|null; `maxWords?` int\|null; `maxLines?` int\|null; `box?` [number, number]\|null; `base?` string\|null; `id` string (bare word)
+fields: `font?` string\|null; `size?` number\|null; `weight?` number\|"normal"\|"bold"\|null; `italic?` boolean\|null; `color?` string\|null; `align?` "left"\|"center"\|"right"\|null; `lineHeight?` number\|null; `letterSpacing?` number\|null; `stroke?` string\|null; `strokeWidth?` number\|null; `shadow?` string\|null; `shadowBlur?` number\|null; `shadowOffset?` [number, number]\|null; `bg?` string\|null; `bgPadding?` number\|[number, number]\|null; `bgRadius?` number\|null; `maxWidth?` number\|null; `uppercase?` boolean\|null; `highlight?` string\|null; `emphasisColor?` string\|null; `maxWords?` int\|null; `maxLines?` int\|null; `box?` [number, number]\|null; `base?` string\|null; `id` string (bare word)
 
 ```text
 mgl edit video.mgl.json style.set brand color='#ffcc00' stroke=null

@@ -41,6 +41,11 @@ describe('built-ins in the renderer', () => {
     expect(await at(p, 30, 60, 40)).toEqual([255, 255, 255, 255]);
     expect(await at(p, 45, 60, 40)).toEqual([0, 0, 255, 255]);
   });
+  it('a clip reaches the radial gradient through gen.shape (gen.type stays the generator id)', async () => {
+    const p = project([{ gen: { type: 'gradient', shape: 'radial', colors: ['#ffffff', '#000000'] } } as Partial<Clip>]);
+    expect((await at(p, 0, 60, 40))[0]).toBeGreaterThan(230);
+    expect((await at(p, 0, 1, 1))[0]).toBeLessThan(40);
+  });
   it('media clips get source-stage filters instead of the layer draw', () => {
     const p = project([{ asset: 'vid', fx: [{ type: 'color', brightness: 0.2 }, { type: 'lut', file: 'a.cube' }, { type: 'blur', radius: 4 }] }]);
     const list = evaluate(p, 'main', 0, opts);

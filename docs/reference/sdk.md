@@ -46,7 +46,10 @@ for (const c of r.changes) console.log(`L${c.line} ${c.kind} ${c.id}`);
   variants, stems or a muted-music version without touching the file.
 - `p.services`: `probe(src)` (duration, size, fps, codec), `analyzeAudio(src)` (silences, beats, tempo),
   `analyzeLevels(src, rate)` (per-frame RMS 0..1 and a spectrum: onsets for syncing angles, see recipes.md),
-  `measureText(text, style)` (the laid-out width and height of a text before you animate it), `readText(path)`.
+  `measureText(text, style)` (the laid-out width and height of a text before you animate it), `readText(path)`,
+  `writeFile(path, bytes)` / `fileExists(path)` (only directly inside `media/generated/`), and, when the project's
+  plugins provide them, `speak` and `transcribe` (the first provider of each kind: `await p.services.speak.voices()`;
+  commands use them through `audio.speak` and `captions.from-speech`).
   Paths are relative to the project folder.
 - `p.save({ force })` refuses if the file changed on disk since it was opened (a hand edit); open it again.
 

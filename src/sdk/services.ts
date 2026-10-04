@@ -1,11 +1,15 @@
-/** The services commands use (probe, audio analysis, file reads, motion tracking, catalog, text metrics), bound to a project directory. */
+/**
+ * The services commands use (probe, audio analysis, file reads, generated-file writes, motion tracking, catalog,
+ * text metrics, and the plugin providers: speak / transcribe), bound to a project directory.
+ */
 import { realpathSync } from 'node:fs';
-import { readFile } from 'node:fs/promises';
+import { mkdir, readFile, rename, rm, stat } from 'node:fs/promises';
 import { dirname, isAbsolute, relative, resolve, sep } from 'node:path';
-import { fail } from '../core/errors.js';
-import type { CommandServices, ProbeInfo } from '../core/commands/registry.js';
+import { MglError, fail } from '../core/errors.js';
+import type { CommandServices, ProbeInfo, SpeakService, TranscribeService } from '../core/commands/registry.js';
 import { kindFromExtension } from '../core/commands/structure.js';
 import type { PluginRegistry } from '../plugin/registry.js';
+import type { SpeakProvider, TranscribeProvider } from '../plugin/api.js';
 import type { MediaBackend } from '../media/types.js';
 import type { ResolvedTextStyle, TextLayouter } from '../render/types.js';
 import { createTextLayouter } from '../render/text.js';
@@ -82,11 +86,77 @@ export function makeServices(projectDir: string, registry?: PluginRegistry, opts
       return { width: l.w, height: l.h };
     },
   };
+  // generated files (audio.music, audio.sfx, audio.speak): writes only directly inside media/generated/
+  let gen: Promise<ReturnType<typeof import('../audiogen/node.js')['generatedFileServices']>> | undefined;
+  const generated = () => (gen ??= import('../audiogen/node.js').then((m) => m.generatedFileServices(projectDir)));
+  services.writeFile = async (rel, data) => (await generated()).writeFile(rel, data);
+  services.fileExists = async (rel) => (await generated()).fileExists(rel);
   if (registry) {
+    const speak = firstProvider<SpeakProvider>(registry, 'speak');
+    if (speak) services.speak = speakService(projectDir, speak);
+    const transcribe = firstProvider<TranscribeProvider>(registry, 'transcribe');
+    if (transcribe) services.transcribe = transcribeService(projectDir, transcribe);
     services.catalog = registry.catalog();
     // plugins that failed to load (a LoadedRegistry carries them), so a command can name the load error
     const problems = (registry as PluginRegistry & { problems?: CommandServices['pluginProblems'] }).problems;
     if (Array.isArray(problems)) services.pluginProblems = problems;
   }
   return services;
+}
+
+/** The first provider of a kind (registration order: built-ins, then the project's plugins in the order they load). */
+export function firstProvider<P>(registry: PluginRegistry, kind: 'speak' | 'transcribe'): P | undefined {
+  const m = registry.providers?.get(kind);
+  return m ? (m.values().next().value as P | undefined) : undefined;
+}
+
+/** Providers by kind for `mgl doctor` and docs: [{kind, id, describe}]. */
+export function listProviders(registry: PluginRegistry): { kind: string; id: string; describe: string }[] {
+  const out: { kind: string; id: string; describe: string }[] = [];
+  for (const [kind, m] of registry.providers ?? []) for (const [id, p] of m) out.push({ kind, id, describe: p.describe });
+  return out;
+}
+
+const GENERATED = /^media\/generated\/[A-Za-z0-9][A-Za-z0-9._-]*\.wav$/;
+
+/** A speak provider bound to the project folder: it writes only media/generated/<name>.wav (via a temp file, renamed on success). */
+export function speakService(projectDir: string, p: SpeakProvider): SpeakService {
+  return {
+    id: p.id, describe: p.describe,
+    voices: () => p.voices(),
+    async speak(args) {
+      if (!GENERATED.test(args.out)) fail('E_PATH', `speech goes directly in media/generated/, not "${args.out}".`, 'use a name like media/generated/vo-<hash>.wav.');
+      const abs = confined(projectDir, args.out);
+      await mkdir(dirname(abs), { recursive: true });
+      confined(projectDir, args.out); // again, now the folder exists (a symlinked media/generated is refused)
+      const tmp = `${abs.slice(0, -4)}.${process.pid}.tmp.wav`;
+      try {
+        const r = await p.speak({ text: args.text, ...(args.voice !== undefined ? { voice: args.voice } : {}), ...(args.speed !== undefined ? { speed: args.speed } : {}), out: tmp });
+        const st = await stat(tmp).catch(() => undefined);
+        if (!st?.isFile() || st.size < 44) fail('E_PROVIDER', `speak provider "${p.id}" wrote no audio.`, `check the provider (mgl doctor lists it), or use another voice.`);
+        await rename(tmp, abs);
+        return r ?? {};
+      } catch (e) {
+        await rm(tmp, { force: true });
+        if (!(e instanceof MglError)) fail('E_PROVIDER', `speak provider "${p.id}" failed: ${String((e as Error)?.message ?? e).split('\n')[0]}`, 'check the provider (mgl doctor lists it); the offline fallback is a recorded voice file (asset.add) + captions.from-text.');
+        throw e;
+      }
+    },
+  };
+}
+
+/** A transcribe provider bound to the project folder (the file must be inside it). */
+export function transcribeService(projectDir: string, p: TranscribeProvider): TranscribeService {
+  return {
+    id: p.id, describe: p.describe,
+    async transcribe(args) {
+      const file = confined(projectDir, args.file);
+      try {
+        return await p.transcribe({ file, ...(args.lang ? { lang: args.lang } : {}) });
+      } catch (e) {
+        if (!(e instanceof MglError)) fail('E_PROVIDER', `transcribe provider "${p.id}" failed: ${String((e as Error)?.message ?? e).split('\n')[0]}`, 'check the provider (mgl doctor lists it); the offline fallback is captions.from-text with the script.');
+        throw e;
+      }
+    },
+  };
 }

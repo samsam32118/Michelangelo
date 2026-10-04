@@ -9,6 +9,7 @@ mgl new shorts -o tpl.mgl.json
 mgl edit tpl.mgl.json template.apply intro params='{"title": "Three tips to focus", "subtitle": "in 30 seconds"}'
 mgl edit tpl.mgl.json template.apply lower-third at=4s params='{"name": "Ada Lovelace", "role": "Engineer"}'
 mgl edit tpl.mgl.json template.apply cta at=6s len=2s params='{"label": "Follow"}'
+mgl edit tpl.mgl.json template.apply hook-title at=0 params='{"kicker": "Sleep", "text": "Stop doing this", "highlight": "before bed"}'
 mgl show tpl.mgl.json
 ```
 
@@ -31,6 +32,8 @@ Built-in templates (parameters and defaults: `mgl docs template <id>`, or effect
 | `bars-and-tone` | head-leader colour bars (SMPTE or EBU) with an ident line (10 s; add the 1 kHz tone as audio) | ident, standard, level |
 | `slate` | programme slate: title, version, date, duration, client on a dark card (5 s) | title, version, date, duration, client |
 | `countdown` | countdown leader, one number per second down to 1 with a sweeping hand | from, color, bg |
+| `hook-title` | Shorts hook: kicker pill, heavy upper-case line snapping in word by word, tilted highlight sticker, soft scrim (3 s) | text, kicker, highlight, accent, position |
+| `follow-outro` | outro card: gradient, avatar ring with your initial, @handle, headline, a Follow / Subscribe button a pointer clicks (5 s) | handle, title, platform, label, doneLabel, accent, bg |
 
 Leader and review generators work as clips too: `smpte-bars`, `countdown-leader`, and `timecode` (burned-in
 HH:MM:SS:FF from `start`, or a clock, seconds or frames). The `counter` generator counts with any keyframe

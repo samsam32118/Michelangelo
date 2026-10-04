@@ -57,6 +57,7 @@ export class PluginRegistry {
       templates: this.templates,
       textAnimations: new Map([...this.textAnimations].map(([k, v]) => [k, { describe: v.describe }])),
       styles: new Map([...this.styles].map(([k, v]) => [k, { describe: v.describe, style: v.style }])),
+      motionPresets: this.motionPresets,
     };
   }
 }

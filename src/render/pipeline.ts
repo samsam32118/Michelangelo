@@ -17,6 +17,7 @@ import { basename, dirname, extname, join, resolve, isAbsolute } from 'node:path
 import { fileURLToPath } from 'node:url';
 import { fail, MglError } from '../core/errors.js';
 import { parseProjectText } from '../core/load.js';
+import { stripEmphasis } from '../core/captions.js';
 import type { Asset, Comp, ProjectFile } from '../core/schema/index.js';
 import { framesToSeconds, parseRate, parseSpeed, type Rate } from '../core/time.js';
 import { interpolate } from './keyframes.js';
@@ -1003,7 +1004,7 @@ export function subtitleCues(project: ProjectFile, compId: string, range?: [numb
 
 export function formatSubtitles(cues: { start: number; end: number; text: string }[], format: 'srt' | 'vtt'): string {
   const sep = format === 'srt' ? ',' : '.';
-  const body = cues.map((c, i) => `${format === 'srt' ? `${i + 1}\n` : ''}${stamp(c.start, sep)} --> ${stamp(c.end, sep)}\n${c.text}\n`).join('\n');
+  const body = cues.map((c, i) => `${format === 'srt' ? `${i + 1}\n` : ''}${stamp(c.start, sep)} --> ${stamp(c.end, sep)}\n${stripEmphasis(c.text)}\n`).join('\n');
   return format === 'vtt' ? `WEBVTT\n\n${body}` : body;
 }
 

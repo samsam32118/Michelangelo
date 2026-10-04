@@ -21,7 +21,7 @@ exception is `E_INTERNAL` (exit 1). Below: each code with one example message an
 | `E_COMMAND` | 1 | … is empty. | give one command per line, or a JSON array of commands. |
 | `E_CYCLE` | 1 | style "…" would inherit from itself (via "…"). | choose another base. |
 | `E_DOWNLOAD` | 2 | could not download …: …. | check network access (HTTPS_PROXY/NO_PROXY are honoured, extra CAs via NODE_EXTRA_CA_CERTS), or install ffmpeg ≥ 6 yourself and set MGL_FFMPEG. |
-| `E_DUPLICATE_ID` | 1 | id "…" is already used by a …, so bus "…" cannot get an entry. | rename that …: mgl edit <file> id.rename … to=…-1 |
+| `E_DUPLICATE_ID` | 1 | clip "…" already exists. | choose another id, or omit it. |
 | `E_EMPTY` | 1 | comp "…" is empty (length 0). | add clips, or give the comp a "length". |
 | `E_ENCODE` | 1 | output size …x… is not valid. | give a positive width and height. |
 | `E_EXISTS` | 1 | … already exists. | choose another name (-o other.mgl.json), or add --force to overwrite it. |
@@ -44,6 +44,7 @@ exception is `E_INTERNAL` (exit 1). Below: each code with one example message an
 | `E_MEDIA` | 1 | analysing … failed: … | check the file with mgl show <file>. |
 | `E_MEDIA_MISSING` | 1 | media file … does not exist. | check the path (relative to the project file) or relink the asset: mgl edit <project> asset.relink <id> src=<path>. |
 | `E_MISSING` | 1 | … is required. | add "…" to the entity. |
+| `E_MOTION_PRESET` | 1 | motion preset "…" returned invalid keys: …. | fix the preset (keys(len) must return [frame, value, easing?] lists with integer frames rising from 0 to len), or use another preset. |
 | `E_NATIVE` | 2 | … could not be started: …. | check the path and permissions of the program (mgl doctor). |
 | `E_NO_AUDIO` | 1 | … has no audio stream. | analyse a file with sound, or render the project audio first. |
 | `E_NO_BEATS` | 1 | found … beat(s) in clip "…" (…–…)…. | lower every= or min=, or lengthen the clip. |
@@ -54,18 +55,22 @@ exception is `E_INTERNAL` (exit 1). Below: each code with one example message an
 | `E_NO_FX` | 1 | bus "…" has no effects. | add one with: mgl edit <file> fx.add bus=… type=<audio effect> |
 | `E_NO_KEY` | 1 | … has no keyframe at frame …. | keyframes are at frames … (clip-local). |
 | `E_NO_MASK` | 1 | clip "…" has no mask …. | masks are 0..…. |
+| `E_NO_MOTION` | 1 | clip "…" has no …motion from motion.apply. | its motion: … |
 | `E_NO_NEIGHBOUR` | 1 | "…" has no clip right after it on …; roll moves a cut between two adjacent clips. | use clip.trim to change one clip. |
+| `E_NO_PROVIDER` | 1 | audio.speak needs a text-to-speech provider, and this project has none. | …. Offline fallback without speech: record or add a voice file (asset.add + clip.add on a dialogue track), then captions.from-text voice=<clip> text="...". |
 | `E_NO_RENDER` | 1 | no detached render of … was found (…). | start one with: mgl render … out.mp4 --detach |
-| `E_NO_SERVICE` | 1 | audio analysis is not available here. | run through the CLI or the SDK (Project.open), which provide media services. |
+| `E_NO_SERVICE` | 1 | audio.speak writes a WAV, and no file service is available here. | run it through the CLI (mgl edit) or the SDK (open(file)). |
+| `E_NO_SPEECH` | 1 | transcribe provider "…" found no words in …. | check that the clip has speech, or use captions.from-text voice=… text="..." with the script. |
 | `E_NO_SUBJECT` | 1 | comp "…" has no video clip to track. | add a video clip, or reframe without track=true. |
 | `E_NOT_AUDIO` | 1 | clip "…" has no audio. | set gain on a media or nested comp clip. |
 | `E_NOT_AVAILABLE` | 1 | look is not available in this build (src/qa is missing). | render stills instead: mgl render <file> frame.png --still 1s |
 | `E_NOT_CAPTIONS` | 1 | clip "…" is not a captions clip. | use the id of a clip with "captions": true, or omit it to create one. |
+| `E_NOT_EMPTY` | 1 | comp "…" already has … clip(s); recipe.short builds a whole Short into an empty comp. | start a new project: mgl new shorts -o short.mgl.json --script script.txt (or pass comp=<an empty comp>). |
 | `E_NOT_KEYFRAMED` | 1 | … has no keyframes. | add one with: mgl edit <file> key.set <id> prop=<prop> at=<frame> value=<v> |
 | `E_NOT_TEXT` | 1 | clip "…" is not a text clip. | edit its cues with cue.set or text.set <cue id>. |
-| `E_OVERLAP` | 1 | the first cue starts at frame …, before captions clip "…" (frame …), and "…" on … is in the way of moving its start. | make room first: mgl edit <file> clip.trim … end=…, then run this again. |
+| `E_OVERLAP` | 1 | the voice would overlap "…" (…–…) on track …. | omit track= to pick a free one, or give another at=. |
 | `E_PARAMS` | 1 | effect "…": "enabled" is true or false. | e.g. enabled=false |
-| `E_PATH` | 1 | no effect "…" on this clip. | effects: … |
+| `E_PATH` | 1 | generated files go directly in …/, not "…". | use a name like …/music-<hash>.wav. |
 | `E_PLUGIN_API` | 1 | plugin "…" needs plugin API …; this Michelangelo provides …. | update Michelangelo (npm install michelangelo@latest), or use an older version of the plugin. |
 | `E_PLUGIN_CONFLICT` | 1 | plugin "…": command "…" is already defined; the first definition is used. | rename the command (ops are "….<verb>"), or remove the other plugin from project.plugins. |
 | `E_PLUGIN_ENTRY` | 1 | plugin "…" was not loaded: …. | point "main" / "exports" in … at a file inside the plugin folder (not in node_modules/), then run: mgl plugin trust … |
@@ -79,8 +84,10 @@ exception is `E_INTERNAL` (exit 1). Below: each code with one example message an
 | `E_PLUGIN_VERSION` | 1 | project.plugins.… is "…", which is not a semver range. | use a range like "^…". |
 | `E_PRESET` | 1 | "…" is not a preset. | use one of: …. |
 | `E_PROP` | 1 | "…" is not an effect parameter path. | write fx.<index or type>.<param>, e.g. fx.blur.radius or fx.0.radius |
-| `E_RANGE` | 1 | fade lengths cannot be negative. | use 0 to remove a fade. |
+| `E_PROVIDER` | 1 | speak provider "…" wrote audio with no length. | check the provider (mgl doctor lists it). |
+| `E_RANGE` | 1 | len … is too short. | give a positive length, e.g. len="30s". |
 | `E_RATE` | 1 | fps … is not a supported rate. | use an integer (24, 25, 30, 50, 60) or a rational string like "30000/1001". |
+| `E_RECIPE` | 1 | recipe.short: the … step was refused (…: …). | this is a bug in the recipe; build the short step by step meanwhile (mgl docs recipes). |
 | `E_REF` | 1 | comp "…" does not exist. | comps: … |
 | `E_RENDER` | 1 | … | render with segments: 1 to see the full error. |
 | `E_RENDER_UNAVAILABLE` | 1 | the render pipeline could not be loaded: … | reinstall michelangelo (npm install michelangelo); renderEffect / renderGenerator work without it. |
@@ -89,12 +96,13 @@ exception is `E_INTERNAL` (exit 1). Below: each code with one example message an
 | `E_SCHEMA` | 1 | the project file must be a JSON object. | start from "mgl new" and compare. |
 | `E_SPEED` | 1 | speed 0 would freeze the whole clip. | use clip.freeze to hold a frame for a while. |
 | `E_TIME` | 1 | … is not a number. | give frames as an integer or seconds as "2.5s". |
-| `E_TRACK_KIND` | 1 | track "…" is … track. | move to a track of the same kind. |
+| `E_TRACK_KIND` | 1 | track "…" is a visual track. | use an audio track, or a new id (it is created on the dialogue bus). |
 | `E_TRUST_STORE` | 1 | the trust store … is not valid JSON. | fix or delete …, then re-run "mgl plugin trust <path>" for each plugin. |
 | `E_UNKNOWN_ANIMATION` | 1 | text animation "…" does not exist. | did you mean "…"? (presets: …) |
 | `E_UNKNOWN_EFFECT` | 1 | …: effect "…" does not exist. | did you mean "…"? |
 | `E_UNKNOWN_GENERATOR` | 1 | clip "…": generator "…" does not exist. | did you mean "…"? |
 | `E_UNKNOWN_KEY` | 1 | …: "…" is not a known property. | did you mean "…"? |
+| `E_UNKNOWN_MOTION` | 1 | motion preset "…" is … preset, not … preset. | use …=… |
 | `E_UNKNOWN_OP` | 1 | "…" is not a command. | did you mean "…"? (list: mgl docs commands) |
 | `E_UNKNOWN_TEMPLATE` | 1 | template "…" does not exist. | did you mean "…"? (templates: …) |
 | `E_UNKNOWN_TOPIC` | 1 | no docs for "…". | did you mean "…"? (topics: …) |

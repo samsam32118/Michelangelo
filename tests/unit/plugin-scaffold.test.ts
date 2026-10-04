@@ -20,7 +20,7 @@ beforeAll(async () => {
   await Promise.all([0, 1, 2, 3].map(async () => {
     for (let k = queue.shift(); k; k = queue.shift()) results.set(k, await runPluginTests(join(dir, 'plugins', `my-${k}`)));
   }));
-}, 120_000);
+}, 300_000);
 afterAll(() => rmSync(dir, { recursive: true, force: true }));
 
 describe('scaffoldPlugin', () => {

@@ -1090,6 +1090,10 @@
                     "type": "string",
                     "pattern": "^(#[0-9a-fA-F]{3,8}|transparent|[a-z]+|rgba?\\([^)]*\\))$"
                   },
+                  "emphasisColor": {
+                    "type": "string",
+                    "pattern": "^(#[0-9a-fA-F]{3,8}|transparent|[a-z]+|rgba?\\([^)]*\\))$"
+                  },
                   "maxWords": {
                     "type": "integer",
                     "exclusiveMinimum": 0,
@@ -2539,6 +2543,10 @@
             "type": "boolean"
           },
           "highlight": {
+            "type": "string",
+            "pattern": "^(#[0-9a-fA-F]{3,8}|transparent|[a-z]+|rgba?\\([^)]*\\))$"
+          },
+          "emphasisColor": {
             "type": "string",
             "pattern": "^(#[0-9a-fA-F]{3,8}|transparent|[a-z]+|rgba?\\([^)]*\\))$"
           },

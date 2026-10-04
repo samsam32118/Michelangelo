@@ -229,6 +229,15 @@ describe('captions', () => {
     expect(s.text).toBe('three');
     expect(s.words[0]!.state).toBe('active');
   });
+  it('balances the pages: 4 words at maxWords 3 show 2 + 2, never 3 + 1', () => {
+    const four = (f: number) => (layer(project([{ id: 'subs', captions: true, len: 60, style: { maxWords: 3 } }], {
+      cues: [{ id: 'q1', clip: 'subs', at: 0, len: 40, text: 'one two three four', words: [0, 10, 20, 30] }],
+    }), f).source as { text: string }).text;
+    expect(four(5)).toBe('one two');
+    expect(four(15)).toBe('one two');
+    expect(four(25)).toBe('three four');
+    expect(four(35)).toBe('three four');
+  });
 });
 
 describe('effects, masks, mattes, styles', () => {

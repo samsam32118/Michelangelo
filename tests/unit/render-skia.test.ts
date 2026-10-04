@@ -124,6 +124,29 @@ describe('skia renderer', () => {
     expect(white).toBeGreaterThan(50);
   });
 
+  it('draws *marked* caption words in emphasisColor (the spoken word keeps highlight)', async () => {
+    const p = project([{ id: 'subs', captions: true, style: { size: 30, color: '#ffffff', highlight: '#ff0000', emphasisColor: '#00ff00' } }]);
+    p.cues = [{ id: 'q', clip: 'subs', at: 0, len: 30, text: 'AA *BB*', words: [0, 15] }];
+    const count = async (f: number) => {
+      const px = await draw(p, f);
+      let red = 0, green = 0, star = 0;
+      for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+        const [r, g, b] = px(x, y);
+        if (r! > 200 && g! < 60) red++;
+        if (g! > 200 && r! < 60 && b! < 60) { green++; expect(x).toBeGreaterThan(W / 2 - 5); }
+        if (r! > 200 && g! > 200 && b! > 200) star++;
+      }
+      return { red, green, star };
+    };
+    const a = await count(5); // AA spoken (red), BB emphasised (green)
+    expect(a.red).toBeGreaterThan(50);
+    expect(a.green).toBeGreaterThan(50);
+    expect(a.star).toBe(0); // no white: the asterisks are not drawn
+    const b = await count(20); // BB spoken: highlight wins
+    expect(b.green).toBe(0);
+    expect(b.red).toBeGreaterThan(50);
+  });
+
   it('draws media frames with fit and runs layer effects', async () => {
     const px = await draw(project([{ asset: 'vid', fit: 'contain' }]));
     near(px(30, 60), [255, 0, 0, 255]);

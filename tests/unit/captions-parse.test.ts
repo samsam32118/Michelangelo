@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { parseSrt, parseVtt, parseCaptions, toSrt, toVtt, splitScript, estimateWordTimes, parseTimestamp, splitCueWords } from '../../src/core/captions.js';
+import { parseSrt, parseVtt, parseCaptions, toSrt, toVtt, splitScript, emphasisWords, stripEmphasis, estimateWordTimes, parseTimestamp, splitCueWords } from '../../src/core/captions.js';
 
 describe('SRT', () => {
   it('parses BOM, CRLF, tags, multi-line cues and both separators', () => {
@@ -85,5 +85,18 @@ describe('splitCueWords', () => {
   });
   it('does not repeat the last word when the cut is after every word start', () => {
     expect(splitCueWords('one two three', [0, 5, 10], 20)).toEqual({ first: { text: 'one two three', words: [0, 5, 10] }, second: null });
+  });
+});
+
+describe('caption emphasis marks', () => {
+  it('reads *word* and *several words*, keeping punctuation, and strips the marks for export', () => {
+    expect(emphasisWords('Try *three* habits, *every single* day.')).toEqual([
+      { text: 'Try', emphasis: false }, { text: 'three', emphasis: true }, { text: 'habits,', emphasis: false },
+      { text: 'every', emphasis: true }, { text: 'single', emphasis: true }, { text: 'day.', emphasis: false },
+    ]);
+    expect(emphasisWords('(*10x*) faster')).toEqual([{ text: '(10x)', emphasis: true }, { text: 'faster', emphasis: false }]);
+    expect(stripEmphasis('a *b* c\n*d*')).toBe('a b c\nd');
+    expect(stripEmphasis('5 * 3')).toBe('5 * 3');
+    expect(toSrt([{ start: 0, end: 1, text: 'go *now*' }])).toContain('\ngo now\n');
   });
 });

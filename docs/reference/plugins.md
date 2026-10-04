@@ -40,7 +40,7 @@ mgl plugin test plugins/voice-chain
 
 ```text
 plugins/film-tint/
-  package.json        "type": "module", "main": "src/index.ts", "michelangelo": {"api": "^1.2.0", "kinds": ["effect"]}
+  package.json        "type": "module", "main": "src/index.ts", "michelangelo": {"api": "^1.3.0", "kinds": ["effect"]}
   src/index.ts        export default definePlugin({ name: 'film-tint', effects: [...] })
   test/film-tint.test.ts   uses michelangelo/testing
   evals/film-tint-basic/   task.md + meta.json
@@ -50,7 +50,7 @@ plugins/film-tint/
 ## The API (`michelangelo/plugin`, semver 1.x, minor versions only add)
 
 ```text
-definePlugin({ name, version?, effects?, transitions?, generators?, templates?, commands?, checks?, importers?, exporters?, styles?, textAnimations? })
+definePlugin({ name, version?, effects?, transitions?, generators?, templates?, commands?, checks?, importers?, exporters?, styles?, textAnimations?, motionPresets?, providers? })
 defineEffect({ type, describe, params: z.object({...}), draw?({ src, dst, params, frame, time, fps, seed, comp }), source?(params) → FilterSpec[], audio?(params) → FilterSpec[], margin?(params) })
 defineTransition({ type, describe, params, draw({ from, to, dst, progress, params, ... }) })
 defineGenerator({ type, describe, params, size?(params, comp), draw({ dst, params, frame, time, fps, seed, comp, audio? }), audioSource?(params) → asset id })
@@ -59,6 +59,9 @@ defineCommand({ op: '<plugin>.<verb>', group, doc, schema, primary?, example, ap
 defineCheck({ id, describe, stage: 'project' | 'frame' | 'audio', run(ctx) → [{ rule, severity, message, clip?, frame?, box?, fix? }] })
 defineImporter({ id, describe, extensions, import({ file, text, project, options }) → commands })
 defineExporter({ id, describe, extensions, export({ out, project, compId, renderFrames, renderAudio }) })
+defineMotionPreset({ id, describe, phase: 'in' | 'out' | 'emphasis' | 'loop', params?, seconds?, keys({ len, fps, seed, params, size, comp }) → { x?, y?, scale?, rotate?, opacity? } keyframes })
+defineProvider({ kind: 'speak', id, describe, voices(), speak({ text, voice?, speed?, out }) → { words? } })
+defineProvider({ kind: 'transcribe', id, describe, transcribe({ file, lang? }) → { text, words: [{ text, start, end }] } })
 ```
 
 - A `Surface` (`src`, `dst`, `from`, `to`) has `ctx` (a CanvasRenderingContext2D-compatible context),
@@ -81,7 +84,18 @@ defineExporter({ id, describe, extensions, export({ out, project, compId, render
   `audio: { rms, spectrum, bands, frame }` (per-frame RMS 0..1 and `bands` spectrum values per frame of that
   asset; read `rms[audio.frame]`). The built-in `waveform` and `spectrum` generators work this way.
 - `frame` and `time` are clip-local; `fps`, `seed` and `comp` (the comp size) are passed to every draw. Text
-  drawn with `ctx.font = '700 64px Inter'` uses the bundled fonts (Inter, Noto Sans, Anton, JetBrains Mono).
+  drawn with `ctx.font = '700 64px Inter'` uses the bundled fonts (Inter, Noto Sans, Anton, Montserrat, Bebas Neue,
+  JetBrains Mono).
+- **Motion presets** (API 1.3) return keyframes over `len` frames from 0, relative to the layer's rest state
+  (`x`/`y` px offsets, `scale` and `opacity` multipliers, `rotate` degrees added); `motion.apply` offsets and
+  merges them. Pure functions of (params, len, fps, seed).
+- **Providers** (API 1.3) put a model or engine behind a stable interface: `audio.speak` uses the first `speak`
+  provider, `captions.from-speech` the first `transcribe` one (times in seconds). `speak` writes a WAV (48 kHz
+  preferred) at `out`, a temporary path inside the project's `media/generated/` that the core renames on success.
+  The core never downloads models: a provider plugin fetches or bundles what it needs and says so in its README.
+  Example: `examples/plugins/flite-voice` in the repository (ffmpeg's flite engine, zero downloads), and the
+  20-line version in audio.md. `mgl doctor <file>` lists the providers a project has. Until the manifest knows a
+  `provider` kind, a provider-only plugin also needs one item of a listed kind (e.g. a `<name>.voices` command).
 - Commands are named `<plugin>.<verb>`, have a zod schema, a doc sentence and an example, and change the
   project only through `ctx` (so they are undoable and dry-runnable).
 
@@ -105,7 +119,7 @@ plus `test` and `assert` (node:test).
   is refused.
 - Plugin code imports `michelangelo/plugin` and `michelangelo/testing`; they resolve to the Michelangelo that
   is running (global install, npx or a project dependency), so a plugin folder needs no `node_modules`.
-- The manifest's `api` range must include this Michelangelo's plugin API (1.2.0; `mgl --version` prints it), and the version must
+- The manifest's `api` range must include this Michelangelo's plugin API (1.3.0; `mgl --version` prints it), and the version must
   satisfy the project's range; otherwise the plugin is refused with the reason and a fix.
 - **Plugins are code that runs on your machine with no sandbox.** Read a plugin before trusting it.
 - `mgl plugin list [file]` shows what is loaded, versions and sources, and every plugin problem.

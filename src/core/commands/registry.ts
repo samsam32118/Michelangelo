@@ -28,6 +28,26 @@ export interface CommandServices {
   pluginProblems?: { code: string; message: string; fix: string; path?: string; severity?: 'error' | 'warning' }[];
   /** text measurement (for layout-aware commands) */
   measureText?(text: string, style: Record<string, unknown>): { width: number; height: number };
+  /** (API 1.3) text-to-speech: the first 'speak' provider of the plugin registry; `out` is relative to the project folder (media/generated/...) */
+  speak?: SpeakService;
+  /** (API 1.3) speech-to-text: the first 'transcribe' provider of the plugin registry; `file` is relative to the project folder */
+  transcribe?: TranscribeService;
+}
+
+/** A word with times in seconds (from a speak or transcribe provider). */
+export interface TimedWord { text: string; start: number; end?: number; confidence?: number }
+
+export interface SpeakService {
+  id: string;
+  describe?: string;
+  voices(): Promise<{ id: string; describe?: string; lang?: string }[]>;
+  speak(args: { text: string; voice?: string; speed?: number; out: string }): Promise<{ words?: TimedWord[] }>;
+}
+
+export interface TranscribeService {
+  id: string;
+  describe?: string;
+  transcribe(args: { file: string; lang?: string }): Promise<{ text: string; words: TimedWord[] }>;
 }
 
 /** Which stages an effect implements (API 1.1); absent = unknown (no stage checks). */
@@ -41,6 +61,8 @@ export interface Catalog {
   templates: Map<string, TemplateDef>;
   textAnimations?: Map<string, { describe?: string }>;
   styles?: Map<string, { describe?: string; style: Record<string, unknown> }>;
+  /** (API 1.3) motion presets by id, for motion.apply (built-ins plus plugins) */
+  motionPresets?: Map<string, import('../../plugin/api.js').MotionPresetDef>;
 }
 
 export interface TemplateDef {

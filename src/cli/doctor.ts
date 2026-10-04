@@ -1,4 +1,4 @@
-/** `mgl doctor`: what this machine has (node, ffmpeg, fonts, cores, memory, disk, proxy, trust store, plugins) and a fix for each gap. */
+/** `mgl doctor`: what this machine has (node, ffmpeg, fonts, cores, memory, disk, proxy, trust store, plugins, AI providers) and a fix for each gap. */
 import { statfsSync } from 'node:fs';
 import { cpus, freemem, totalmem } from 'node:os';
 import { MglError } from '../core/errors.js';
@@ -50,7 +50,7 @@ export async function doctor(a: Args, o: Out) {
     const { registerFonts } = await import('../render/text.js');
     const { GlobalFonts } = await import('@napi-rs/canvas');
     registerFonts();
-    families = [...new Set(GlobalFonts.families.map((f: { family: string }) => f.family))].filter((f) => /Inter|Noto|Anton|JetBrains/.test(f));
+    families = [...new Set(GlobalFonts.families.map((f: { family: string }) => f.family))].filter((f) => /Inter|Noto|Anton|JetBrains|Montserrat|Bebas/.test(f));
     fonts = families.length;
     lines.push(`fonts: ${families.join(', ') || 'none bundled'}`);
     if (!fonts) gaps.push({ what: 'the bundled fonts did not register', fix: 'reinstall the package (the fonts/ folder is missing).' });
@@ -72,6 +72,9 @@ export async function doctor(a: Args, o: Out) {
   lines.push(`trust store: ${trustStorePath()} (${trusted} trusted)`);
 
   let plugins: unknown;
+  const { listProviders } = await import('../sdk/services.js');
+  const { builtinRegistry } = await import('../builtin/index.js');
+  let providers = listProviders(builtinRegistry());
   const file = a.pos[0];
   if (file) {
     const { Project } = await import('../sdk/project.js');
@@ -81,12 +84,18 @@ export async function doctor(a: Args, o: Out) {
     lines.push(`plugins of ${file}: ${extra.length ? extra.map(([n, i]) => `${n} ${i.version}`).join(', ') : 'none (built-ins only)'}`);
     for (const pr of reg.problems.filter((x) => x.severity === 'error')) gaps.push({ what: pr.message, fix: pr.fix });
     plugins = { loaded: reg.loaded, problems: reg.problems };
+    providers = listProviders(reg);
   }
+  // AI providers (plugin API 1.3): audio.speak uses the first 'speak' one, captions.from-speech the first 'transcribe' one
+  const byKind = (k: string) => providers.filter((p) => p.kind === k).map((p) => p.id);
+  const scope = file ? `of ${file}` : '(built-in; pass a project file to include its plugins)';
+  lines.push(`providers ${scope}: speak ${byKind('speak').join(', ') || 'none'} · transcribe ${byKind('transcribe').join(', ') || 'none'}`);
+  if (file && !byKind('speak').length) lines.push(`  audio.speak needs a speak provider: copy examples/plugins/flite-voice into plugins/, mgl plugin trust plugins/flite-voice, then project.set plugins='{"flite-voice": "^1.0.0"}' (uses ffmpeg flite${has.filters.includes('flite') ? ', present' : ', missing here'})`);
 
   lines.push(gaps.length ? `${gaps.length} gap${gaps.length > 1 ? 's' : ''}:` : 'ready: nothing missing');
   for (const g of gaps) lines.push(`  ${g.fatal ? 'error' : 'warn'} ${g.what}`, `    fix: ${g.fix}`);
   o.line(...lines);
   const fatal = gaps.find((g) => g.fatal);
   if (fatal) { o.exit = 2; o.set({ error: { code: fatal.code ?? 'E_ENVIRONMENT', message: fatal.what, fix: fatal.fix } }); }
-  o.set({ node: process.versions.node, ffmpeg: ff ? { path: ff.ffmpeg, ffprobe: ff.ffprobe, version: ff.version, source: ff.source, licence: ff.licence, ...has } : null, fonts: families, cpus: cores, memory: { total: totalmem(), free: freemem() }, disk, proxy, trustStore: trustStorePath(), plugins, gaps });
+  o.set({ node: process.versions.node, ffmpeg: ff ? { path: ff.ffmpeg, ffprobe: ff.ffprobe, version: ff.version, source: ff.source, licence: ff.licence, ...has } : null, fonts: families, cpus: cores, memory: { total: totalmem(), free: freemem() }, disk, proxy, trustStore: trustStorePath(), plugins, providers, gaps });
 }

@@ -27,6 +27,8 @@ import zoom from './transitions/zoom.js';
 import blurT from './transitions/blur.js';
 import spin from './transitions/spin.js';
 import flash from './transitions/flash.js';
+import whip from './transitions/whip.js';
+import zoomPunch from './transitions/zoom-punch.js';
 import gradient from './generators/gradient.js';
 import noise from './generators/noise.js';
 import particles from './generators/particles.js';
@@ -37,7 +39,7 @@ import { waveform, spectrum } from './generators/audio.js';
 import { timecode, smpteBars, countdownLeader } from './generators/timecode.js';
 
 export const effects = [blur, glow, shadow, vignette, chromaKey, color, lut, denoise, sharpen, grain, pixelate, stroke, mirror, invert, rgbSplit, letterbox, legalize, ...audioEffects];
-export const transitions = [crossfade, dip, wipe, slide, push, zoom, blurT, spin, flash];
+export const transitions = [crossfade, dip, wipe, slide, push, zoom, blurT, spin, flash, whip, zoomPunch];
 export const generators = [gradient, noise, particles, progressBar, counter, checker, pattern, waveform, spectrum, timecode, smpteBars, countdownLeader];
 
 export default definePlugin({ name: 'builtin-effects', version: '1.0.0', effects, transitions, generators });

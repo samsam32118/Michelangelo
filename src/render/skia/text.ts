@@ -97,7 +97,8 @@ export function drawTextLayer(ctx: SKRSContext2D, layouter: TextLayouter, src: {
   if (src.words && src.words.length === l.words.length) {
     l.words.forEach((w, i) => {
       const cw = src.words![i]!;
-      drawString(ctx, st, w.text, w.x, l.lines[w.line]?.baseline ?? 0, l.size, cw.state === 'active' ? highlight : st.color);
+      // the spoken word wins; an emphasised word (*marked*) uses emphasisColor when the style has one
+      drawString(ctx, st, w.text, w.x, l.lines[w.line]?.baseline ?? 0, l.size, cw.state === 'active' ? highlight : cw.emphasis && st.emphasisColor ? st.emphasisColor : st.color);
     });
   } else if (src.animate) {
     const us = units(ctx, l, src.animate.by);

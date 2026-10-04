@@ -16,7 +16,7 @@ export interface Problem extends MglErrorInfo {
 }
 
 /** Built-in style ids (provided by the builtin plugin); the loader accepts them without a styles entry. */
-export const BUILTIN_STYLES = ['title', 'subtitle', 'caption', 'karaoke', 'pop', 'boxed', 'lower-third', 'cta', 'label', 'body'];
+export const BUILTIN_STYLES = ['title', 'subtitle', 'caption', 'karaoke', 'pop', 'boxed', 'lower-third', 'cta', 'label', 'body', 'hormozi', 'word-pop'];
 
 export interface LoadResult {
   project: ProjectFile;

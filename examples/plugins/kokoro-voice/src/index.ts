@@ -290,6 +290,19 @@ interface Kokoro {
   generate(text: string, o: { voice?: string; speed?: number }): Promise<RawAudio>;
 }
 
+/**
+ * Run `fn` without letting it leave process-wide error handlers behind: phonemizer (eSpeak compiled with Emscripten)
+ * adds "uncaughtException" / "unhandledRejection" handlers that rethrow, which turns any later uncaught error of the
+ * host (the mgl CLI, an SDK script) into a dump of its minified source instead of the error message.
+ */
+async function keepProcessHandlers<T>(fn: () => Promise<T>): Promise<T> {
+  const events = ['uncaughtException', 'unhandledRejection'] as const;
+  const before = events.map((e) => process.listeners(e));
+  try { return await fn(); } finally {
+    events.forEach((e, i) => { for (const l of process.listeners(e)) if (!before[i]!.includes(l)) process.removeListener(e, l as never); });
+  }
+}
+
 let loading: Promise<Kokoro> | undefined;
 /** one synthesis at a time: the duration capture below wraps a shared model */
 let queue: Promise<unknown> = Promise.resolve();
@@ -326,7 +339,7 @@ async function speakChunk(tts: Kokoro, text: string, voice: string, speed: numbe
     return r;
   };
   try {
-    const audio = await tts.generate(text, { voice, speed });
+    const audio = await keepProcessHandlers(() => tts.generate(text, { voice, speed }));
     if (audio.sampling_rate !== SAMPLE_RATE) return { samples: audio.audio };
     if (!captured?.durations || captured.durations.length !== captured.ids.length) return { samples: audio.audio };
     const tokens = captured.ids.map((id) => tts.tokenizer.decode([id]));
@@ -349,7 +362,7 @@ export const kokoro: SpeakProvider = defineProvider({
     const parts = chunks(text);
     if (!parts.length) throw new Error('nothing to say: the text has no words');
     const run = queue.then(async () => {
-      const tts = await (loading ??= load().catch((e) => { loading = undefined; throw e; }));
+      const tts = await (loading ??= keepProcessHandlers(load).catch((e) => { loading = undefined; throw e; }));
       const pieces: Float32Array[] = [];
       const words: Word[] = [];
       let pos = 0, timed = true;

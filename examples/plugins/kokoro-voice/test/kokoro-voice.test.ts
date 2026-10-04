@@ -93,6 +93,8 @@ test('speaks with word timings (MGL_KOKORO_TEST=1)', async () => {
   for (let i = 1; i < words.length; i++) assert.ok(words[i]!.start > words[i - 1]!.start);
   // the next sentence starts after the last one ends (the model folds part of the pause into "sleep.")
   assert.ok(words[5]!.start >= (words[4]!.end ?? words[4]!.start));
+  // the model's dependencies leave no process-wide error handlers behind (they would hide the host's errors)
+  assert.equal(process.listeners('uncaughtException').filter((l) => /ExitStatus|quit_/.test(String(l))).length, 0);
   // what audio.speak needs from any speak provider
   assert.deepEqual((await checkSpeakProvider(kokoro, { text: "It's 5 o'clock — time for tea." })).problems, []);
 });

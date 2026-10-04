@@ -9,3 +9,4 @@ bench/tmp/
 evals/results/**/transcript.jsonl
 evals/results/**/agent.stderr.log
 evals/results/**/stash/
+evals/results/**/result.json

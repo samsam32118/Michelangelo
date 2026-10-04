@@ -15,8 +15,14 @@ export { z };
 export { defineCommand } from '../core/commands/registry.js';
 export type { CommandDef, TemplateDef, TemplateOutput, CommandContext } from '../core/commands/registry.js';
 export type { FilterSpec } from '../render/types.js';
+/**
+ * (API 1.4) Speech timing, for speak and transcribe providers: align a text to a voice's loudness envelope, check
+ * word times against the sound, and the caption timing defaults Michelangelo times cues with.
+ */
+export { alignWords, snapToOnsets, voicedRuns, textWords, ALIGN_DEFAULTS } from '../core/align.js';
+export { CUE_TIMING, timeCues } from '../core/cue-timing.js';
 
-export const PLUGIN_API_VERSION = '1.3.0';
+export const PLUGIN_API_VERSION = '1.4.0';
 
 /** A CanvasRenderingContext2D-compatible drawing context (Skia today; a GPU renderer provides the same contract). */
 export type Canvas2D = SKRSContext2D;

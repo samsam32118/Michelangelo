@@ -8,8 +8,10 @@ import { run } from './proc.js';
 import type { AudioAnalysisReport } from './types.js';
 
 export const ANALYSIS_RATE = 11025;
+/** seconds per `envelope` value */
+export const ENVELOPE_HOP = 0.01;
 
-export interface AnalyzeOptions { silenceDb?: number; minSilence?: number; /** skip beat detection */ noBeats?: boolean }
+export interface AnalyzeOptions { silenceDb?: number; minSilence?: number; /** skip beat detection */ noBeats?: boolean; /** also return `envelope` (dBFS per 10 ms, for word alignment) */ envelope?: boolean }
 
 export function parseEbur128(stderr: string): { integrated: number; truePeak: number; lra: number; momentary: number[] } {
   const momentary: number[] = [];
@@ -184,5 +186,6 @@ export async function analyzeAudio(file: string, opts: AnalyzeOptions = {}): Pro
     rms: rmsWindows(pcm, ANALYSIS_RATE),
   };
   if (bpm !== undefined) report.bpm = bpm;
+  if (opts.envelope) report.envelope = rmsWindows(pcm, ANALYSIS_RATE, ENVELOPE_HOP);
   return report;
 }

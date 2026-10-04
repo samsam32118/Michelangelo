@@ -134,16 +134,26 @@ plugins** (plugin API 1.3, `providers: [...]`). With one in the project:
 
 - `audio.speak text="..." [voice=] [speed=0.5..2] [id=] [at=] [track=]` writes `media/generated/vo-<hash>.wav`
   (reused when text, voice and speed repeat), adds it on the dialogue bus right after the previous voice line
-  (unless `at=`), and stores the provider's word timings next to it.
+  (unless `at=`), and stores word timings next to it: the provider's, with each phrase's first word moved to where
+  the voice starts, or, when the provider gives none, the text aligned to the sound (`timings: aligned`).
 - `captions.from-speech [clip=<voice clip> | clips=[...]] [style=karaoke] [maxWords=3]` makes word-timed cues,
   by default from every voice clip on the dialogue bus into one captions clip: from the timings `audio.speak`
-  stored, else a `transcribe` provider, else (a clip `audio.speak` made without timings) estimated from its text.
+  stored, else a `transcribe` provider, else (a clip `audio.speak` made without timings) the text aligned to the
+  sound. Cue timing rules and the aligner: text-and-captions.md, "Captions in sync with speech".
 - No provider: both fail with `E_NO_PROVIDER` and the fix. The offline fallback without speech is a recorded
   voice file plus `captions.from-text voice=<clip> text="..."`. `mgl doctor <file>` lists the providers.
 
+Two voices ship as example plugins in the repository (`examples/plugins`):
+
+| plugin | sound | needs | word timings |
+|---|---|---|---|
+| `kokoro-voice` | natural (Kokoro-82M neural TTS, 28 English US/UK voices, `af_heart` default) | `npm install` in the plugin folder; the first use downloads ~330 MB once | from the model (per-phoneme durations) |
+| `flite-voice` | robotic but clear (ffmpeg's flite) | an ffmpeg with libflite; no downloads | phrase by phrase |
+
 A complete speak provider is ~20 lines around ffmpeg's built-in **flite** engine (no downloads; voices `slt`,
-`kal`, `rms`, `awb`; robotic but clear, fine for drafts). The repository's `examples/plugins/flite-voice` is the
-fuller version (phrase-by-phrase synthesis, so its word timings follow the real phrase lengths).
+`kal`, `rms`, `awb`; fine for drafts). It returns no word times: Michelangelo aligns the text to the sound. A
+provider that knows its word times should return them (`{ words: [{ text, start, end }] }`, seconds from the
+start of the file, one per word of the text): they are kept, only phrase starts are checked against the sound.
 
 ```sh
 mkdir -p plugins/my-voice/src
@@ -165,7 +175,7 @@ const speak = defineProvider({
     execFileSync(process.env.MGL_FFMPEG || 'ffmpeg', ['-v', 'error', '-f', 'lavfi', '-i', `flite=textfile='${out}.txt':voice=${voice}`,
       '-af', `aresample=48000,atempo=${speed}`, '-y', out]);
     rmSync(`${out}.txt`);
-    return {}; // no word times: captions.from-speech estimates them from the text
+    return {}; // no word times: Michelangelo aligns the text to the sound
   },
 });
 const list = defineCommand({ op: 'my-voice.voices', group: 'audio', doc: 'List the voices.', schema: z.strictObject({}), example: {},

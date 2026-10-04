@@ -45,7 +45,7 @@ Each option also has an environment variable: `--ref` is `MGL_REF`, `--dir` is `
 Check the install:
 
 ```sh
-mgl --version   # mgl 0.1.0 (plugin API 1.3.0, ...)
+mgl --version   # mgl 0.1.0 (plugin API 1.4.0, ...)
 mgl doctor      # node, ffmpeg (codecs and filters), fonts, providers: "ready: nothing missing"
 ```
 
@@ -142,8 +142,9 @@ Every verb takes `--json` and exits with one of three codes:
 - **Output.** MP4, WebM, ProRes, GIF, PNG sequences, WAV, MP3, SRT, VTT and chapter files.
 - **Plugins.**
   - Effects, transitions, generators, templates, commands, checks, importers, exporters, styles, motion presets, and speech and transcription providers.
-  - Public, semver-versioned API (`michelangelo/plugin`, 1.3.0). Run `mgl plugin new` for a scaffold.
-  - Six examples in [examples/plugins](examples/plugins). One is a zero-download text-to-speech voice (`flite-voice`).
+  - Public, semver-versioned API (`michelangelo/plugin`, 1.4.0). Run `mgl plugin new` for a scaffold.
+  - Seven examples in [examples/plugins](examples/plugins). Two are text-to-speech voices: `kokoro-voice` (natural,
+    Kokoro-82M on the CPU) and `flite-voice` (zero downloads). Captions follow either voice word by word.
 
 ## Documentation
 

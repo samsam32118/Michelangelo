@@ -304,3 +304,56 @@ export async function renderProject(project: ProjectFile | string, frame = 0, op
   const [still] = await pipeline.renderStills(p, { baseDir, registry, frames: [frame], scale: opts.scale ?? 1, ...(opts.comp ? { comp: opts.comp } : {}) });
   return still!.image;
 }
+
+/**
+ * (API 1.4) What a speak provider must do for audio.speak and captions.from-speech: write a readable WAV with sound
+ * in it, and, if it returns word timings, one per word of the text, in order, inside the audio. Returns the
+ * problems found (empty = conforms) and what it measured. Use it in a speak plugin's own tests:
+ *   assert.deepEqual((await checkSpeakProvider(plugin.providers![0]!)).problems, []);
+ */
+export async function checkSpeakProvider(provider: import('./api.js').ProviderDef, opts: { text?: string; voice?: string } = {}): Promise<{ problems: string[]; duration: number; words: number }> {
+  const problems: string[] = [];
+  if (provider.kind !== 'speak') return { problems: [`provider "${provider.id}" is a ${provider.kind} provider, not speak`], duration: 0, words: 0 };
+  const text = opts.text ?? 'Three tips for better sleep. First, keep your room cool and dark.';
+  const voices = await provider.voices();
+  if (!voices.length) problems.push('voices() lists no voice');
+  const out = tempFile(`${provider.id}-check.wav`);
+  const r = await provider.speak({ text, out, ...(opts.voice ? { voice: opts.voice } : {}) });
+  if (!existsSync(out)) return { problems: [...problems, `speak() wrote nothing at ${out}`], duration: 0, words: 0 };
+  const b = readFileSync(out);
+  let duration = 0;
+  if (b.subarray(0, 4).toString('latin1') !== 'RIFF' || b.subarray(8, 12).toString('latin1') !== 'WAVE') problems.push('the output is not a WAV file (RIFF/WAVE header)');
+  else {
+    // find the fmt and data chunks
+    let rate = 0, bytesPerSec = 0, dataLen = 0, bits = 16, loud = 0;
+    for (let o = 12; o + 8 <= b.length;) {
+      const id = b.subarray(o, o + 4).toString('latin1'), len = b.readUInt32LE(o + 4);
+      if (id === 'fmt ') { rate = b.readUInt32LE(o + 12); bytesPerSec = b.readUInt32LE(o + 16); bits = b.readUInt16LE(o + 22); }
+      if (id === 'data') {
+        dataLen = Math.min(len, b.length - o - 8);
+        if (bits === 16) for (let i = o + 8; i + 1 < o + 8 + dataLen; i += 2) loud = Math.max(loud, Math.abs(b.readInt16LE(i)));
+        else loud = 1;
+        break;
+      }
+      o += 8 + len + (len & 1);
+    }
+    duration = bytesPerSec ? dataLen / bytesPerSec : 0;
+    if (!rate || !duration) problems.push('the WAV has no audio data');
+    else if (bits === 16 && loud < 300) problems.push('the audio is silent');
+    if (rate && rate < 16000) problems.push(`sample rate ${rate} Hz is low for speech (48000 preferred)`);
+  }
+  const words = r?.words ?? [];
+  if (words.length) {
+    const textWords = text.split(/\s+/).filter(Boolean);
+    if (words.length !== textWords.length) problems.push(`${words.length} word timings for ${textWords.length} words of text (give one per word, or none: Michelangelo then aligns by sound)`);
+    else textWords.forEach((w, i) => { if (words[i]!.text !== w) problems.push(`word ${i + 1} is "${words[i]!.text}", the text has "${w}"`); });
+    for (let i = 0; i < words.length; i++) {
+      const w = words[i]!;
+      if (!(w.start >= 0) || (duration && w.start > duration + 0.05)) problems.push(`word ${i + 1} "${w.text}" starts at ${w.start}, outside the audio (0–${duration.toFixed(2)} s)`);
+      if (w.end !== undefined && w.end < w.start) problems.push(`word ${i + 1} "${w.text}" ends before it starts`);
+      if (i && w.start < words[i - 1]!.start) problems.push(`word ${i + 1} "${w.text}" starts before word ${i}`);
+    }
+  }
+  return { problems, duration: Math.round(duration * 1000) / 1000, words: words.length };
+}
+

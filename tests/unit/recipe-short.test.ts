@@ -220,7 +220,8 @@ describe('recipe.short', () => {
     const capClip = clip(p, 'captions');
     // keywords (numbers) come back marked on the spoken cues: "*Second*, ten minutes" → emphasis
     const second = p.data.cues!.find((q) => q.clip === 'captions' && q.text.startsWith('*Second*,'))!;
-    expect(capClip.at + second.at).toBe(Math.round(SCRIPT.split(' ').indexOf('Second,') * 0.4 * 30));
+    // (the cue appears CUE_TIMING.lead = 0.05 s before the word is heard)
+    expect(capClip.at + second.at).toBe(Math.floor((SCRIPT.split(' ').indexOf('Second,') * 0.4 - 0.05) * 30));
     assertLayout(p);
     await assertClean(p);
     await expect(p.edit({ op: 'recipe.short', script: SCRIPT, comp: 'main', vo: 'vo.wav', voice: true })).rejects.toMatchObject({ code: 'E_ARG' });
@@ -232,7 +233,7 @@ describe('recipe.short', () => {
     await r.edit({ op: 'audio.speak', text: SCRIPT, id: 'line1' });
     await r.edit({ op: 'recipe.short', script: SCRIPT, vo: 'line1', music: false });
     const s2 = r.data.cues!.find((q) => q.clip === 'captions' && q.text.startsWith('*Second*,'))!;
-    expect(clip(r, 'captions').at + s2.at).toBe(Math.round(SCRIPT.split(' ').indexOf('Second,') * 0.4 * 30));
+    expect(clip(r, 'captions').at + s2.at).toBe(Math.floor((SCRIPT.split(' ').indexOf('Second,') * 0.4 - 0.05) * 30));
     await assertClean(r);
   });
 });

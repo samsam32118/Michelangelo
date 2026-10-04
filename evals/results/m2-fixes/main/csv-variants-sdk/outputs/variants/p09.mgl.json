@@ -1,0 +1,16 @@
+{"michelangelo": 1,
+"project": {"name": "Product promo"},
+"comps": [
+{"id": "main", "size": [1080, 1080], "fps": 30, "length": 90}
+],
+"tracks": [
+{"id": "BG", "comp": "main"},
+{"id": "T1", "comp": "main"},
+{"id": "T2", "comp": "main"}
+],
+"clips": [
+{"id": "bg", "track": "BG", "at": 0, "len": 90, "color": "#5e2440"},
+{"id": "name", "track": "T1", "at": 0, "len": 90, "text": "Iris Vase", "style": {"size": 110, "base": "title"}, "y": 420},
+{"id": "price", "track": "T2", "at": 0, "len": 90, "text": "$44.00", "style": {"size": 90, "base": "subtitle"}, "y": 660}
+]
+}

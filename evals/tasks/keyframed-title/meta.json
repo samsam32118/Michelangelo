@@ -1,0 +1,20 @@
+{
+  "id": "keyframed-title",
+  "tags": [
+    "motion"
+  ],
+  "timeout_min": 15,
+  "expects_weak": false,
+  "fixtures": [
+    "title.mgl.json (one 3 s text clip, centred)"
+  ],
+  "deliverables": [
+    "*.png"
+  ],
+  "library_only": false,
+  "checks": [
+    "[lib] x keyframes start off-screen-left and end at centre by frame 15 with an out easing",
+    "[lib] opacity reaches 0 at the last frame (after holding at 1)",
+    "stills: at 0.25 s the text is left of centre, at 1.5 s centred, on the last frame no text"
+  ]
+}

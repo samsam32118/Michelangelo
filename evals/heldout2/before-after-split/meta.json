@@ -1,0 +1,27 @@
+{
+  "id": "before-after-split",
+  "tags": [
+    "compositing",
+    "text",
+    "corporate"
+  ],
+  "timeout_min": 20,
+  "expects_weak": false,
+  "fixtures": [
+    "before.mp4 (testsrc2 1920x1080 30 fps 8 s, fully desaturated; camera audio = 440 Hz tone at -20 dBFS as a decoy)",
+    "after.mp4 (testsrc2 1920x1080 30 fps 8 s, saturation boosted; audio = flite speech, 8 s)"
+  ],
+  "checks": [
+    "out/split.mp4: 1920x1080 with audio, 8 s +/- 0.25, not black/static/silent",
+    "left half (below the label band) matches the centre crop of before.mp4 at 2/4/6 s (SSIM >= 0.7, better than squashed or letterboxed alternatives) and is grey",
+    "right half matches the centre crop of after.mp4 at 2/4/6 s (SSIM >= 0.7, better than alternatives) and is saturated",
+    "a near-white vertical divider 3-14 px wide around x = 960 at 2/4/6 s",
+    "label graphics in the top band of both halves at 2/4/6 s",
+    "audio is after.mp4's speech (envelope correlation >= 0.8), the 440 Hz decoy is > 20 dB down",
+    "inputs unchanged",
+    "[lib] split.mgl.json validates, 1920x1080, uses before.mp4 and after.mp4; text clips BEFORE and AFTER in the project"
+  ],
+  "deliverables": [
+    "out/split.mp4"
+  ]
+}

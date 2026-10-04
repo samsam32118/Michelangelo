@@ -1,0 +1,38 @@
+{
+  "compilerOptions": {
+    "target": "ES2023",
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "strict": true,
+    "noUncheckedIndexedAccess": false,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "resolveJsonModule": true,
+    "declaration": true,
+    "sourceMap": true,
+    "outDir": "dist",
+    "verbatimModuleSyntax": false,
+    "allowImportingTsExtensions": false,
+    "types": [
+      "node"
+    ],
+    "paths": {
+      "michelangelo/plugin": [
+        "./src/plugin/api.ts"
+      ],
+      "michelangelo/testing": [
+        "./src/plugin/testing.ts"
+      ],
+      "michelangelo": [
+        "./src/sdk/index.ts"
+      ]
+    }
+  },
+  "include": [
+    "src",
+    "tests",
+    "scripts",
+    "evals/lib",
+    "examples"
+  ]
+}

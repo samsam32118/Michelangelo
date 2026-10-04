@@ -1,0 +1,36 @@
+{"michelangelo": 1,
+"assets": [
+{"id": "beat", "src": "beat.wav"},
+{"id": "photo1-png", "src": "photos/photo1.png"},
+{"id": "photo2-png", "src": "photos/photo2.png"},
+{"id": "photo3-png", "src": "photos/photo3.png"},
+{"id": "photo4-png", "src": "photos/photo4.png"},
+{"id": "photo5-png", "src": "photos/photo5.png"},
+{"id": "photo6-png", "src": "photos/photo6.png"},
+{"id": "photo7-png", "src": "photos/photo7.png"},
+{"id": "photo8-png", "src": "photos/photo8.png"}
+],
+"comps": [
+{"id": "main", "size": [1080, 1080], "fps": 30}
+],
+"tracks": [
+{"id": "V1", "comp": "main"},
+{"id": "T1", "comp": "main"},
+{"id": "A1", "comp": "main", "audio": true, "bus": "dialogue"},
+{"id": "A2", "comp": "main", "audio": true, "bus": "music"}
+],
+"clips": [
+{"id": "photo1", "track": "V1", "at": 0, "len": 15, "asset": "photo1-png", "fit": "cover"},
+{"id": "photo2", "track": "V1", "at": 15, "len": 15, "asset": "photo2-png", "fit": "cover"},
+{"id": "photo3", "track": "V1", "at": 30, "len": 15, "asset": "photo3-png", "fit": "cover"},
+{"id": "photo4", "track": "V1", "at": 45, "len": 15, "asset": "photo4-png", "fit": "cover"},
+{"id": "photo5", "track": "V1", "at": 60, "len": 15, "asset": "photo5-png", "fit": "cover"},
+{"id": "photo6", "track": "V1", "at": 75, "len": 15, "asset": "photo6-png", "fit": "cover"},
+{"id": "photo7", "track": "V1", "at": 90, "len": 15, "asset": "photo7-png", "fit": "cover"},
+{"id": "photo8", "track": "V1", "at": 105, "len": 30, "asset": "photo8-png", "fit": "cover"},
+{"id": "music", "track": "A1", "at": 0, "len": 135, "asset": "beat", "in": 15, "clock": 15}
+],
+"buses": [
+{"id": "master", "loudness": {"lufs": -16, "peak": -1}}
+]
+}

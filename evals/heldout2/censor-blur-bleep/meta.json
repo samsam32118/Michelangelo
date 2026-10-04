@@ -1,0 +1,26 @@
+{
+  "id": "censor-blur-bleep",
+  "tags": [
+    "effects",
+    "masks",
+    "audio",
+    "social"
+  ],
+  "timeout_min": 20,
+  "expects_weak": false,
+  "fixtures": [
+    "street.mp4 (testsrc2 1920x1080 30 fps 8 s with a static white name tag x 120-520, y 820-980 carrying black text; AAC flite speech with a separate word spoken at 3.25 s)"
+  ],
+  "checks": [
+    "out/censored.mp4: 1920x1080 with audio, 8 s +/- 0.15, not black/static/silent",
+    "name tag obscured at 0.2 / 4 / 7.8 s: the tag's fine detail no longer matches the source text (high-pass correlation < 0.35 or detail < 20%), mean brightness within 0.2 of the source's (blurred, not blacked out)",
+    "picture outside the tag unchanged (SSIM >= 0.9 at 1 / 4 / 7 s)",
+    "3.25-3.75 s: 1 kHz tone present and the original speech gone (least-squares gain vs the source < 0.25)",
+    "elsewhere the speech is unchanged (correlation >= 0.9, gain 0.7-1.4 over 0.4-3.0 s and 4.0-7.5 s) and there is no tone",
+    "input unchanged",
+    "[lib] censored.mgl.json validates, 1920x1080, uses street.mp4"
+  ],
+  "deliverables": [
+    "out/censored.mp4"
+  ]
+}

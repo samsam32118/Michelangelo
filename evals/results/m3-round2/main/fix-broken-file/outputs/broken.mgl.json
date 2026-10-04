@@ -1,0 +1,24 @@
+{"michelangelo": 1,
+"project": {"name": "Broken edit"},
+"assets": [
+{"id": "beach-mp4", "src": "media/beach.mp4"},
+{"id": "city-mp4", "src": "media/city.mp4"}
+],
+"comps": [
+{"id": "main", "size": [1280, 720], "fps": 30, "length": 300}
+],
+"tracks": [
+{"id": "V1", "comp": "main"},
+{"id": "V2", "comp": "main"},
+{"id": "T1", "comp": "main"},
+{"id": "V3", "comp": "main"}
+],
+"clips": [
+{"id": "shot1", "track": "V1", "at": 0, "len": 100, "asset": "beach-mp4"},
+{"id": "shot2", "track": "V1", "at": 100, "len": 110, "asset": "city-mp4", "in": 30},
+{"id": "shot3", "track": "V1", "at": 210, "len": 90, "asset": "beach-mp4", "in": 150},
+{"id": "overlay", "track": "V2", "at": 30, "len": 150, "color": "#ff6600", "opacity": 0.8, "scale": 0.3, "x": 1100, "y": 600},
+{"id": "title", "track": "T1", "at": 0, "len": 90, "text": "Summer", "style": "title"},
+{"id": "credit", "track": "V3", "at": 240, "len": 60, "text": "Shot on location", "style": "label", "y": 650}
+]
+}

@@ -1,0 +1,21 @@
+{
+  "id": "green-screen",
+  "tags": [
+    "effects",
+    "weak"
+  ],
+  "timeout_min": 20,
+  "expects_weak": true,
+  "fixtures": [
+    "presenter.mp4 (a magenta disc moving over #00ff00), city.mp4 (testsrc2)"
+  ],
+  "deliverables": [
+    "*.png"
+  ],
+  "library_only": false,
+  "checks": [
+    "still: no pixel with dominant green (g > r+60 and g > b+60)",
+    "the disc region is magenta; the former green region matches city.mp4",
+    "[lib] a project uses presenter.mp4 and city.mp4 and keys the presenter (a chroma-key fx)"
+  ]
+}

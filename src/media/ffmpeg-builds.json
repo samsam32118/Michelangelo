@@ -1,0 +1,22 @@
+{
+  "version": "6.0.1",
+  "note": "Static GPL builds by John Van Sickle (https://johnvansickle.com/ffmpeg/), pinned to immutable old-releases files. Downloaded at run time, never bundled. darwin and win32 are not pinned: install ffmpeg >= 6 there (brew install ffmpeg / winget install ffmpeg) or set MGL_FFMPEG.",
+  "platforms": {
+    "linux-x64": {
+      "url": "https://johnvansickle.com/ffmpeg/old-releases/ffmpeg-6.0.1-amd64-static.tar.xz",
+      "sha256": "28268bf402f1083833ea269331587f60a242848880073be8016501d864bd07a5",
+      "size": 41164188,
+      "archive": "tar.xz",
+      "dir": "ffmpeg-6.0.1-amd64-static",
+      "licence": "GPL-3.0-or-later (static build by John Van Sickle, includes x264/x265)"
+    },
+    "linux-arm64": {
+      "url": "https://johnvansickle.com/ffmpeg/old-releases/ffmpeg-6.0.1-arm64-static.tar.xz",
+      "sha256": "7dbd8e2f47bd83de591b9d6ea70e67d32d9aa97e7d47ae402b60c2fe3fd4d0ab",
+      "size": 18994172,
+      "archive": "tar.xz",
+      "dir": "ffmpeg-6.0.1-arm64-static",
+      "licence": "GPL-3.0-or-later (static build by John Van Sickle, includes x264/x265)"
+    }
+  }
+}

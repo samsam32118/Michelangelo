@@ -1,0 +1,25 @@
+{
+  "id": "stabilize-handheld",
+  "tags": [
+    "effects",
+    "tracking",
+    "weak"
+  ],
+  "timeout_min": 25,
+  "expects_weak": true,
+  "fixtures": [
+    "handheld.mp4 (1920x1080 30 fps 8 s: a static textured scene with a magenta and a cyan marker and a yellow ball moving left to right, viewed through a crop window that shakes by up to +-37 px horizontally and +-21 px vertically at 1-3 Hz)"
+  ],
+  "checks": [
+    "out/stable.mp4: 1920x1080, 8 s +/- 0.15, not black/static",
+    "both scene markers visible in >= 95% of frames",
+    "shake removed: mean frame-to-frame movement of the magenta marker <= 35% of handheld.mp4's",
+    "the ball still travels >= 800 px left to right (not a frozen frame)",
+    "zoom between 0.95x and 1.3x (marker spacing vs the scene) and no black edges (<= 1% near-black pixels in the outer 3% border)",
+    "input unchanged",
+    "[lib] stable.mgl.json validates, 1920x1080, uses handheld.mp4"
+  ],
+  "deliverables": [
+    "out/stable.mp4"
+  ]
+}

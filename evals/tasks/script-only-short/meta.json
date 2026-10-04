@@ -1,0 +1,29 @@
+{
+  "id": "script-only-short",
+  "tags": [
+    "core",
+    "text",
+    "motion",
+    "audio",
+    "render",
+    "weak"
+  ],
+  "timeout_min": 30,
+  "expects_weak": true,
+  "fixtures": [
+    "script.txt (6 sentences, nothing else: no footage, no music)"
+  ],
+  "deliverables": [
+    "out/short.mp4"
+  ],
+  "library_only": false,
+  "checks": [
+    "out/short.mp4: 1080x1920, H.264 + AAC, 20-30 s",
+    "motion throughout: the picture changes within every 2 s window; not black",
+    "sound: not silent, integrated loudness -16..-12 LUFS",
+    "music throughout: no silence longer than 1.5 s (-45 dB)",
+    "on-screen text in >= 80 % of sampled frames (4 fps), and in the hook (0.5 s and 1.0 s)",
+    "the text follows the script: >= 6 distinct on-screen text states (one per sentence; OCR-free)",
+    "[lib] a valid 1080x1920 project whose text clips or cues cover >= 80 % of the script words"
+  ]
+}

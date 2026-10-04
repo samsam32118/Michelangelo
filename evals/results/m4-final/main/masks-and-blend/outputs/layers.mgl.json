@@ -1,0 +1,21 @@
+{"michelangelo": 1,
+"project": {"name": "Layers"},
+"assets": [
+{"id": "base-mp4", "src": "media/base.mp4"},
+{"id": "bars-mp4", "src": "media/bars.mp4"},
+{"id": "leak-mp4", "src": "media/leak.mp4"}
+],
+"comps": [
+{"id": "main", "size": [1280, 720], "fps": 30, "length": 120}
+],
+"tracks": [
+{"id": "V1", "comp": "main"},
+{"id": "V2", "comp": "main"},
+{"id": "V3", "comp": "main"}
+],
+"clips": [
+{"id": "base", "track": "V1", "at": 0, "len": 120, "asset": "base-mp4"},
+{"id": "top", "track": "V2", "at": 0, "len": 120, "asset": "bars-mp4", "masks": [{"shape": "ellipse", "box": [320, 160, 640, 400], "feather": 60}]},
+{"id": "leak", "track": "V3", "at": 0, "len": 120, "asset": "leak-mp4", "blend": "screen", "note": "light leak"}
+]
+}

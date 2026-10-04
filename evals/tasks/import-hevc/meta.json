@@ -1,0 +1,21 @@
+{
+  "id": "import-hevc",
+  "tags": [
+    "media"
+  ],
+  "timeout_min": 15,
+  "expects_weak": false,
+  "fixtures": [
+    "phone.mov (HEVC/x265 1920x1080 with rotate=90 side data, testsrc2 with a red marker top-left)"
+  ],
+  "deliverables": [
+    "out/day1.mp4"
+  ],
+  "library_only": false,
+  "checks": [
+    "out/day1.mp4 H.264 1080x1920, 6 s +-1 frame, not empty",
+    "rotation honoured: the red marker is in the same corner as in the displayed source",
+    "first frame matches the source at 2 s (SSIM > 0.7 at 540x960)",
+    "[lib] a 1080x1920 project plays phone.mov from 2 s with a \"Day 1\" text clip"
+  ]
+}

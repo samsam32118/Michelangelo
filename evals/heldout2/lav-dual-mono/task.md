@@ -1,0 +1,1 @@
+In `interview.mp4` the lavalier mic is only on the left channel and the right channel is the noisy camera mic. Make the audio the lav on both channels (centred, dual mono), drop the camera mic completely, and bring the loudness to about -16 LUFS. Don't touch the picture. Save the project as `fixed.mgl.json` and render `out/fixed.mp4` with stereo audio.

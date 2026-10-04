@@ -1,0 +1,19 @@
+{
+  "id": "fix-broken-file",
+  "tags": [
+    "robustness"
+  ],
+  "timeout_min": 10,
+  "expects_weak": false,
+  "fixtures": [
+    "broken.mgl.json (a trailing comma, an unknown key \"opactiy\", a clip referring to missing track \"V3\", an overlap on V1)"
+  ],
+  "deliverables": [
+    "broken.mgl.json"
+  ],
+  "library_only": true,
+  "checks": [
+    "[lib] file loads and check passes with no errors (keys, references, overlaps)",
+    "[lib] clip count unchanged (same ids, credit kept); the opacity value preserved as \"opacity\""
+  ]
+}

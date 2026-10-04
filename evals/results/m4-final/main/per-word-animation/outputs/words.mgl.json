@@ -1,0 +1,15 @@
+{"michelangelo": 1,
+"project": {"platform": "shorts"},
+"comps": [
+{"id": "main", "size": [1080, 1920], "fps": 30, "bg": "#111111"}
+],
+"tracks": [
+{"id": "V1", "comp": "main"},
+{"id": "T1", "comp": "main"},
+{"id": "A1", "comp": "main", "audio": true, "bus": "dialogue"},
+{"id": "A2", "comp": "main", "audio": true, "bus": "music"}
+],
+"clips": [
+{"id": "words", "track": "T1", "at": 0, "len": 90, "text": "Make every second count", "style": "title", "animate": {"in": "pop", "by": "word", "stagger": 15, "len": 12}}
+]
+}

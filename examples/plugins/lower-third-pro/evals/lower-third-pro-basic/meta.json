@@ -1,0 +1,8 @@
+{
+  "id": "lower-third-pro-basic",
+  "tags": ["plugins", "template", "command"],
+  "timeout_min": 15,
+  "expects_weak": false,
+  "fixtures": ["demo.mgl.json (1080x1920 testsrc2 clip)", "plugins/lower-third-pro"],
+  "checks": ["clips tagged template:lower-third-pro from 1 s to 5 s with the texts 'Grace Hopper' and 'Rear Admiral'", "the plate is on the right half and above the bottom 22% of the frame", "out/lt.png: plate pixels in the lower right"]
+}

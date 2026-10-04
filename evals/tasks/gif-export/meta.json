@@ -1,0 +1,21 @@
+{
+  "id": "gif-export",
+  "tags": [
+    "export"
+  ],
+  "timeout_min": 10,
+  "expects_weak": false,
+  "fixtures": [
+    "demo.mgl.json (animated text over testsrc2, 10 s)"
+  ],
+  "deliverables": [
+    "out/clip.gif"
+  ],
+  "library_only": false,
+  "checks": [
+    "out/clip.gif: width 480, 3 s +-0.2, loops, < 5 MB, animated",
+    "first frame matches the project at 3 s (SSIM > 0.6 at 480 px)",
+    "the GIF shows a label in the top band that moves right between 3 s and 5 s (not the bare background)",
+    "[lib] the GIF shows the project (its moving label) at 3 s and 5 s, like a render of demo.mgl.json"
+  ]
+}

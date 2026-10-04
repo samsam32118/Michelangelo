@@ -1,0 +1,15 @@
+{"michelangelo": 1,
+"project": {"name": "Posterize demo", "plugins": {"posterize": "^0.1.0"}},
+"assets": [
+{"id": "src-mp4", "src": "media/src.mp4"}
+],
+"comps": [
+{"id": "main", "size": [1280, 720], "fps": 30, "length": 90}
+],
+"tracks": [
+{"id": "V1", "comp": "main"}
+],
+"clips": [
+{"id": "shot", "track": "V1", "at": 0, "len": 90, "asset": "src-mp4", "fx": [{"type": "posterize", "levels": 3}]}
+]
+}

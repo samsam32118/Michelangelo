@@ -1,0 +1,32 @@
+{
+  "id": "talking-head-youtube",
+  "tags": [
+    "editing",
+    "audio",
+    "captions",
+    "templates",
+    "chapters",
+    "weak"
+  ],
+  "timeout_min": 35,
+  "expects_weak": true,
+  "fixtures": [
+    "interview.mp4 (60 s 960x540: a soft 'head' over a gradient; flite speech, 10 phrases + 3 fillers, pauses up to 3 s)",
+    "notes.txt (speaker name and role; 4 topics with their times in interview.mp4)"
+  ],
+  "deliverables": [
+    "out/final.mp4",
+    "out/chapters.txt"
+  ],
+  "library_only": false,
+  "checks": [
+    "out/final.mp4: H.264 + AAC, 16:9, at most 51.2 s (dead air removed; an intro of up to 5 s allowed)",
+    "all 10 phrases kept, in order (energy envelope cross-correlation)",
+    "no silence longer than 0.8 s once the speech starts (-40 dB)",
+    "burned captions: text in the bottom third at >= 80 % of the phrase midpoints after 10 s",
+    "lower third: left-aligned text in the lower part of the frame within the first 10 s",
+    "intro title: text in the upper or middle of the frame within the first 4 s",
+    "chapters (out/chapters.txt or chapter metadata): each topic of notes.txt within 2 s of where it starts in the output",
+    "[lib] a valid project cuts interview.mp4 (>= 5 clips), with caption cues, a name text clip and a marker per chapter"
+  ]
+}

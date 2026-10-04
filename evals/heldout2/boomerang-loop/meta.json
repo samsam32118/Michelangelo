@@ -1,0 +1,25 @@
+{
+  "id": "boomerang-loop",
+  "tags": [
+    "editing",
+    "speed",
+    "social",
+    "weak"
+  ],
+  "timeout_min": 20,
+  "expects_weak": true,
+  "fixtures": [
+    "jump.mp4 (1080x1080 30 fps 4 s frame-counter video: every frame carries its index as a binary code band at the top)"
+  ],
+  "checks": [
+    "out/boomerang.mp4: 1080x1080, ~30 fps, 9 s +/- 0.2, not black/static",
+    ">= 95% of frames decode to a source frame index, all within source frames 28-76 (1.0-2.5 s)",
+    "the index sequence is exactly 6 monotone runs: up, down, up, down, up, down, each spanning <= 33 to >= 71",
+    "normal speed: median step between frames <= 1.5 source frames",
+    "input unchanged",
+    "[lib] boomerang.mgl.json validates, 1080x1080, uses jump.mp4"
+  ],
+  "deliverables": [
+    "out/boomerang.mp4"
+  ]
+}

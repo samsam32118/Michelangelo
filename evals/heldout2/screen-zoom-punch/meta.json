@@ -1,0 +1,26 @@
+{
+  "id": "screen-zoom-punch",
+  "tags": [
+    "motion",
+    "keyframes",
+    "tutorial",
+    "youtube"
+  ],
+  "timeout_min": 15,
+  "expects_weak": false,
+  "fixtures": [
+    "screencast.mp4 (1920x1080 30 fps 9 s synthetic app UI with a detailed settings panel in the top-right quarter, moving cursor and widgets; flite narration)"
+  ],
+  "checks": [
+    "out/zoom.mp4: 1920x1080 with audio, 9 s +/- 0.15, not black/static/silent",
+    "full frame at 1.5 s and 7.5 s (SSIM >= 0.85 vs screencast.mp4)",
+    "at 4.0 / 4.75 / 5.5 s the frame is the top-right quarter scaled 2x (SSIM >= 0.8 and above the full-frame SSIM; mean abs error <= 10 and far below the full frame's)",
+    "smooth zooms: >= 2 sampled frames (every 0.1 s) in 2.9-3.9 s and in 5.9-6.9 s match an intermediate zoom 1.1x-1.9x towards the quarter",
+    "audio unchanged (envelope correlation >= 0.9)",
+    "input unchanged",
+    "[lib] zoom.mgl.json validates, 1920x1080, uses screencast.mp4, with keyframed scale/position on some clip"
+  ],
+  "deliverables": [
+    "out/zoom.mp4"
+  ]
+}

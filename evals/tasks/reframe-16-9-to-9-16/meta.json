@@ -1,0 +1,21 @@
+{
+  "id": "reframe-16-9-to-9-16",
+  "tags": [
+    "reframe"
+  ],
+  "timeout_min": 20,
+  "expects_weak": false,
+  "fixtures": [
+    "wide.mgl.json (1920x1080; video of a white circle moving left->right on dark bg, title text)",
+    "circle.mp4"
+  ],
+  "deliverables": [
+    "out/tall.mp4"
+  ],
+  "library_only": false,
+  "checks": [
+    "[lib] tall.mgl.json comp 1080x1920 (valid, keeps the title); wide.mgl.json unchanged",
+    "out/tall.mp4 1080x1920; the white circle is fully inside the frame in 5 sampled frames",
+    "title fully inside the 9:16 Shorts safe zone"
+  ]
+}

@@ -1,0 +1,21 @@
+{"michelangelo": 1,
+"project": {"platform": "youtube"},
+"assets": [
+{"id": "screen-mp4", "src": "screen.mp4"},
+{"id": "cam-mp4", "src": "cam.mp4"}
+],
+"comps": [
+{"id": "main", "size": [1920, 1080], "fps": 30}
+],
+"tracks": [
+{"id": "V1", "comp": "main"},
+{"id": "V2", "comp": "main"},
+{"id": "T1", "comp": "main"},
+{"id": "A1", "comp": "main", "audio": true, "bus": "dialogue"},
+{"id": "A2", "comp": "main", "audio": true, "bus": "music"}
+],
+"clips": [
+{"id": "screen", "track": "V1", "at": 0, "len": 180, "asset": "screen-mp4", "fit": "cover"},
+{"id": "cam", "track": "V2", "at": 0, "len": 180, "asset": "cam-mp4", "fit": "cover", "x": 1632, "y": 897, "scale": 0.25, "fx": [{"type": "shadow", "x": 0, "y": 10, "blur": 36, "opacity": 0.5}], "masks": [{"shape": "rect", "box": [1392, 762, 480, 270], "radius": 24}]}
+]
+}

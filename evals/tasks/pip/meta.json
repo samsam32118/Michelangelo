@@ -1,0 +1,21 @@
+{
+  "id": "pip",
+  "tags": [
+    "compositing"
+  ],
+  "timeout_min": 15,
+  "expects_weak": false,
+  "fixtures": [
+    "screen.mp4 (testsrc2), cam.mp4 (smptebars)"
+  ],
+  "deliverables": [
+    "out/pip.mp4"
+  ],
+  "library_only": false,
+  "checks": [
+    "at 2 s: the bottom-right region shows smptebars, the rest testsrc2",
+    "PiP box width 480 +-20 px",
+    "corners of the PiP box show the background (rounded)",
+    "[lib] a 1920x1080 project uses screen.mp4 and cam.mp4, with the cam clip scaled and placed"
+  ]
+}

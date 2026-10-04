@@ -1,0 +1,2058 @@
+{
+ "label": "m2-fixes",
+ "set": "main",
+ "model": "claude-opus-5-5",
+ "date": "2026-10-04T04:29:39.767Z",
+ "dryRun": false,
+ "sandbox": false,
+ "isolation": "audit",
+ "packageVersion": "0.1.0",
+ "timeoutScale": 1,
+ "agentHome": "/tmp/mgl-eval-home-THwT1S",
+ "tasks": 30,
+ "passed": 27,
+ "successRate": 0.9,
+ "meanScore": 0.9556,
+ "meanTurns": 11.2,
+ "meanTokens": 425956,
+ "totalTokens": 12778687,
+ "totalOutputTokens": 80038,
+ "totalCostUsd": 9.38,
+ "meanWallSec": 51.5,
+ "timeouts": 0,
+ "bashTimeouts": 0,
+ "failedEdits": 0,
+ "permissionDenials": 38,
+ "violations": 0,
+ "fatalViolations": 0,
+ "violationFails": 0,
+ "meanBaselineScore": 0.0556,
+ "meanDeltaScore": 0.9,
+ "baselineTasks": 30,
+ "topErrors": [
+  [
+   "E_REF",
+   3
+  ],
+  [
+   "E_ARG",
+   1
+  ],
+  [
+   "E_USAGE",
+   1
+  ],
+  [
+   "E_UNKNOWN_KEY",
+   1
+  ],
+  [
+   "E_OVERLAP",
+   1
+  ]
+ ],
+ "topVerbs": [
+  [
+   "edit",
+   122
+  ],
+  [
+   "docs",
+   82
+  ],
+  [
+   "check",
+   55
+  ],
+  [
+   "render",
+   49
+  ],
+  [
+   "show",
+   38
+  ],
+  [
+   "look",
+   32
+  ],
+  [
+   "new",
+   15
+  ],
+  [
+   "plugin",
+   12
+  ]
+ ],
+ "results": [
+  {
+   "task": "beat-cut",
+   "pass": false,
+   "score": 0.3333,
+   "checks": [
+    {
+     "name": "cut times (frame-colour changes) within 2 frames of the beats 0.5, 1.0, ... 4.0 s; 1080x1080",
+     "pass": false,
+     "detail": "photo starts (frames) 0,15,30,45,60,75,90,105; expected 15,30,45,60,75,90,105,120"
+    },
+    {
+     "name": "8 distinct colours appear in order",
+     "pass": true,
+     "detail": "first frames 0,15,30,45,60,75,90,105"
+    },
+    {
+     "name": "the project (1080x1080, the 8 photos and beat.wav) starts each photo clip on its beat",
+     "pass": false,
+     "detail": "beat.mgl.json: photo clips start at 0,0.5,1,1.5,2,2.5,3,3.5 s (beat.mgl.json)"
+    }
+   ],
+   "metrics": {
+    "turns": 17,
+    "inputTokens": 28,
+    "outputTokens": 3545,
+    "cacheReadTokens": 608133,
+    "cacheCreationTokens": 25110,
+    "costUsd": 0.3946626,
+    "toolCalls": 15,
+    "toolCounts": {
+     "Skill": 1,
+     "Bash": 12,
+     "Write": 1,
+     "Read": 1
+    },
+    "bashTimeouts": 0,
+    "failedEdits": 0,
+    "permissionDenials": 2,
+    "errorCodes": {},
+    "verbs": {
+     "docs": 4,
+     "new": 1,
+     "edit": 10,
+     "show": 6,
+     "check": 1,
+     "look": 4,
+     "render": 1
+    },
+    "violations": [],
+    "fatalViolations": [],
+    "resultSubtype": "success",
+    "isError": false,
+    "apiMs": 45157,
+    "results": 1
+   },
+   "wallSec": 68.397,
+   "timedOut": false,
+   "dir": "/tmp/mgl-eval-beat-cut-z58yjc",
+   "timeoutMin": 20,
+   "expectsWeak": true,
+   "agentHome": "/tmp/mgl-eval-home-THwT1S",
+   "baselineScore": 0,
+   "exitCode": 0,
+   "outputs": 3,
+   "dirRemoved": true,
+   "deltaScore": 0.3333
+  },
+  {
+   "task": "captions-from-srt",
+   "pass": false,
+   "score": 0.6667,
+   "checks": [
+    {
+     "name": "project has 12 cues; each cue start/end within 1 frame of the SRT; texts unchanged",
+     "pass": false,
+     "detail": "12 cues; valid"
+    },
+    {
+     "name": "caption text box in the bottom third, white with a black outline",
+     "pass": true,
+     "detail": "bottom share 0.87 white 0.29 black 0.29; bottom share 0.96 white 0.29 black 0.29; bottom share 0.9 white 0.3 black 0.31"
+    },
+    {
+     "name": "out/draft.mp4 30 s +-0.2, glyph pixels in the bottom third at 3 cue midpoints and none at the gap; not empty; talk.mp4 unchanged",
+     "pass": true,
+     "detail": "30 s; bottom-third glyphs 0.057/0.0566/0.0504; gap 0.0008; luma 0.398/0.397/0.397/0.397/0.398, max frame diff 5.16"
+    }
+   ],
+   "metrics": {
+    "turns": 11,
+    "inputTokens": 20,
+    "outputTokens": 1592,
+    "cacheReadTokens": 406402,
+    "cacheCreationTokens": 20805,
+    "costUsd": 0.2808234,
+    "toolCalls": 9,
+    "toolCounts": {
+     "Skill": 1,
+     "Bash": 7,
+     "Read": 1
+    },
+    "bashTimeouts": 0,
+    "failedEdits": 0,
+    "permissionDenials": 1,
+    "errorCodes": {},
+    "verbs": {
+     "show": 2,
+     "docs": 4,
+     "edit": 5,
+     "check": 2,
+     "look": 1,
+     "render": 1
+    },
+    "violations": [],
+    "fatalViolations": [],
+    "resultSubtype": "success",
+    "isError": false,
+    "apiMs": 23085,
+    "results": 1
+   },
+   "wallSec": 45.739,
+   "timedOut": false,
+   "dir": "/tmp/mgl-eval-captions-from-srt-wo4bfc",
+   "timeoutMin": 15,
+   "expectsWeak": false,
+   "agentHome": "/tmp/mgl-eval-home-THwT1S",
+   "baselineScore": 0,
+   "exitCode": 0,
+   "outputs": 3,
+   "dirRemoved": true,
+   "deltaScore": 0.6667
+  },
+  {
+   "task": "captions-vtt-words",
+   "pass": true,
+   "score": 1,
+   "checks": [
+    {
+     "name": "cues carry word timings matching the VTT within 1 frame (texts unchanged)",
+     "pass": true,
+     "detail": "clip.mgl.json: 3 cues, word times 4/6/5"
+    },
+    {
+     "name": "out/still.png 1080x1920; the caption at 4.2 s shows 2 dominant text colours (highlighted word)",
+     "pass": true,
+     "detail": "clusters rgb(254,254,254) 0.78, rgb(253,210,0) 0.1"
+    }
+   ],
+   "metrics": {
+    "turns": 8,
+    "inputTokens": 12,
+    "outputTokens": 998,
+    "cacheReadTokens": 227281,
+    "cacheCreationTokens": 20590,
+    "costUsd": 0.2313522,
+    "toolCalls": 6,
+    "toolCounts": {
+     "Skill": 1,
+     "Bash": 4,
+     "Read": 1
+    },
+    "bashTimeouts": 0,
+    "failedEdits": 0,
+    "permissionDenials": 0,
+    "errorCodes": {},
+    "verbs": {
+     "docs": 3,
+     "edit": 1,
+     "show": 1,
+     "check": 1,
+     "render": 1
+    },
+    "violations": [],
+    "fatalViolations": [],
+    "resultSubtype": "success",
+    "isError": false,
+    "apiMs": 14772,
+    "results": 1
+   },
+   "wallSec": 22.697,
+   "timedOut": false,
+   "dir": "/tmp/mgl-eval-captions-vtt-words-ctDYNG",
+   "timeoutMin": 15,
+   "expectsWeak": false,
+   "agentHome": "/tmp/mgl-eval-home-THwT1S",
+   "baselineScore": 0,
+   "exitCode": 0,
+   "outputs": 3,
+   "dirRemoved": true,
+   "deltaScore": 1
+  },
+  {
+   "task": "color-match",
+   "pass": true,
+   "score": 1,
+   "checks": [
+    {
+     "name": "mean R/B ratio of the B still within 5 % of the A still",
+     "pass": true,
+     "detail": "out/shot-b.png: shot B R/B 0.988; out/shot-a.png: shot A R/B 0.988"
+    },
+    {
+     "name": "B keeps its source (shot B still referenced, visible; A untouched) and has a colour correction (fx)",
+     "pass": true,
+     "detail": "B clip \"b\" fx [{\"type\":\"color\",\"temperature\":-0.38}]"
+    },
+    {
+     "name": "a render of match.mgl.json: shot B (1 s into it) within 5 % of shot A in mean R/B, and still shot B",
+     "pass": true,
+     "detail": "rendered B/A R/B ratio 1; rendered B is shot B"
+    }
+   ],
+   "metrics": {
+    "turns": 17,
+    "inputTokens": 26,
+    "outputTokens": 4371,
+    "cacheReadTokens": 583226,
+    "cacheCreationTokens": 27634,
+    "costUsd": 0.42636419999999997,
+    "toolCalls": 15,
+    "toolCounts": {
+     "Skill": 1,
+     "Bash": 11,
+     "Write": 1,
+     "Read": 2
+    },
+    "bashTimeouts": 0,
+    "failedEdits": 0,
+    "permissionDenials": 2,
+    "errorCodes": {},
+    "verbs": {
+     "docs": 3,
+     "edit": 6,
+     "render": 8,
+     "check": 1
+    },
+    "violations": [],
+    "fatalViolations": [],
+    "resultSubtype": "success",
+    "isError": false,
+    "apiMs": 52729,
+    "results": 1
+   },
+   "wallSec": 71.174,
+   "timedOut": false,
+   "dir": "/tmp/mgl-eval-color-match-BUEnYA",
+   "timeoutMin": 20,
+   "expectsWeak": true,
+   "agentHome": "/tmp/mgl-eval-home-THwT1S",
+   "baselineScore": 0,
+   "exitCode": 0,
+   "outputs": 3,
+   "dirRemoved": true,
+   "deltaScore": 1
+  },
+  {
+   "task": "csv-variants-sdk",
+   "pass": true,
+   "score": 1,
+   "checks": [
+    {
+     "name": "10 PNGs out/<id>.png at the comp size (1080x1080)",
+     "pass": true,
+     "detail": "10/10 present at 1080x1080"
+    },
+    {
+     "name": "background colour of each matches its CSV colour (delta E < 5)",
+     "pass": true,
+     "detail": "delta E 0 0 0 0 0 0 0 0 0 0"
+    },
+    {
+     "name": "made with the library: a script importing michelangelo, or 10 valid variant projects each with its name and price",
+     "pass": true,
+     "detail": "scripts: make-variants.mjs; variant projects with name and price: 10/10"
+    },
+    {
+     "name": "variant projects carry each product's price and name",
+     "pass": true,
+     "detail": "10/10"
+    },
+    {
+     "name": "name glyph region differs between variants (and has text)",
+     "pass": true,
+     "detail": "text px 31435..56430, min pairwise XOR/union 0.166"
+    },
+    {
+     "name": "price region has text in each variant and differs between rows with different prices",
+     "pass": true,
+     "detail": "price px 8936..10795, min pairwise XOR/union 0.158"
+    }
+   ],
+   "metrics": {
+    "turns": 8,
+    "inputTokens": 14,
+    "outputTokens": 1745,
+    "cacheReadTokens": 277136,
+    "cacheCreationTokens": 22682,
+    "costUsd": 0.2730232,
+    "toolCalls": 7,
+    "toolCounts": {
+     "Bash": 4,
+     "Write": 1,
+     "Read": 2
+    },
+    "bashTimeouts": 0,
+    "failedEdits": 0,
+    "permissionDenials": 0,
+    "errorCodes": {},
+    "verbs": {
+     "docs": 4
+    },
+    "violations": [],
+    "fatalViolations": [],
+    "resultSubtype": "success",
+    "isError": false,
+    "apiMs": 22330,
+    "results": 1
+   },
+   "wallSec": 29.4,
+   "timedOut": false,
+   "dir": "/tmp/mgl-eval-csv-variants-sdk-57ypKd",
+   "timeoutMin": 20,
+   "expectsWeak": false,
+   "agentHome": "/tmp/mgl-eval-home-THwT1S",
+   "baselineScore": 0,
+   "exitCode": 0,
+   "outputs": 23,
+   "dirRemoved": true,
+   "deltaScore": 1
+  },
+  {
+   "task": "cta-end",
+   "pass": true,
+   "score": 1,
+   "checks": [
+    {
+     "name": "a CTA clip (\"Subscribe\") spans 12-15 s; project valid",
+     "pass": true,
+     "detail": "\"Subscribe\" 12-15; valid"
+    },
+    {
+     "name": "its rendered box at 13.5 s is inside the Shorts safe zone",
+     "pass": true,
+     "detail": "CTA px 0.0048 of frame, box 169,639,260,21, safe 27,77,448,691 (540x960)"
+    },
+    {
+     "name": "scale or animate keyframes with a back/bounce/elastic easing, or a pop/bounce preset",
+     "pass": true,
+     "detail": "{\"easings\":[],\"presets\":[\"bounce\"],\"transitions\":[]}"
+    },
+    {
+     "name": "draft mp4 rendered, 15 s",
+     "pass": true,
+     "detail": "out/vlog-draft.mp4: 15 s; luma 0.267/0.267/0.247/0.267/0.27, max frame diff 10.11"
+    }
+   ],
+   "metrics": {
+    "turns": 11,
+    "inputTokens": 20,
+    "outputTokens": 2035,
+    "cacheReadTokens": 395408,
+    "cacheCreationTokens": 19040,
+    "costUsd": 0.2733476,
+    "toolCalls": 9,
+    "toolCounts": {
+     "Skill": 1,
+     "Bash": 7,
+     "Read": 1
+    },
+    "bashTimeouts": 0,
+    "failedEdits": 0,
+    "permissionDenials": 0,
+    "errorCodes": {
+     "E_REF": 1,
+     "E_ARG": 1
+    },
+    "verbs": {
+     "show": 1,
+     "docs": 4,
+     "edit": 8,
+     "check": 3,
+     "look": 3,
+     "render": 1
+    },
+    "violations": [],
+    "fatalViolations": [],
+    "resultSubtype": "success",
+    "isError": false,
+    "apiMs": 30909,
+    "results": 1
+   },
+   "wallSec": 49.905,
+   "timedOut": false,
+   "dir": "/tmp/mgl-eval-cta-end-H0zh7i",
+   "timeoutMin": 15,
+   "expectsWeak": false,
+   "agentHome": "/tmp/mgl-eval-home-THwT1S",
+   "baselineScore": 0,
+   "exitCode": 0,
+   "outputs": 2,
+   "dirRemoved": true,
+   "deltaScore": 1
+  },
+  {
+   "task": "cut-silences",
+   "pass": true,
+   "score": 1,
+   "checks": [
+    {
+     "name": "out/tight.wav duration = original minus removed silences (+-0.48 s); tight.mgl.json valid; interview.wav unchanged",
+     "pass": true,
+     "detail": "19.97 s (expected 19.8); loudness -17.2 LUFS; project valid"
+    },
+    {
+     "name": "silencedetect -40 dB d=0.6 finds no silence",
+     "pass": true,
+     "detail": "none"
+    },
+    {
+     "name": "all 8 phrases present, in order (energy envelope cross-correlation)",
+     "pass": true,
+     "detail": "8 segments, corr 0.96 0.96 0.94 0.99 0.97 0.98 0.97 1"
+    }
+   ],
+   "metrics": {
+    "turns": 6,
+    "inputTokens": 12,
+    "outputTokens": 1231,
+    "cacheReadTokens": 224180,
+    "cacheCreationTokens": 16695,
+    "costUsd": 0.20421099999999998,
+    "toolCalls": 5,
+    "toolCounts": {
+     "Bash": 5
+    },
+    "bashTimeouts": 0,
+    "failedEdits": 0,
+    "permissionDenials": 0,
+    "errorCodes": {},
+    "verbs": {
+     "docs": 2,
+     "new": 2,
+     "edit": 2,
+     "show": 2,
+     "check": 1,
+     "render": 1
+    },
+    "violations": [],
+    "fatalViolations": [],
+    "resultSubtype": "success",
+    "isError": false,
+    "apiMs": 18235,
+    "results": 1
+   },
+   "wallSec": 28.477,
+   "timedOut": false,
+   "dir": "/tmp/mgl-eval-cut-silences-8AqdyY",
+   "timeoutMin": 20,
+   "expectsWeak": false,
+   "agentHome": "/tmp/mgl-eval-home-THwT1S",
+   "baselineScore": 0,
+   "exitCode": 0,
+   "outputs": 2,
+   "dirRemoved": true,
+   "deltaScore": 1
+  },
+  {
+   "task": "duck-music-under-vo",
+   "pass": true,
+   "score": 1,
+   "checks": [
+    {
+     "name": "out/pod.wav 30 s +-0.1, not silent",
+     "pass": true,
+     "detail": "30 s; loudness -13.6 LUFS"
+    },
+    {
+     "name": "music level at 1-4 s and 25-29 s within +-1.5 dB of the original bed; not muted during 8-18 s (>= -30 dB)",
+     "pass": true,
+     "detail": "vs bed: 0 dB, 0 dB; under voice -12.24 dB"
+    },
+    {
+     "name": "music during 8-18 s is >= 8 dB below its level at 1-4 s and 25-29 s",
+     "pass": true,
+     "detail": "ducked by 12.24 dB"
+    },
+    {
+     "name": "speech present (300-3400 Hz energy) at 10 s",
+     "pass": true,
+     "detail": "speech band -12.8 dB (bed -37.5 dB)"
+    },
+    {
+     "name": "the project ducks the bed: a bus duck, gain keyframes or a lowered part of the bed clip",
+     "pass": true,
+     "detail": "pod.mgl.json"
+    }
+   ],
+   "metrics": {
+    "turns": 18,
+    "inputTokens": 34,
+    "outputTokens": 6052,
+    "cacheReadTokens": 747128,
+    "cacheCreationTokens": 27699,
+    "costUsd": 0.49336860000000005,
+    "toolCalls": 17,
+    "toolCounts": {
+     "Bash": 14,
+     "Write": 3
+    },
+    "bashTimeouts": 0,
+    "failedEdits": 0,
+    "permissionDenials": 5,
+    "errorCodes": {},
+    "verbs": {
+     "docs": 2,
+     "edit": 3,
+     "check": 1,
+     "render": 7,
+     "look": 1
+    },
+    "violations": [],
+    "fatalViolations": [],
+    "resultSubtype": "success",
+    "isError": false,
+    "apiMs": 72976,
+    "results": 1
+   },
+   "wallSec": 86.809,
+   "timedOut": false,
+   "dir": "/tmp/mgl-eval-duck-music-under-vo-wQDJva",
+   "timeoutMin": 15,
+   "expectsWeak": false,
+   "agentHome": "/tmp/mgl-eval-home-THwT1S",
+   "baselineScore": 0,
+   "exitCode": 0,
+   "outputs": 2,
+   "dirRemoved": true,
+   "deltaScore": 1
+  },
+  {
+   "task": "edit-200-clips",
+   "pass": true,
+   "score": 1,
+   "checks": [
+    {
+     "name": "V2 has no clips < 10 frames and no gaps where they were (later V2 clips shifted)",
+     "pass": true,
+     "detail": "58 V2 clips (expected 58); short left: 0; first mismatch: none"
+    },
+    {
+     "name": "other tracks unchanged (V1 clips identical; T1 positions identical)",
+     "pass": true,
+     "detail": "V1 identical"
+    },
+    {
+     "name": "the 6 CHORUS clips have colour #ffcc00; other text clips unchanged",
+     "pass": true,
+     "detail": "CHORUS #ffcc00,#ffcc00,#ffcc00,#ffcc00,#ffcc00,#ffcc00; others unchanged"
+    },
+    {
+     "name": "file valid",
+     "pass": true,
+     "detail": "183 clips"
+    }
+   ],
+   "metrics": {
+    "turns": 12,
+    "inputTokens": 20,
+    "outputTokens": 3889,
+    "cacheReadTokens": 397797,
+    "cacheCreationTokens": 20828,
+    "costUsd": 0.3252204,
+    "toolCalls": 10,
+    "toolCounts": {
+     "Skill": 1,
+     "Bash": 8,
+     "Write": 1
+    },
+    "bashTimeouts": 0,
+    "failedEdits": 0,
+    "permissionDenials": 4,
+    "errorCodes": {},
+    "verbs": {
+     "show": 6,
+     "docs": 1,
+     "check": 5
+    },
+    "violations": [],
+    "fatalViolations": [],
+    "resultSubtype": "success",
+    "isError": false,
+    "apiMs": 47077,
+    "results": 1
+   },
+   "wallSec": 52.61,
+   "timedOut": false,
+   "dir": "/tmp/mgl-eval-edit-200-clips-LUkS91",
+   "timeoutMin": 20,
+   "expectsWeak": false,
+   "agentHome": "/tmp/mgl-eval-home-THwT1S",
+   "baselineScore": 0.25,
+   "exitCode": 0,
+   "outputs": 1,
+   "dirRemoved": true,
+   "deltaScore": 0.75
+  },
+  {
+   "task": "fix-broken-file",
+   "pass": true,
+   "score": 1,
+   "checks": [
+    {
+     "name": "file loads and check passes with no errors (keys, references, overlaps)",
+     "pass": true,
+     "detail": "valid"
+    },
+    {
+     "name": "clip count unchanged (same ids, credit kept); the opacity value preserved as \"opacity\"",
+     "pass": true,
+     "detail": "ids credit,overlay,shot1,shot2,shot3,title; overlay opacity 0.8"
+    }
+   ],
+   "metrics": {
+    "turns": 16,
+    "inputTokens": 22,
+    "outputTokens": 3416,
+    "cacheReadTokens": 441492,
+    "cacheCreationTokens": 21760,
+    "costUsd": 0.33191839999999995,
+    "toolCalls": 15,
+    "toolCounts": {
+     "Bash": 10,
+     "Edit": 4,
+     "Read": 1
+    },
+    "bashTimeouts": 0,
+    "failedEdits": 0,
+    "permissionDenials": 1,
+    "errorCodes": {
+     "E_USAGE": 1,
+     "E_UNKNOWN_KEY": 1,
+     "E_REF": 1,
+     "E_OVERLAP": 1
+    },
+    "verbs": {
+     "validate": 1,
+     "docs": 2,
+     "check": 5,
+     "show": 2,
+     "look": 1,
+     "render": 1
+    },
+    "violations": [],
+    "fatalViolations": [],
+    "resultSubtype": "success",
+    "isError": false,
+    "apiMs": 45512,
+    "results": 1
+   },
+   "wallSec": 58.482,
+   "timedOut": false,
+   "dir": "/tmp/mgl-eval-fix-broken-file-7NUMtM",
+   "timeoutMin": 10,
+   "expectsWeak": false,
+   "agentHome": "/tmp/mgl-eval-home-THwT1S",
+   "baselineScore": 0,
+   "exitCode": 0,
+   "outputs": 2,
+   "dirRemoved": true,
+   "deltaScore": 1
+  },
+  {
+   "task": "fix-caption-logo-overlap",
+   "pass": true,
+   "score": 1,
+   "checks": [
+    {
+     "name": "frame at cue c5: caption glyphs and the logo both present and disjoint",
+     "pass": true,
+     "detail": "logo 1 visible, caption white px 47654, caption box 72,1246,877,277, logo box 810,130,240,240"
+    },
+    {
+     "name": "logo clip x, y, scale, opacity, hidden, blend unchanged",
+     "pass": true,
+     "detail": "{\"id\":\"logo\",\"track\":\"LOGO\",\"at\":0,\"len\":450,\"asset\":\"logo-png\",\"fit\":\"none\",\"x\":930,\"y\":250}"
+    },
+    {
+     "name": "caption clip and style: size not smaller, not hidden, opacity unchanged, scale not < 1",
+     "pass": true,
+     "detail": "size 64, scale undefined, opacity undefined"
+    },
+    {
+     "name": "cue count, texts and timings unchanged",
+     "pass": true,
+     "detail": "6 cues"
+    }
+   ],
+   "metrics": {
+    "turns": 25,
+    "inputTokens": 46,
+    "outputTokens": 8488,
+    "cacheReadTokens": 1104603,
+    "cacheCreationTokens": 35378,
+    "costUsd": 0.6750386,
+    "toolCalls": 24,
+    "toolCounts": {
+     "Bash": 19,
+     "Read": 2,
+     "Write": 2,
+     "Edit": 1
+    },
+    "bashTimeouts": 0,
+    "failedEdits": 0,
+    "permissionDenials": 4,
+    "errorCodes": {},
+    "verbs": {
+     "check": 9,
+     "look": 7,
+     "edit": 8,
+     "docs": 7,
+     "show": 1
+    },
+    "violations": [],
+    "fatalViolations": [],
+    "resultSubtype": "success",
+    "isError": false,
+    "apiMs": 105867,
+    "results": 1
+   },
+   "wallSec": 137.621,
+   "timedOut": false,
+   "dir": "/tmp/mgl-eval-fix-caption-logo-overlap-BsJs3G",
+   "timeoutMin": 15,
+   "expectsWeak": false,
+   "agentHome": "/tmp/mgl-eval-home-THwT1S",
+   "baselineScore": 0.75,
+   "exitCode": 0,
+   "outputs": 1,
+   "dirRemoved": true,
+   "deltaScore": 0.25
+  },
+  {
+   "task": "gif-export",
+   "pass": true,
+   "score": 1,
+   "checks": [
+    {
+     "name": "out/clip.gif: width 480, 3 s +-0.2, loops, < 5 MB, animated",
+     "pass": true,
+     "detail": "gif 480x270, 45 frames, 3 s, loop 0, 0.65 MB; luma 0.49/0.5/0.501/0.505/0.507, max frame diff 15.02"
+    },
+    {
+     "name": "first frame matches the project at 3 s (SSIM > 0.6 at 480 px)",
+     "pass": true,
+     "detail": "SSIM 0.904 against the source at 3 s"
+    },
+    {
+     "name": "the GIF shows the project (its moving label) at 3 s and 5 s, like a render of demo.mgl.json",
+     "pass": true,
+     "detail": "3 s: 100 % of 1290 label px follow the project; 5 s: 100 % of 1315 label px follow the project"
+    }
+   ],
+   "metrics": {
+    "turns": 7,
+    "inputTokens": 14,
+    "outputTokens": 1630,
+    "cacheReadTokens": 251311,
+    "cacheCreationTokens": 14148,
+    "costUsd": 0.19726719999999998,
+    "toolCalls": 6,
+    "toolCounts": {
+     "Bash": 5,
+     "Read": 1
+    },
+    "bashTimeouts": 0,
+    "failedEdits": 0,
+    "permissionDenials": 0,
+    "errorCodes": {},
+    "verbs": {
+     "docs": 2,
+     "render": 2,
+     "show": 1
+    },
+    "violations": [],
+    "fatalViolations": [],
+    "resultSubtype": "success",
+    "isError": false,
+    "apiMs": 22326,
+    "results": 1
+   },
+   "wallSec": 30.75,
+   "timedOut": false,
+   "dir": "/tmp/mgl-eval-gif-export-QrtQBe",
+   "timeoutMin": 10,
+   "expectsWeak": false,
+   "agentHome": "/tmp/mgl-eval-home-THwT1S",
+   "baselineScore": 0,
+   "exitCode": 0,
+   "outputs": 2,
+   "dirRemoved": true,
+   "deltaScore": 1
+  },
+  {
+   "task": "green-screen",
+   "pass": false,
+   "score": 0.6667,
+   "checks": [
+    {
+     "name": "still: no pixel with dominant green (g > r+60 and g > b+60)",
+     "pass": false,
+     "detail": "out/still-1s.png: 90 green pixels (sampled)"
+    },
+    {
+     "name": "the disc region is magenta; the former green region matches city.mp4",
+     "pass": true,
+     "detail": "disc magenta 1, background error vs city 0"
+    },
+    {
+     "name": "a project uses presenter.mp4 and city.mp4 and keys the presenter (a chroma-key fx)",
+     "pass": true,
+     "detail": "greenscreen.mgl.json"
+    }
+   ],
+   "metrics": {
+    "turns": 12,
+    "inputTokens": 22,
+    "outputTokens": 2587,
+    "cacheReadTokens": 458517,
+    "cacheCreationTokens": 22861,
+    "costUsd": 0.3275524,
+    "toolCalls": 11,
+    "toolCounts": {
+     "Bash": 8,
+     "Read": 2,
+     "Edit": 1
+    },
+    "bashTimeouts": 0,
+    "failedEdits": 0,
+    "permissionDenials": 2,
+    "errorCodes": {
+     "E_REF": 1
+    },
+    "verbs": {
+     "docs": 3,
+     "new": 1,
+     "edit": 9,
+     "check": 3,
+     "render": 2
+    },
+    "violations": [],
+    "fatalViolations": [],
+    "resultSubtype": "success",
+    "isError": false,
+    "apiMs": 34607,
+    "results": 1
+   },
+   "wallSec": 46.522,
+   "timedOut": false,
+   "dir": "/tmp/mgl-eval-green-screen-FYUz9k",
+   "timeoutMin": 20,
+   "expectsWeak": true,
+   "agentHome": "/tmp/mgl-eval-home-THwT1S",
+   "baselineScore": 0,
+   "exitCode": 0,
+   "outputs": 2,
+   "dirRemoved": true,
+   "deltaScore": 0.6667
+  },
+  {
+   "task": "import-hevc",
+   "pass": true,
+   "score": 1,
+   "checks": [
+    {
+     "name": "out/day1.mp4 H.264 1080x1920, 6 s +-1 frame, not empty",
+     "pass": true,
+     "detail": "h264 1080x1920 180 frames @30; luma 0.498/0.493/0.499/0.499/0.483, max frame diff 15.65"
+    },
+    {
+     "name": "rotation honoured: the red marker is in the same corner as in the displayed source",
+     "pass": true,
+     "detail": "output bl (0.56), source bl"
+    },
+    {
+     "name": "first frame matches the source at 2 s (SSIM > 0.7 at 540x960)",
+     "pass": true,
+     "detail": "SSIM 0.93"
+    },
+    {
+     "name": "a 1080x1920 project plays phone.mov from 2 s with a \"Day 1\" text clip",
+     "pass": true,
+     "detail": "day1.mgl.json"
+    }
+   ],
+   "metrics": {
+    "turns": 10,
+    "inputTokens": 18,
+    "outputTokens": 1888,
+    "cacheReadTokens": 359093,
+    "cacheCreationTokens": 20363,
+    "costUsd": 0.2737316,
+    "toolCalls": 9,
+    "toolCounts": {
+     "Bash": 7,
+     "Read": 2
+    },
+    "bashTimeouts": 0,
+    "failedEdits": 0,
+    "permissionDenials": 0,
+    "errorCodes": {},
+    "verbs": {
+     "new": 1,
+     "edit": 2,
+     "show": 2,
+     "check": 1,
+     "look": 1,
+     "render": 1
+    },
+    "violations": [],
+    "fatalViolations": [],
+    "resultSubtype": "success",
+    "isError": false,
+    "apiMs": 26375,
+    "results": 1
+   },
+   "wallSec": 54.677,
+   "timedOut": false,
+   "dir": "/tmp/mgl-eval-import-hevc-FMxIxL",
+   "timeoutMin": 15,
+   "expectsWeak": false,
+   "agentHome": "/tmp/mgl-eval-home-THwT1S",
+   "baselineScore": 0,
+   "exitCode": 0,
+   "outputs": 2,
+   "dirRemoved": true,
+   "deltaScore": 1
+  },
+  {
+   "task": "import-prores",
+   "pass": true,
+   "score": 1,
+   "checks": [
+    {
+     "name": "out/edit.mp4 1920x1080 30 fps, 6.0 s +-1 frame (cut-centred transition: lengths add up)",
+     "pass": true,
+     "detail": "1920x1080 30 fps 180 frames; luma 0.496/0.489/0.418/0.354/0.354, max frame diff 71.52"
+    },
+    {
+     "name": "frame at 1 s matches testsrc, at 5.5 s matches smptebars (SSIM > 0.6)",
+     "pass": true,
+     "detail": "testsrc 0.981, smptebars 0.991"
+    },
+    {
+     "name": "crossfade: the frame at the cut (3.0 s) is a blend of both sources",
+     "pass": true,
+     "detail": "share 1 of 120389 contrasting pixels lie between both sources"
+    },
+    {
+     "name": "a 1920x1080 30 fps project uses master.mov and film24.mp4 with a transition",
+     "pass": true,
+     "detail": "edit.mgl.json"
+    }
+   ],
+   "metrics": {
+    "turns": 9,
+    "inputTokens": 18,
+    "outputTokens": 2073,
+    "cacheReadTokens": 357775,
+    "cacheCreationTokens": 21120,
+    "costUsd": 0.283239,
+    "toolCalls": 8,
+    "toolCounts": {
+     "Bash": 7,
+     "Read": 1
+    },
+    "bashTimeouts": 0,
+    "failedEdits": 0,
+    "permissionDenials": 2,
+    "errorCodes": {},
+    "verbs": {
+     "docs": 5,
+     "new": 2,
+     "edit": 6,
+     "show": 2,
+     "check": 2,
+     "look": 1,
+     "render": 1
+    },
+    "violations": [],
+    "fatalViolations": [],
+    "resultSubtype": "success",
+    "isError": false,
+    "apiMs": 27308,
+    "results": 1
+   },
+   "wallSec": 50.823,
+   "timedOut": false,
+   "dir": "/tmp/mgl-eval-import-prores-Vy5flS",
+   "timeoutMin": 15,
+   "expectsWeak": false,
+   "agentHome": "/tmp/mgl-eval-home-THwT1S",
+   "baselineScore": 0,
+   "exitCode": 0,
+   "outputs": 2,
+   "dirRemoved": true,
+   "deltaScore": 1
+  },
+  {
+   "task": "intro-template",
+   "pass": true,
+   "score": 1,
+   "checks": [
+    {
+     "name": "out/intro.mp4 1920x1080, 12 s +-0.2; a project has the \"Kitchen Lab\" title",
+     "pass": true,
+     "detail": "1920x1080 12 s; luma 0.069/0.071/0.496/0.495/0.495, max frame diff 122.68; title clip found"
+    },
+    {
+     "name": "frames at 0.5 s and 2.5 s differ (animated) and contain title glyphs",
+     "pass": true,
+     "detail": "diff 2.29, edges at 2.5 s 0.014, luma std at 0.5 s 0.128"
+    },
+    {
+     "name": "frame at 6 s matches cook.mp4 at 2 s (SSIM > 0.8)",
+     "pass": true,
+     "detail": "SSIM 0.972"
+    }
+   ],
+   "metrics": {
+    "turns": 7,
+    "inputTokens": 14,
+    "outputTokens": 1138,
+    "cacheReadTokens": 270699,
+    "cacheCreationTokens": 19114,
+    "costUsd": 0.2309948,
+    "toolCalls": 6,
+    "toolCounts": {
+     "Bash": 5,
+     "Read": 1
+    },
+    "bashTimeouts": 0,
+    "failedEdits": 0,
+    "permissionDenials": 0,
+    "errorCodes": {},
+    "verbs": {
+     "docs": 2,
+     "new": 2,
+     "edit": 2,
+     "show": 1,
+     "check": 1,
+     "look": 1,
+     "render": 1
+    },
+    "violations": [],
+    "fatalViolations": [],
+    "resultSubtype": "success",
+    "isError": false,
+    "apiMs": 18558,
+    "results": 1
+   },
+   "wallSec": 43.425,
+   "timedOut": false,
+   "dir": "/tmp/mgl-eval-intro-template-CCur37",
+   "timeoutMin": 15,
+   "expectsWeak": false,
+   "agentHome": "/tmp/mgl-eval-home-THwT1S",
+   "baselineScore": 0,
+   "exitCode": 0,
+   "outputs": 2,
+   "dirRemoved": true,
+   "deltaScore": 1
+  },
+  {
+   "task": "j-and-l-cuts",
+   "pass": true,
+   "score": 1,
+   "checks": [
+    {
+     "name": "picture cut frame unchanged (a ends and b starts at frame 120)",
+     "pass": true,
+     "detail": "a 0+120, b 120+120 in 60"
+    },
+    {
+     "name": "440 Hz for 1 s after the picture cut in a rendered wav, then 660 Hz",
+     "pass": true,
+     "detail": "440 minus 660 dB: 2 s 115.2, 4.2 s 118.2, 5.3 s -120.7, 7 s -123.9"
+    },
+    {
+     "name": "no gap or overlap problems (file valid; V1 and the audio track contiguous)",
+     "pass": true,
+     "detail": "ok"
+    }
+   ],
+   "metrics": {
+    "turns": 7,
+    "inputTokens": 14,
+    "outputTokens": 1675,
+    "cacheReadTokens": 268903,
+    "cacheCreationTokens": 18737,
+    "costUsd": 0.2383916,
+    "toolCalls": 6,
+    "toolCounts": {
+     "Bash": 6
+    },
+    "bashTimeouts": 0,
+    "failedEdits": 0,
+    "permissionDenials": 1,
+    "errorCodes": {},
+    "verbs": {
+     "edit": 1,
+     "check": 1,
+     "look": 1
+    },
+    "violations": [],
+    "fatalViolations": [],
+    "resultSubtype": "success",
+    "isError": false,
+    "apiMs": 22070,
+    "results": 1
+   },
+   "wallSec": 29.653,
+   "timedOut": false,
+   "dir": "/tmp/mgl-eval-j-and-l-cuts-GUAhaU",
+   "timeoutMin": 15,
+   "expectsWeak": false,
+   "agentHome": "/tmp/mgl-eval-home-THwT1S",
+   "baselineScore": 0.6667,
+   "exitCode": 0,
+   "outputs": 1,
+   "dirRemoved": true,
+   "deltaScore": 0.3333
+  },
+  {
+   "task": "keyframed-title",
+   "pass": true,
+   "score": 1,
+   "checks": [
+    {
+     "name": "x keyframes start off-screen-left and end at centre by frame 15 with an out easing",
+     "pass": true,
+     "detail": "x [[0,-600,\"outCubic\"],[15,960]]"
+    },
+    {
+     "name": "opacity reaches 0 at the last frame (after holding at 1)",
+     "pass": true,
+     "detail": "opacity [[0,1],[74,1],[89,0]], len 90"
+    },
+    {
+     "name": "stills: at 0.25 s the text is left of centre, at 1.5 s centred, on the last frame no text",
+     "pass": true,
+     "detail": "out/title-last.png: 0px cx null; out/title-1.5s.png: 2250px cx 962; out/title-0.25s.png: 2309px cx 800"
+    }
+   ],
+   "metrics": {
+    "turns": 8,
+    "inputTokens": 12,
+    "outputTokens": 2207,
+    "cacheReadTokens": 230514,
+    "cacheCreationTokens": 21105,
+    "costUsd": 0.2603198,
+    "toolCalls": 7,
+    "toolCounts": {
+     "Bash": 6,
+     "Read": 1
+    },
+    "bashTimeouts": 0,
+    "failedEdits": 0,
+    "permissionDenials": 1,
+    "errorCodes": {},
+    "verbs": {
+     "docs": 3,
+     "edit": 2,
+     "check": 2,
+     "render": 4,
+     "look": 1
+    },
+    "violations": [],
+    "fatalViolations": [],
+    "resultSubtype": "success",
+    "isError": false,
+    "apiMs": 26966,
+    "results": 1
+   },
+   "wallSec": 35.609,
+   "timedOut": false,
+   "dir": "/tmp/mgl-eval-keyframed-title-H79Auf",
+   "timeoutMin": 15,
+   "expectsWeak": false,
+   "agentHome": "/tmp/mgl-eval-home-THwT1S",
+   "baselineScore": 0,
+   "exitCode": 0,
+   "outputs": 4,
+   "dirRemoved": true,
+   "deltaScore": 1
+  },
+  {
+   "task": "loudness-normalize",
+   "pass": true,
+   "score": 1,
+   "checks": [
+    {
+     "name": "out/mix.wav integrated loudness -14 +-1 LU, true peak <= -1.0 dBTP, 12 s, content kept",
+     "pass": true,
+     "detail": "-14.3 LUFS, -1 dBTP, 12 s, speech band -14.5 dB"
+    },
+    {
+     "name": "out/mix.mp3 exists, mp3 codec, loudness -14 +-1.5",
+     "pass": true,
+     "detail": "mp3, -14.5 LUFS"
+    },
+    {
+     "name": "the mix project (speech + tones) carries the normalisation: a -14 LUFS loudness target, platform or gains",
+     "pass": true,
+     "detail": "mix.mgl.json"
+    }
+   ],
+   "metrics": {
+    "turns": 9,
+    "inputTokens": 18,
+    "outputTokens": 2082,
+    "cacheReadTokens": 367120,
+    "cacheCreationTokens": 20085,
+    "costUsd": 0.276992,
+    "toolCalls": 8,
+    "toolCounts": {
+     "Bash": 8
+    },
+    "bashTimeouts": 0,
+    "failedEdits": 0,
+    "permissionDenials": 2,
+    "errorCodes": {},
+    "verbs": {
+     "docs": 3,
+     "edit": 2,
+     "render": 4,
+     "look": 1
+    },
+    "violations": [],
+    "fatalViolations": [],
+    "resultSubtype": "success",
+    "isError": false,
+    "apiMs": 28570,
+    "results": 1
+   },
+   "wallSec": 42.24,
+   "timedOut": false,
+   "dir": "/tmp/mgl-eval-loudness-normalize-kxvjF5",
+   "timeoutMin": 15,
+   "expectsWeak": false,
+   "agentHome": "/tmp/mgl-eval-home-THwT1S",
+   "baselineScore": 0,
+   "exitCode": 0,
+   "outputs": 3,
+   "dirRemoved": true,
+   "deltaScore": 1
+  },
+  {
+   "task": "lower-third",
+   "pass": true,
+   "score": 1,
+   "checks": [
+    {
+     "name": "a template-derived or hand-built text clip with the name spans 2-7 s (project valid)",
+     "pass": true,
+     "detail": "\"Dr. Ada Park\" 2.3-7; valid"
+    },
+    {
+     "name": "out/l3.png has text pixels in the lower-left third; out/before.png matches the plain video there",
+     "pass": true,
+     "detail": "changed in lower-left third: l3 0.3442, before 0"
+    },
+    {
+     "name": "animated: opacity/position keyframes or an animate preset on the clip (or its template group)",
+     "pass": true,
+     "detail": "{\"animate\":{\"in\":\"slide-left\",\"out\":\"fade\",\"by\":\"all\"},\"x\":152}"
+    }
+   ],
+   "metrics": {
+    "turns": 7,
+    "inputTokens": 10,
+    "outputTokens": 1047,
+    "cacheReadTokens": 185428,
+    "cacheCreationTokens": 23136,
+    "costUsd": 0.24433360000000004,
+    "toolCalls": 6,
+    "toolCounts": {
+     "Bash": 4,
+     "Read": 2
+    },
+    "bashTimeouts": 0,
+    "failedEdits": 0,
+    "permissionDenials": 0,
+    "errorCodes": {},
+    "verbs": {
+     "docs": 3,
+     "edit": 1,
+     "show": 1,
+     "check": 1,
+     "render": 2
+    },
+    "violations": [],
+    "fatalViolations": [],
+    "resultSubtype": "success",
+    "isError": false,
+    "apiMs": 15540,
+    "results": 1
+   },
+   "wallSec": 23.606,
+   "timedOut": false,
+   "dir": "/tmp/mgl-eval-lower-third-wYHtzw",
+   "timeoutMin": 15,
+   "expectsWeak": false,
+   "agentHome": "/tmp/mgl-eval-home-THwT1S",
+   "baselineScore": 0,
+   "exitCode": 0,
+   "outputs": 3,
+   "dirRemoved": true,
+   "deltaScore": 1
+  },
+  {
+   "task": "masks-and-blend",
+   "pass": true,
+   "score": 1,
+   "checks": [
+    {
+     "name": "top clip has a centred ellipse mask with feather > 0 (not hidden, opacity unchanged)",
+     "pass": true,
+     "detail": "masks [{\"shape\":\"ellipse\",\"box\":[320,160,640,400],\"feather\":60}]"
+    },
+    {
+     "name": "light leak clip blend = screen",
+     "pass": true,
+     "detail": "blend screen, opacity undefined"
+    },
+    {
+     "name": "still: centre = smptebars screen leak, corners = testsrc2 screen leak, nothing darker than the base",
+     "pass": true,
+     "detail": "out/still-2s.png: error centre 1.2 tl 2 tr 0.2 bl 2.1 br 0.4, darker 0.003"
+    }
+   ],
+   "metrics": {
+    "turns": 6,
+    "inputTokens": 12,
+    "outputTokens": 969,
+    "cacheReadTokens": 227118,
+    "cacheCreationTokens": 18009,
+    "costUsd": 0.21010060000000003,
+    "toolCalls": 5,
+    "toolCounts": {
+     "Bash": 4,
+     "Read": 1
+    },
+    "bashTimeouts": 0,
+    "failedEdits": 0,
+    "permissionDenials": 0,
+    "errorCodes": {},
+    "verbs": {
+     "docs": 3,
+     "edit": 2,
+     "check": 1,
+     "render": 1
+    },
+    "violations": [],
+    "fatalViolations": [],
+    "resultSubtype": "success",
+    "isError": false,
+    "apiMs": 16806,
+    "results": 1
+   },
+   "wallSec": 24.26,
+   "timedOut": false,
+   "dir": "/tmp/mgl-eval-masks-and-blend-qjb5dD",
+   "timeoutMin": 15,
+   "expectsWeak": false,
+   "agentHome": "/tmp/mgl-eval-home-THwT1S",
+   "baselineScore": 0,
+   "exitCode": 0,
+   "outputs": 2,
+   "dirRemoved": true,
+   "deltaScore": 1
+  },
+  {
+   "task": "nested-comp",
+   "pass": true,
+   "score": 1,
+   "checks": [
+    {
+     "name": "a 1080x1080 5 s badge comp used by 3 comp clips in a 1920x1080 main (different sizes and start times), with a rotation",
+     "pass": true,
+     "detail": "badges.mgl.json: comp \"badge\" 1080x1080, 3 uses at 0,30,90 scale 0.7,0.45,0.25"
+    },
+    {
+     "name": "frames: the badge is visible at 3 different scales at a time when all three overlap",
+     "pass": true,
+     "detail": "at 3.5 s: 3 blobs, sizes 70,118,176; luma 0.148/0.177/0.187/0.115/0.085, max frame diff 23.68"
+    },
+    {
+     "name": "rotation differs between two frames 0.5 s apart",
+     "pass": true,
+     "detail": "0.112 of the largest badge's pixels changed"
+    }
+   ],
+   "metrics": {
+    "turns": 10,
+    "inputTokens": 18,
+    "outputTokens": 2919,
+    "cacheReadTokens": 363538,
+    "cacheCreationTokens": 21841,
+    "costUsd": 0.30703959999999997,
+    "toolCalls": 9,
+    "toolCounts": {
+     "Bash": 7,
+     "Write": 1,
+     "Read": 1
+    },
+    "bashTimeouts": 0,
+    "failedEdits": 0,
+    "permissionDenials": 1,
+    "errorCodes": {},
+    "verbs": {
+     "docs": 2,
+     "check": 2,
+     "show": 2,
+     "look": 1,
+     "render": 1
+    },
+    "violations": [],
+    "fatalViolations": [],
+    "resultSubtype": "success",
+    "isError": false,
+    "apiMs": 37587,
+    "results": 1
+   },
+   "wallSec": 61.354,
+   "timedOut": false,
+   "dir": "/tmp/mgl-eval-nested-comp-QGE5be",
+   "timeoutMin": 20,
+   "expectsWeak": false,
+   "agentHome": "/tmp/mgl-eval-home-THwT1S",
+   "baselineScore": 0,
+   "exitCode": 0,
+   "outputs": 2,
+   "dirRemoved": true,
+   "deltaScore": 1
+  },
+  {
+   "task": "per-word-animation",
+   "pass": true,
+   "score": 1,
+   "checks": [
+    {
+     "name": "1080x1920 project with a per-word text animation (animate by word) or per-word clips",
+     "pass": true,
+     "detail": "words.mgl.json"
+    },
+    {
+     "name": "still at 0.6 s (out/w.png) shows fewer glyph columns than the project rendered at 2.5 s",
+     "pass": true,
+     "detail": "glyph columns 113 at 0.6 s vs 163 at 2.5 s; luma 0.153"
+    },
+    {
+     "name": "look contact sheet exists (.mgl/**/sheet.png), long edge <= 1568",
+     "pass": true,
+     "detail": ".mgl/words/look/sheet.png 1566x1424"
+    }
+   ],
+   "metrics": {
+    "turns": 11,
+    "inputTokens": 20,
+    "outputTokens": 1982,
+    "cacheReadTokens": 405505,
+    "cacheCreationTokens": 25653,
+    "costUsd": 0.3272,
+    "toolCalls": 10,
+    "toolCounts": {
+     "Bash": 7,
+     "Read": 3
+    },
+    "bashTimeouts": 0,
+    "failedEdits": 0,
+    "permissionDenials": 1,
+    "errorCodes": {},
+    "verbs": {
+     "docs": 3,
+     "new": 2,
+     "show": 3,
+     "edit": 5,
+     "check": 2,
+     "look": 2,
+     "render": 2
+    },
+    "violations": [],
+    "fatalViolations": [],
+    "resultSubtype": "success",
+    "isError": false,
+    "apiMs": 29996,
+    "results": 1
+   },
+   "wallSec": 41.89,
+   "timedOut": false,
+   "dir": "/tmp/mgl-eval-per-word-animation-7h1twC",
+   "timeoutMin": 15,
+   "expectsWeak": false,
+   "agentHome": "/tmp/mgl-eval-home-THwT1S",
+   "baselineScore": 0,
+   "exitCode": 0,
+   "outputs": 2,
+   "dirRemoved": true,
+   "deltaScore": 1
+  },
+  {
+   "task": "pip",
+   "pass": true,
+   "score": 1,
+   "checks": [
+    {
+     "name": "at 2 s: the bottom-right region shows smptebars, the rest testsrc2",
+     "pass": true,
+     "detail": "box 1392,762,480,270, PiP error vs smptebars 1.6, rest changed 0.0009"
+    },
+    {
+     "name": "PiP box width 480 +-20 px",
+     "pass": true,
+     "detail": "width 480"
+    },
+    {
+     "name": "corners of the PiP box show the background (rounded)",
+     "pass": true,
+     "detail": "corner pixels checked"
+    },
+    {
+     "name": "a 1920x1080 project uses screen.mp4 and cam.mp4, with the cam clip scaled and placed",
+     "pass": true,
+     "detail": "pip.mgl.json"
+    }
+   ],
+   "metrics": {
+    "turns": 13,
+    "inputTokens": 26,
+    "outputTokens": 2994,
+    "cacheReadTokens": 588086,
+    "cacheCreationTokens": 27506,
+    "costUsd": 0.39885519999999997,
+    "toolCalls": 12,
+    "toolCounts": {
+     "Bash": 10,
+     "Read": 2
+    },
+    "bashTimeouts": 0,
+    "failedEdits": 0,
+    "permissionDenials": 2,
+    "errorCodes": {},
+    "verbs": {
+     "new": 1,
+     "edit": 6,
+     "docs": 2,
+     "check": 1,
+     "look": 1,
+     "render": 1
+    },
+    "violations": [],
+    "fatalViolations": [],
+    "resultSubtype": "success",
+    "isError": false,
+    "apiMs": 40938,
+    "results": 1
+   },
+   "wallSec": 85.828,
+   "timedOut": false,
+   "dir": "/tmp/mgl-eval-pip-PAs1mw",
+   "timeoutMin": 15,
+   "expectsWeak": false,
+   "agentHome": "/tmp/mgl-eval-home-THwT1S",
+   "baselineScore": 0,
+   "exitCode": 0,
+   "outputs": 2,
+   "dirRemoved": true,
+   "deltaScore": 1
+  },
+  {
+   "task": "plugin-effect-new",
+   "pass": true,
+   "score": 1,
+   "checks": [
+    {
+     "name": "plugins/posterize exists with manifest api ^1 and passing tests",
+     "pass": true,
+     "detail": "api ^1.0.0; tests 3 passed, 0 failed"
+    },
+    {
+     "name": "demo.mgl.json names the plugin and the clip has fx posterize levels=3",
+     "pass": true,
+     "detail": "plugins {\"posterize\":\"^0.1.0\"}, fx [{\"type\":\"posterize\",\"levels\":3}]"
+    },
+    {
+     "name": "out/poster.png: each channel has <= 3 distinct value clusters in the clip area (and is not flat)",
+     "pass": true,
+     "detail": "1280x720, levels per channel 3/3/3"
+    }
+   ],
+   "metrics": {
+    "turns": 18,
+    "inputTokens": 22,
+    "outputTokens": 5798,
+    "cacheReadTokens": 482056,
+    "cacheCreationTokens": 26727,
+    "costUsd": 0.4274312,
+    "toolCalls": 17,
+    "toolCounts": {
+     "Bash": 8,
+     "Write": 2,
+     "Read": 2,
+     "Edit": 5
+    },
+    "bashTimeouts": 0,
+    "failedEdits": 0,
+    "permissionDenials": 2,
+    "errorCodes": {},
+    "verbs": {
+     "docs": 1,
+     "plugin": 7,
+     "edit": 4,
+     "check": 2,
+     "render": 2
+    },
+    "violations": [],
+    "fatalViolations": [],
+    "resultSubtype": "success",
+    "isError": false,
+    "apiMs": 54465,
+    "results": 1
+   },
+   "wallSec": 71.008,
+   "timedOut": false,
+   "dir": "/tmp/mgl-eval-plugin-effect-new-DPMyxn",
+   "timeoutMin": 25,
+   "expectsWeak": false,
+   "agentHome": "/tmp/mgl-eval-home-THwT1S",
+   "baselineScore": 0,
+   "exitCode": 0,
+   "outputs": 8,
+   "dirRemoved": true,
+   "deltaScore": 1
+  },
+  {
+   "task": "plugin-transition-new",
+   "pass": true,
+   "score": 1,
+   "checks": [
+    {
+     "name": "plugin test passes (plugins/iris, manifest api ^1)",
+     "pass": true,
+     "detail": "api ^1.0.0; tests 3 passed, 0 failed"
+    },
+    {
+     "name": "two.mgl.json uses the iris transition between the clips, 1 s long; clips unchanged",
+     "pass": true,
+     "detail": "transition {\"type\":\"iris\",\"len\":30}"
+    },
+    {
+     "name": "at the transition midpoint (3.0 s): centre pixel blue, corner pixel red",
+     "pass": true,
+     "detail": "centre rgb(0,0,254), corner rgb(253,0,0)"
+    },
+    {
+     "name": "before (2.0 s): all red; after (4.0 s): all blue; duration 6 s",
+     "pass": true,
+     "detail": "red 1, blue 1, 6 s"
+    }
+   ],
+   "metrics": {
+    "turns": 16,
+    "inputTokens": 22,
+    "outputTokens": 4300,
+    "cacheReadTokens": 470165,
+    "cacheCreationTokens": 26214,
+    "costUsd": 0.39100500000000005,
+    "toolCalls": 15,
+    "toolCounts": {
+     "Bash": 8,
+     "Read": 4,
+     "Write": 2,
+     "Edit": 1
+    },
+    "bashTimeouts": 0,
+    "failedEdits": 0,
+    "permissionDenials": 1,
+    "errorCodes": {},
+    "verbs": {
+     "docs": 3,
+     "plugin": 5,
+     "edit": 2,
+     "check": 1,
+     "look": 1,
+     "render": 1
+    },
+    "violations": [],
+    "fatalViolations": [],
+    "resultSubtype": "success",
+    "isError": false,
+    "apiMs": 44539,
+    "results": 1
+   },
+   "wallSec": 62.752,
+   "timedOut": false,
+   "dir": "/tmp/mgl-eval-plugin-transition-new-HCJ2zr",
+   "timeoutMin": 25,
+   "expectsWeak": false,
+   "agentHome": "/tmp/mgl-eval-home-THwT1S",
+   "baselineScore": 0,
+   "exitCode": 0,
+   "outputs": 8,
+   "dirRemoved": true,
+   "deltaScore": 1
+  },
+  {
+   "task": "reframe-16-9-to-9-16",
+   "pass": true,
+   "score": 1,
+   "checks": [
+    {
+     "name": "tall.mgl.json comp 1080x1920 (valid, keeps the title); wide.mgl.json unchanged",
+     "pass": true,
+     "detail": "1080x1920; valid; wide unchanged"
+    },
+    {
+     "name": "out/tall.mp4 1080x1920; the white circle is fully inside the frame in 5 sampled frames",
+     "pass": true,
+     "detail": "0.5s blob 15713px @181,409,141,142; 1.5s blob 15725px @185,409,141,142; 2.8s blob 15731px @185,409,141,142; 4.2s blob 15731px @185,409,142,142; 5.6s blob 15737px @234,409,142,142; luma 0.086/0.086/0.083/0.083/0.082, max frame diff 1.53"
+    },
+    {
+     "name": "title fully inside the 9:16 Shorts safe zone",
+     "pass": true,
+     "detail": "title px 2437, box 225,109,91,46, safe 27,77,448,691"
+    }
+   ],
+   "metrics": {
+    "turns": 8,
+    "inputTokens": 16,
+    "outputTokens": 1611,
+    "cacheReadTokens": 319601,
+    "cacheCreationTokens": 21564,
+    "costUsd": 0.2699002,
+    "toolCalls": 7,
+    "toolCounts": {
+     "Bash": 6,
+     "Read": 1
+    },
+    "bashTimeouts": 0,
+    "failedEdits": 0,
+    "permissionDenials": 0,
+    "errorCodes": {},
+    "verbs": {
+     "docs": 1,
+     "edit": 2,
+     "check": 1,
+     "look": 1,
+     "render": 1
+    },
+    "violations": [],
+    "fatalViolations": [],
+    "resultSubtype": "success",
+    "isError": false,
+    "apiMs": 27426,
+    "results": 1
+   },
+   "wallSec": 46.418,
+   "timedOut": false,
+   "dir": "/tmp/mgl-eval-reframe-16-9-to-9-16-xq53pK",
+   "timeoutMin": 20,
+   "expectsWeak": false,
+   "agentHome": "/tmp/mgl-eval-home-THwT1S",
+   "baselineScore": 0,
+   "exitCode": 0,
+   "outputs": 3,
+   "dirRemoved": true,
+   "deltaScore": 1
+  },
+  {
+   "task": "short-from-script",
+   "pass": true,
+   "score": 1,
+   "checks": [
+    {
+     "name": "out/short.mp4: 1080x1920, H.264 + AAC, duration within 0.5 s of vo.wav",
+     "pass": true,
+     "detail": "1080x1920 h264/aac 10.933 s (vo 10.935 s)"
+    },
+    {
+     "name": "not black, not static, audio not silent, integrated loudness -20..-10 LUFS",
+     "pass": true,
+     "detail": "luma 0.498/0.491/0.492/0.495/0.498, max frame diff 12.48, loudness -14.2 LUFS; -14.2 LUFS"
+    },
+    {
+     "name": "text present at 0.5 s and 7 s (glyph pixel density above the bg-only reference)",
+     "pass": true,
+     "detail": "excess density 0.0269, 0.005 (need > 0.003)"
+    },
+    {
+     "name": "project valid; >= 1 cue per script line; a text clip starts at 0 with len <= 2.5 s",
+     "pass": true,
+     "detail": "short.mgl.json: 14 cues, 100% of script words, title \"3 Tips to Focus Better\""
+    }
+   ],
+   "metrics": {
+    "turns": 17,
+    "inputTokens": 28,
+    "outputTokens": 2933,
+    "cacheReadTokens": 602809,
+    "cacheCreationTokens": 25604,
+    "costUsd": 0.38534480000000004,
+    "toolCalls": 15,
+    "toolCounts": {
+     "Skill": 1,
+     "Bash": 12,
+     "Read": 2
+    },
+    "bashTimeouts": 0,
+    "failedEdits": 0,
+    "permissionDenials": 3,
+    "errorCodes": {},
+    "verbs": {
+     "docs": 5,
+     "new": 3,
+     "edit": 23,
+     "show": 3,
+     "check": 3,
+     "look": 2,
+     "render": 1
+    },
+    "violations": [],
+    "fatalViolations": [],
+    "resultSubtype": "success",
+    "isError": false,
+    "apiMs": 41700,
+    "results": 1
+   },
+   "wallSec": 81.603,
+   "timedOut": false,
+   "dir": "/tmp/mgl-eval-short-from-script-57gKvx",
+   "timeoutMin": 25,
+   "expectsWeak": false,
+   "agentHome": "/tmp/mgl-eval-home-THwT1S",
+   "baselineScore": 0,
+   "exitCode": 0,
+   "outputs": 3,
+   "dirRemoved": true,
+   "deltaScore": 1
+  },
+  {
+   "task": "slip-roll",
+   "pass": true,
+   "score": 1,
+   "checks": [
+    {
+     "name": "a.len +12, b.at +12, b.in +12, b.len -12; c.at and c.len unchanged, c.in +30",
+     "pass": true,
+     "detail": "a 0+102 in 0; b 102+78 in 162; c 180+90 in 330"
+    },
+    {
+     "name": "rendered counter at c start = old + 30 (and clip a still showing 0.1 s after the old cut)",
+     "pass": true,
+     "detail": "counter at 6 s = 330 (want 330), at 3.1 s = 93 (want 93: still clip a after the roll)"
+    }
+   ],
+   "metrics": {
+    "turns": 4,
+    "inputTokens": 8,
+    "outputTokens": 985,
+    "cacheReadTokens": 135359,
+    "cacheCreationTokens": 12941,
+    "costUsd": 0.1515148,
+    "toolCalls": 3,
+    "toolCounts": {
+     "Bash": 3
+    },
+    "bashTimeouts": 0,
+    "failedEdits": 0,
+    "permissionDenials": 0,
+    "errorCodes": {},
+    "verbs": {
+     "docs": 2,
+     "edit": 2,
+     "check": 1
+    },
+    "violations": [],
+    "fatalViolations": [],
+    "resultSubtype": "success",
+    "isError": false,
+    "apiMs": 14811,
+    "results": 1
+   },
+   "wallSec": 20.294,
+   "timedOut": false,
+   "dir": "/tmp/mgl-eval-slip-roll-ye9xu7",
+   "timeoutMin": 15,
+   "expectsWeak": false,
+   "agentHome": "/tmp/mgl-eval-home-THwT1S",
+   "baselineScore": 0,
+   "exitCode": 0,
+   "outputs": 1,
+   "dirRemoved": true,
+   "deltaScore": 1
+  },
+  {
+   "task": "speed-and-freeze",
+   "pass": true,
+   "score": 1,
+   "checks": [
+    {
+     "name": "decoded counter values follow 1x, then 2x steps, then constant for 30 frames, then 1x",
+     "pass": true,
+     "detail": "start 0; 1x 1; 2x 1; hold 90 x31 at frame 60; then 1x 1 over 147; last 239; luma 0.408/0.437/0.442/0.43/0.442, max frame diff 13.84"
+    },
+    {
+     "name": "duration consistent (frame count matches the edit: 90 + the 1x tail to the end of the original range)",
+     "pass": true,
+     "detail": "240 frames, 8 s; last source frame 239"
+    },
+    {
+     "name": "the project has the edit: a 2x clip and a freeze (speed 0) or a time remap on the counter",
+     "pass": true,
+     "detail": "run.mgl.json"
+    }
+   ],
+   "metrics": {
+    "turns": 7,
+    "inputTokens": 14,
+    "outputTokens": 1858,
+    "cacheReadTokens": 275322,
+    "cacheCreationTokens": 21415,
+    "costUsd": 0.2647924,
+    "toolCalls": 6,
+    "toolCounts": {
+     "Bash": 5,
+     "Read": 1
+    },
+    "bashTimeouts": 0,
+    "failedEdits": 0,
+    "permissionDenials": 1,
+    "errorCodes": {},
+    "verbs": {
+     "docs": 3,
+     "edit": 8,
+     "show": 2,
+     "check": 1,
+     "look": 1,
+     "render": 1
+    },
+    "violations": [],
+    "fatalViolations": [],
+    "resultSubtype": "success",
+    "isError": false,
+    "apiMs": 25376,
+    "results": 1
+   },
+   "wallSec": 41.257,
+   "timedOut": false,
+   "dir": "/tmp/mgl-eval-speed-and-freeze-QmcbV2",
+   "timeoutMin": 20,
+   "expectsWeak": false,
+   "agentHome": "/tmp/mgl-eval-home-THwT1S",
+   "baselineScore": 0,
+   "exitCode": 0,
+   "outputs": 2,
+   "dirRemoved": true,
+   "deltaScore": 1
+  }
+ ]
+}

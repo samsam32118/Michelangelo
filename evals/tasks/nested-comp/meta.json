@@ -1,0 +1,18 @@
+{
+  "id": "nested-comp",
+  "tags": [
+    "comps"
+  ],
+  "timeout_min": 20,
+  "expects_weak": false,
+  "fixtures": [],
+  "deliverables": [
+    "out/badges.mp4"
+  ],
+  "library_only": false,
+  "checks": [
+    "[lib] a 1080x1080 5 s badge comp used by 3 comp clips in a 1920x1080 main (different sizes and start times), with a rotation",
+    "out/badges.mp4 1920x1080: the badge is shown at 3 different scales (each held for >= 0.5 s somewhere in the video)",
+    "within one instance (same place and size 0.5 s later) the badge content rotates"
+  ]
+}

@@ -1,0 +1,61 @@
+{
+ "task": "csv-variants-sdk",
+ "pass": true,
+ "score": 1,
+ "checks": [
+  {
+   "name": "10 PNGs out/<id>.png at the comp size (1080x1080)",
+   "pass": true,
+   "detail": "10/10 present at 1080x1080"
+  },
+  {
+   "name": "background colour of each matches its CSV colour (delta E < 5)",
+   "pass": true,
+   "detail": "delta E 0 0 0 0 0 0 0 0 0 0"
+  },
+  {
+   "name": "a .mjs/.ts script importing michelangelo exists and was run before the PNGs were written",
+   "pass": true,
+   "detail": "make-variants.mjs"
+  },
+  {
+   "name": "name glyph region differs between variants (and has text)",
+   "pass": true,
+   "detail": "text px 31435..56430, min pairwise XOR/union 0.166"
+  }
+ ],
+ "metrics": {
+  "turns": 8,
+  "inputTokens": 12,
+  "outputTokens": 2162,
+  "cacheReadTokens": 230745,
+  "cacheCreationTokens": 21609,
+  "costUsd": 0.26347800000000005,
+  "toolCalls": 7,
+  "toolCounts": {
+   "Bash": 4,
+   "Write": 1,
+   "Read": 2
+  },
+  "bashTimeouts": 0,
+  "failedEdits": 0,
+  "errorCodes": {},
+  "verbs": {
+   "docs": 2,
+   "show": 2
+  },
+  "violations": [],
+  "resultSubtype": "success",
+  "isError": false,
+  "apiMs": 22216
+ },
+ "wallSec": 28.976,
+ "timedOut": false,
+ "dir": "/tmp/mgl-eval-csv-variants-sdk-7s7LNQ",
+ "timeoutMin": 20,
+ "expectsWeak": false,
+ "exitCode": 0,
+ "outputs": 33,
+ "dirRemoved": true,
+ "baselineScore": 0
+}

@@ -1,0 +1,61 @@
+{
+ "task": "captions-from-srt",
+ "pass": false,
+ "score": 0.6667,
+ "checks": [
+  {
+   "name": "project has 12 cues; each cue start/end within 1 frame of the SRT; texts unchanged",
+   "pass": false,
+   "detail": "12 cues; valid"
+  },
+  {
+   "name": "caption text box in the bottom third, white with a black outline",
+   "pass": true,
+   "detail": "bottom share 0.87 white 0.29 black 0.28; bottom share 0.96 white 0.29 black 0.28; bottom share 0.89 white 0.31 black 0.31"
+  },
+  {
+   "name": "out/draft.mp4 30 s +-0.2, glyph pixels in the bottom third at 3 cue midpoints and none at the gap; not empty; talk.mp4 unchanged",
+   "pass": true,
+   "detail": "30 s; bottom-third glyphs 0.0565/0.0563/0.0494; gap 0.0004; luma 0.37/0.37/0.369/0.369/0.37, max frame diff 5.08"
+  }
+ ],
+ "metrics": {
+  "turns": 15,
+  "inputTokens": 26,
+  "outputTokens": 2220,
+  "cacheReadTokens": 554193,
+  "cacheCreationTokens": 24478,
+  "costUsd": 0.3523246,
+  "toolCalls": 13,
+  "toolCounts": {
+   "Skill": 1,
+   "Bash": 10,
+   "Read": 2
+  },
+  "bashTimeouts": 0,
+  "failedEdits": 0,
+  "errorCodes": {
+   "E_REF": 1
+  },
+  "verbs": {
+   "docs": 5,
+   "edit": 6,
+   "check": 3,
+   "look": 2,
+   "render": 1
+  },
+  "violations": [],
+  "resultSubtype": "success",
+  "isError": false,
+  "apiMs": 30708
+ },
+ "wallSec": 55.049,
+ "timedOut": false,
+ "dir": "/tmp/mgl-eval-captions-from-srt-sKCguW",
+ "timeoutMin": 15,
+ "expectsWeak": false,
+ "exitCode": 0,
+ "outputs": 3,
+ "dirRemoved": true,
+ "baselineScore": 0
+}

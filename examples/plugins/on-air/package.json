@@ -1,0 +1,10 @@
+{
+  "name": "on-air",
+  "version": "1.0.0",
+  "description": "Audio examples: a telephone-voice audio effect and a level meter that follows a sound.",
+  "type": "module",
+  "main": "src/index.ts",
+  "michelangelo": { "api": "^1.1.0", "kinds": ["effect", "generator"] },
+  "scripts": { "test": "node --test test/*.test.ts" },
+  "peerDependencies": { "michelangelo": ">=0.1.0" }
+}

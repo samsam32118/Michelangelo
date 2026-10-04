@@ -1,0 +1,1 @@
+For the YouTube upload of `lesson.mgl.json`: add a chapter at each row of `chapters.csv` as a marker, show a 2-second full-screen title card with the chapter name at the start of each chapter (over the video, semi-transparent dark backing), and write the chapter list for the description as `out/chapters.txt` in YouTube's `MM:SS Title` format. Render `out/lesson.mp4`.

@@ -1,0 +1,23 @@
+{"michelangelo": 1,
+"assets": [
+{"id": "interview", "src": "interview.wav"}
+],
+"comps": [
+{"id": "main", "size": [1920, 1080], "fps": 30}
+],
+"tracks": [
+{"id": "V1", "comp": "main"},
+{"id": "T1", "comp": "main"},
+{"id": "A1", "comp": "main", "audio": true, "bus": "dialogue"},
+{"id": "A2", "comp": "main", "audio": true, "bus": "music"}
+],
+"clips": [
+{"id": "vo", "track": "A1", "at": 0, "len": 5, "asset": "interview"},
+{"id": "vo-2-26", "track": "A1", "at": 5, "len": 140, "asset": "interview", "in": 32, "clock": 32},
+{"id": "vo-2-25", "track": "A1", "at": 145, "len": 157, "asset": "interview", "in": 220, "clock": 220},
+{"id": "vo-2-24", "track": "A1", "at": 302, "len": 83, "asset": "interview", "in": 432, "clock": 432},
+{"id": "vo-2-23", "track": "A1", "at": 385, "len": 69, "asset": "interview", "in": 552, "clock": 552},
+{"id": "vo-2-22", "track": "A1", "at": 454, "len": 140, "asset": "interview", "in": 676, "clock": 676},
+{"id": "vo-2-2", "track": "A1", "at": 594, "len": 5, "asset": "interview", "in": 855, "clock": 855}
+]
+}

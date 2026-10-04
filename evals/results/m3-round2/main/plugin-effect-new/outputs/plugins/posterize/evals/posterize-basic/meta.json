@@ -1,0 +1,16 @@
+{
+  "id": "posterize-basic",
+  "tags": [
+    "plugins",
+    "effect"
+  ],
+  "timeout_min": 15,
+  "expects_weak": false,
+  "fixtures": [
+    "demo.mgl.json (a 1080x1920 30 fps comp with a testsrc2 clip)"
+  ],
+  "checks": [
+    "demo.mgl.json names the plugin and the clip has fx posterize amount=0.8",
+    "out/posterize.png: the clip area is tinted towards #00aaff"
+  ]
+}

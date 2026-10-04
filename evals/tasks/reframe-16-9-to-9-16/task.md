@@ -1,0 +1,1 @@
+Turn the landscape edit `wide.mgl.json` into a vertical 9:16 version for Shorts as `tall.mgl.json`, keeping the subject (the moving white circle) in frame and the title readable. Render `out/tall.mp4`.

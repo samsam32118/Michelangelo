@@ -1,0 +1,25 @@
+{
+  "id": "short-from-script",
+  "tags": [
+    "core",
+    "captions",
+    "render"
+  ],
+  "timeout_min": 25,
+  "expects_weak": false,
+  "fixtures": [
+    "script.txt (4 lines)",
+    "vo.wav (flite speech of the script, ~14 s)",
+    "bg.mp4 (testsrc2 1920x1080 20 s)"
+  ],
+  "deliverables": [
+    "out/short.mp4"
+  ],
+  "library_only": false,
+  "checks": [
+    "out/short.mp4: 1080x1920, H.264 + AAC, duration within 0.5 s of vo.wav",
+    "not black, not static, audio not silent, integrated loudness -20..-10 LUFS",
+    "text present at 0.5 s and 7 s (glyph pixel density above the bg-only reference)",
+    "[lib] project valid; >= 1 cue per script line; a text clip starts at 0 with len <= 2.5 s"
+  ]
+}

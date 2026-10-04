@@ -1,0 +1,22 @@
+{
+  "id": "lower-third",
+  "tags": [
+    "templates",
+    "text"
+  ],
+  "timeout_min": 15,
+  "expects_weak": false,
+  "fixtures": [
+    "talk.mgl.json (1920x1080 video 10 s)"
+  ],
+  "deliverables": [
+    "out/l3.png",
+    "out/before.png"
+  ],
+  "library_only": false,
+  "checks": [
+    "[lib] a template-derived or hand-built text clip with the name spans 2-7 s (project valid)",
+    "out/l3.png has text pixels in the lower-left third; out/before.png matches the plain video there",
+    "[lib] animated: opacity/position keyframes or an animate preset on the clip (or its template group)"
+  ]
+}

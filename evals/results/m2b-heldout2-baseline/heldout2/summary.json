@@ -1,0 +1,572 @@
+{
+ "label": "m2b-heldout2-baseline",
+ "set": "heldout2",
+ "model": "claude-opus-5-5",
+ "date": "2026-10-04T05:30:45.195Z",
+ "dryRun": false,
+ "sandbox": false,
+ "isolation": "audit",
+ "packageVersion": "0.1.0",
+ "timeoutScale": 1,
+ "tasks": 10,
+ "passed": 8,
+ "successRate": 0.8,
+ "meanScore": 0.9667,
+ "meanTurns": 23.3,
+ "meanTokens": 1003407,
+ "totalTokens": 10034066,
+ "totalOutputTokens": 63640,
+ "totalCostUsd": 5.71,
+ "meanWallSec": 125.3,
+ "timeouts": 0,
+ "bashTimeouts": 0,
+ "failedEdits": 0,
+ "permissionDenials": 40,
+ "violations": 0,
+ "fatalViolations": 0,
+ "violationFails": 0,
+ "meanBaselineScore": 0,
+ "meanDeltaScore": 0.9667,
+ "baselineTasks": 10,
+ "topErrors": [
+  [
+   "E_REF",
+   3
+  ],
+  [
+   "E_ARG",
+   3
+  ],
+  [
+   "E_OVERLAP",
+   2
+  ],
+  [
+   "E_UNKNOWN_TOPIC",
+   1
+  ],
+  [
+   "E_PATH",
+   1
+  ]
+ ],
+ "topVerbs": [
+  [
+   "edit",
+   67
+  ],
+  [
+   "docs",
+   46
+  ],
+  [
+   "check",
+   21
+  ],
+  [
+   "new",
+   20
+  ],
+  [
+   "render",
+   13
+  ],
+  [
+   "show",
+   12
+  ],
+  [
+   "look",
+   8
+  ]
+ ],
+ "results": [
+  {
+   "task": "h-388eb6",
+   "pass": true,
+   "score": 1,
+   "wallSec": 96.693,
+   "timedOut": false,
+   "timeoutMin": 20,
+   "expectsWeak": true,
+   "baselineScore": 0,
+   "exitCode": 0,
+   "outputs": 2,
+   "dirRemoved": true,
+   "deltaScore": 1,
+   "harnessError": false,
+   "checks": 5,
+   "metrics": {
+    "turns": 19,
+    "inputTokens": 34,
+    "outputTokens": 5943,
+    "cacheReadTokens": 743138,
+    "cacheCreationTokens": 27342,
+    "costUsd": 0.4875506,
+    "toolCalls": 18,
+    "toolCounts": {
+     "Bash": 16,
+     "Read": 1,
+     "Edit": 1
+    },
+    "bashTimeouts": 0,
+    "failedEdits": 0,
+    "permissionDenials": 1,
+    "errorCodes": {},
+    "verbs": {
+     "new": 1,
+     "edit": 4,
+     "show": 2,
+     "check": 2,
+     "render": 1
+    },
+    "violations": 0,
+    "fatalViolations": 0,
+    "resultSubtype": "success",
+    "isError": false,
+    "apiMs": 71119,
+    "results": 1
+   }
+  },
+  {
+   "task": "h-c1b94c",
+   "pass": true,
+   "score": 1,
+   "wallSec": 89.655,
+   "timedOut": false,
+   "timeoutMin": 20,
+   "expectsWeak": false,
+   "baselineScore": 0,
+   "exitCode": 0,
+   "outputs": 2,
+   "dirRemoved": true,
+   "deltaScore": 1,
+   "harnessError": false,
+   "checks": 7,
+   "metrics": {
+    "turns": 21,
+    "inputTokens": 38,
+    "outputTokens": 4753,
+    "cacheReadTokens": 887250,
+    "cacheCreationTokens": 29466,
+    "costUsd": 0.50964,
+    "toolCalls": 20,
+    "toolCounts": {
+     "Bash": 16,
+     "Write": 1,
+     "Edit": 1,
+     "Read": 2
+    },
+    "bashTimeouts": 0,
+    "failedEdits": 0,
+    "permissionDenials": 3,
+    "errorCodes": {
+     "E_OVERLAP": 2
+    },
+    "verbs": {
+     "docs": 1,
+     "new": 1,
+     "check": 3,
+     "look": 1,
+     "render": 1
+    },
+    "violations": 0,
+    "fatalViolations": 0,
+    "resultSubtype": "success",
+    "isError": false,
+    "apiMs": 63616,
+    "results": 1
+   }
+  },
+  {
+   "task": "h-3f561a",
+   "pass": true,
+   "score": 1,
+   "wallSec": 88.069,
+   "timedOut": false,
+   "timeoutMin": 20,
+   "expectsWeak": true,
+   "baselineScore": 0,
+   "exitCode": 0,
+   "outputs": 3,
+   "dirRemoved": true,
+   "deltaScore": 1,
+   "harnessError": false,
+   "checks": 5,
+   "metrics": {
+    "turns": 15,
+    "inputTokens": 26,
+    "outputTokens": 4333,
+    "cacheReadTokens": 568341,
+    "cacheCreationTokens": 24015,
+    "costUsd": 0.3937682,
+    "toolCalls": 14,
+    "toolCounts": {
+     "Bash": 12,
+     "Write": 2
+    },
+    "bashTimeouts": 0,
+    "failedEdits": 0,
+    "permissionDenials": 4,
+    "errorCodes": {},
+    "verbs": {
+     "docs": 1,
+     "new": 1,
+     "check": 4,
+     "render": 1
+    },
+    "violations": 0,
+    "fatalViolations": 0,
+    "resultSubtype": "success",
+    "isError": false,
+    "apiMs": 49514,
+    "results": 1
+   }
+  },
+  {
+   "task": "h-5f5ba2",
+   "pass": false,
+   "score": 0.8333,
+   "wallSec": 362.767,
+   "timedOut": false,
+   "timeoutMin": 20,
+   "expectsWeak": false,
+   "baselineScore": 0,
+   "exitCode": 0,
+   "outputs": 4,
+   "dirRemoved": true,
+   "deltaScore": 0.8333,
+   "harnessError": false,
+   "checks": 6,
+   "metrics": {
+    "turns": 64,
+    "inputTokens": 86,
+    "outputTokens": 17985,
+    "cacheReadTokens": 3013302,
+    "cacheCreationTokens": 70102,
+    "costUsd": 1.5247644,
+    "toolCalls": 63,
+    "toolCounts": {
+     "Bash": 49,
+     "Read": 9,
+     "Edit": 3,
+     "Write": 2
+    },
+    "bashTimeouts": 0,
+    "failedEdits": 0,
+    "permissionDenials": 9,
+    "errorCodes": {
+     "E_UNKNOWN_TOPIC": 1
+    },
+    "verbs": {
+     "docs": 14,
+     "new": 2,
+     "edit": 18,
+     "show": 3,
+     "check": 3,
+     "render": 3,
+     "look": 2
+    },
+    "violations": 0,
+    "fatalViolations": 0,
+    "resultSubtype": "success",
+    "isError": false,
+    "apiMs": 244164,
+    "results": 1
+   }
+  },
+  {
+   "task": "h-426a7a",
+   "pass": true,
+   "score": 1,
+   "wallSec": 108.086,
+   "timedOut": false,
+   "timeoutMin": 15,
+   "expectsWeak": false,
+   "baselineScore": 0,
+   "exitCode": 0,
+   "outputs": 3,
+   "dirRemoved": true,
+   "deltaScore": 1,
+   "harnessError": false,
+   "checks": 7,
+   "metrics": {
+    "turns": 22,
+    "inputTokens": 42,
+    "outputTokens": 5060,
+    "cacheReadTokens": 956085,
+    "cacheCreationTokens": 29622,
+    "costUsd": 0.530754,
+    "toolCalls": 21,
+    "toolCounts": {
+     "Bash": 18,
+     "Read": 2,
+     "Edit": 1
+    },
+    "bashTimeouts": 0,
+    "failedEdits": 0,
+    "permissionDenials": 6,
+    "errorCodes": {
+     "E_PATH": 1,
+     "E_REF": 3,
+     "E_ARG": 3
+    },
+    "verbs": {
+     "docs": 6,
+     "new": 7,
+     "edit": 24,
+     "check": 2,
+     "render": 1,
+     "look": 1
+    },
+    "violations": 0,
+    "fatalViolations": 0,
+    "resultSubtype": "success",
+    "isError": false,
+    "apiMs": 74366,
+    "results": 1
+   }
+  },
+  {
+   "task": "h-b618bd",
+   "pass": false,
+   "score": 0.8333,
+   "wallSec": 81.976,
+   "timedOut": false,
+   "timeoutMin": 20,
+   "expectsWeak": false,
+   "baselineScore": 0,
+   "exitCode": 0,
+   "outputs": 2,
+   "dirRemoved": true,
+   "deltaScore": 0.8333,
+   "harnessError": false,
+   "checks": 6,
+   "metrics": {
+    "turns": 18,
+    "inputTokens": 32,
+    "outputTokens": 3866,
+    "cacheReadTokens": 690507,
+    "cacheCreationTokens": 26179,
+    "costUsd": 0.4262364,
+    "toolCalls": 17,
+    "toolCounts": {
+     "Bash": 15,
+     "Edit": 1,
+     "Read": 1
+    },
+    "bashTimeouts": 0,
+    "failedEdits": 0,
+    "permissionDenials": 4,
+    "errorCodes": {},
+    "verbs": {
+     "docs": 9,
+     "new": 3,
+     "edit": 12,
+     "show": 3,
+     "check": 1,
+     "look": 1,
+     "render": 1
+    },
+    "violations": 0,
+    "fatalViolations": 0,
+    "resultSubtype": "success",
+    "isError": false,
+    "apiMs": 51636,
+    "results": 1
+   }
+  },
+  {
+   "task": "h-d81eb4",
+   "pass": true,
+   "score": 1,
+   "wallSec": 102.802,
+   "timedOut": false,
+   "timeoutMin": 20,
+   "expectsWeak": false,
+   "baselineScore": 0,
+   "exitCode": 0,
+   "outputs": 2,
+   "dirRemoved": true,
+   "deltaScore": 1,
+   "harnessError": false,
+   "checks": 6,
+   "metrics": {
+    "turns": 19,
+    "inputTokens": 32,
+    "outputTokens": 5068,
+    "cacheReadTokens": 721200,
+    "cacheCreationTokens": 29561,
+    "costUsd": 0.48344000000000004,
+    "toolCalls": 18,
+    "toolCounts": {
+     "Bash": 15,
+     "Write": 2,
+     "Read": 1
+    },
+    "bashTimeouts": 0,
+    "failedEdits": 0,
+    "permissionDenials": 4,
+    "errorCodes": {},
+    "verbs": {
+     "docs": 6,
+     "new": 2,
+     "edit": 5,
+     "show": 3,
+     "check": 2,
+     "look": 1,
+     "render": 1
+    },
+    "violations": 0,
+    "fatalViolations": 0,
+    "resultSubtype": "success",
+    "isError": false,
+    "apiMs": 58017,
+    "results": 1
+   }
+  },
+  {
+   "task": "h-20111d",
+   "pass": true,
+   "score": 1,
+   "wallSec": 84.783,
+   "timedOut": false,
+   "timeoutMin": 15,
+   "expectsWeak": false,
+   "baselineScore": 0,
+   "exitCode": 0,
+   "outputs": 2,
+   "dirRemoved": true,
+   "deltaScore": 1,
+   "harnessError": false,
+   "checks": 6,
+   "metrics": {
+    "turns": 18,
+    "inputTokens": 32,
+    "outputTokens": 5103,
+    "cacheReadTokens": 680756,
+    "cacheCreationTokens": 22639,
+    "costUsd": 0.4206502,
+    "toolCalls": 17,
+    "toolCounts": {
+     "Bash": 16,
+     "Write": 1
+    },
+    "bashTimeouts": 0,
+    "failedEdits": 0,
+    "permissionDenials": 4,
+    "errorCodes": {},
+    "verbs": {
+     "docs": 3,
+     "new": 1,
+     "edit": 2,
+     "check": 1,
+     "show": 1,
+     "render": 2
+    },
+    "violations": 0,
+    "fatalViolations": 0,
+    "resultSubtype": "success",
+    "isError": false,
+    "apiMs": 59355,
+    "results": 1
+   }
+  },
+  {
+   "task": "h-204129",
+   "pass": true,
+   "score": 1,
+   "wallSec": 66.717,
+   "timedOut": false,
+   "timeoutMin": 15,
+   "expectsWeak": false,
+   "baselineScore": 0,
+   "exitCode": 0,
+   "outputs": 2,
+   "dirRemoved": true,
+   "deltaScore": 1,
+   "harnessError": false,
+   "checks": 6,
+   "metrics": {
+    "turns": 11,
+    "inputTokens": 18,
+    "outputTokens": 2711,
+    "cacheReadTokens": 359519,
+    "cacheCreationTokens": 21368,
+    "costUsd": 0.29836080000000004,
+    "toolCalls": 10,
+    "toolCounts": {
+     "Bash": 7,
+     "Read": 2,
+     "Edit": 1
+    },
+    "bashTimeouts": 0,
+    "failedEdits": 0,
+    "permissionDenials": 1,
+    "errorCodes": {},
+    "verbs": {
+     "docs": 3,
+     "new": 1,
+     "edit": 1,
+     "check": 2,
+     "look": 2,
+     "render": 1
+    },
+    "violations": 0,
+    "fatalViolations": 0,
+    "resultSubtype": "success",
+    "isError": false,
+    "apiMs": 37737,
+    "results": 1
+   }
+  },
+  {
+   "task": "h-ef12d8",
+   "pass": true,
+   "score": 1,
+   "wallSec": 171.484,
+   "timedOut": false,
+   "timeoutMin": 25,
+   "expectsWeak": true,
+   "baselineScore": 0,
+   "exitCode": 0,
+   "outputs": 3,
+   "dirRemoved": true,
+   "deltaScore": 1,
+   "harnessError": false,
+   "checks": 6,
+   "metrics": {
+    "turns": 26,
+    "inputTokens": 44,
+    "outputTokens": 8818,
+    "cacheReadTokens": 1037881,
+    "cacheCreationTokens": 31769,
+    "costUsd": 0.6394732000000001,
+    "toolCalls": 25,
+    "toolCounts": {
+     "Bash": 18,
+     "Grep": 3,
+     "Read": 2,
+     "Write": 2
+    },
+    "bashTimeouts": 0,
+    "failedEdits": 0,
+    "permissionDenials": 4,
+    "errorCodes": {},
+    "verbs": {
+     "docs": 3,
+     "new": 1,
+     "edit": 1,
+     "check": 1,
+     "render": 1
+    },
+    "violations": 0,
+    "fatalViolations": 0,
+    "resultSubtype": "success",
+    "isError": false,
+    "apiMs": 112091,
+    "results": 1
+   }
+  }
+ ]
+}

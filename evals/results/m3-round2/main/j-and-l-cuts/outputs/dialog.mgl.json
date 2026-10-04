@@ -1,0 +1,20 @@
+{"michelangelo": 1,
+"project": {"name": "Dialogue"},
+"assets": [
+{"id": "shot-a", "src": "media/shotA.mp4"},
+{"id": "shot-b", "src": "media/shotB.mp4"}
+],
+"comps": [
+{"id": "main", "size": [1280, 720], "fps": 30, "length": 240}
+],
+"tracks": [
+{"id": "V1", "comp": "main"},
+{"id": "A1", "comp": "main", "audio": true, "bus": "dialogue"}
+],
+"clips": [
+{"id": "a", "track": "V1", "at": 0, "len": 120, "asset": "shot-a", "link": "A", "muted": true},
+{"id": "b", "track": "V1", "at": 120, "len": 120, "asset": "shot-b", "in": 60, "link": "B", "muted": true},
+{"id": "a-audio", "track": "A1", "at": 0, "len": 150, "asset": "shot-a", "link": "A"},
+{"id": "b-audio", "track": "A1", "at": 150, "len": 90, "asset": "shot-b", "in": 90, "link": "B", "clock": 30}
+]
+}

@@ -1,0 +1,62 @@
+{
+  "name": "michelangelo",
+  "version": "0.1.0",
+  "description": "Video editing and motion graphics as a TypeScript library and CLI, designed for AI coding agents.",
+  "type": "module",
+  "license": "SEE LICENSE IN LICENSE.md",
+  "engines": {
+    "node": ">=22"
+  },
+  "bin": {
+    "mgl": "./dist/cli/main.js",
+    "michelangelo": "./dist/cli/main.js"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/sdk/index.d.ts",
+      "default": "./dist/sdk/index.js"
+    },
+    "./plugin": {
+      "types": "./dist/plugin/api.d.ts",
+      "default": "./dist/plugin/api.js"
+    },
+    "./testing": {
+      "types": "./dist/plugin/testing.d.ts",
+      "default": "./dist/plugin/testing.js"
+    },
+    "./schema/v1.json": "./schema/v1.json",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist",
+    "schema",
+    "docs",
+    "fonts",
+    "SKILL.md",
+    "LICENSE.md",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json && node scripts/postbuild.mjs",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run",
+    "test:fast": "npm run typecheck && vitest run",
+    "schema": "node --import tsx scripts/gen-schema.ts",
+    "bench": "node --import tsx scripts/bench.ts",
+    "mgl": "node --import tsx src/cli/main.ts",
+    "docs": "node --import tsx scripts/gen-docs.ts",
+    "docs:check": "node --import tsx scripts/gen-docs.ts --check && node --import tsx scripts/gen-schema.ts --check"
+  },
+  "dependencies": {
+    "@napi-rs/canvas": "0.1.80",
+    "jsonc-parser": "^3.3.1",
+    "undici": "^8.11.2",
+    "zod": "^4.6.5"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.4",
+    "tsx": "^4.23.15",
+    "typescript": "^7.0.2",
+    "vitest": "^5.0.3"
+  }
+}

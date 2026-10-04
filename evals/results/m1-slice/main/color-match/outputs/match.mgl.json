@@ -1,0 +1,17 @@
+{"michelangelo": 1,
+"project": {"name": "Colour match", "plugins": {"channel-mix": "^0.1.0"}},
+"assets": [
+{"id": "shot-a", "src": "media/a.mp4"},
+{"id": "shot-b", "src": "media/b.mp4"}
+],
+"comps": [
+{"id": "main", "size": [1280, 720], "fps": 30, "length": 240}
+],
+"tracks": [
+{"id": "V1", "comp": "main"}
+],
+"clips": [
+{"id": "a", "track": "V1", "at": 0, "len": 120, "asset": "shot-a"},
+{"id": "b", "track": "V1", "at": 120, "len": 120, "asset": "shot-b", "fx": [{"type": "channel-mix", "red": [1.0272, 0.0368, -0.003, -0.043], "green": [0.004, 1.0048, 0.0003, -0.0032], "blue": [0.0106, 0.0189, 1.0661, -0.0154]}]}
+]
+}

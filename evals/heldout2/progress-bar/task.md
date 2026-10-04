@@ -1,0 +1,1 @@
+Add a YouTube-style progress bar to `tutorial.mp4`: a 12 px tall #ff3b30 bar along the very bottom edge of the frame that grows from the left, from nothing at the start to the full width at the end of the video. Leave the picture and the audio otherwise untouched. Keep it 1920x1080, save the project as `progress.mgl.json` and render `out/progress.mp4`.

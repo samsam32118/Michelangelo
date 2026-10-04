@@ -1,0 +1,19 @@
+{
+  "name": "posterize",
+  "version": "0.1.0",
+  "description": "A layer effect that reduces each colour channel to N levels.",
+  "type": "module",
+  "main": "src/index.ts",
+  "michelangelo": {
+    "api": "^1.2.0",
+    "kinds": [
+      "effect"
+    ]
+  },
+  "scripts": {
+    "test": "node --test test/*.test.ts"
+  },
+  "peerDependencies": {
+    "michelangelo": "*"
+  }
+}

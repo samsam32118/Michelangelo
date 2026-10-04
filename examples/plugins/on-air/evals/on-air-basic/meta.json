@@ -1,0 +1,8 @@
+{
+  "id": "on-air-basic",
+  "tags": ["plugins", "effect", "generator", "audio"],
+  "timeout_min": 15,
+  "expects_weak": false,
+  "fixtures": ["demo.mgl.json (a voice clip on A1, bus dialogue)", "plugins/on-air"],
+  "checks": ["bus dialogue has fx telephone", "out/call.wav has little energy below 250 Hz and above 4 kHz", "a gen level-meter clip names the voice asset", "out/meter.png: a coloured bar at the right edge"]
+}

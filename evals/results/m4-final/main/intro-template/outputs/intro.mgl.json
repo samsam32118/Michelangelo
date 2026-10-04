@@ -1,0 +1,24 @@
+{"michelangelo": 1,
+"project": {"name": "Kitchen Lab", "platform": "youtube"},
+"assets": [
+{"id": "cook-mp4", "src": "cook.mp4"}
+],
+"comps": [
+{"id": "main", "size": [1920, 1080], "fps": 30}
+],
+"tracks": [
+{"id": "V1", "comp": "main"},
+{"id": "T1", "comp": "main"},
+{"id": "V2", "comp": "main"},
+{"id": "V3", "comp": "main"},
+{"id": "A1", "comp": "main", "audio": true, "bus": "dialogue"},
+{"id": "A2", "comp": "main", "audio": true, "bus": "music"}
+],
+"clips": [
+{"id": "intro-bg", "track": "V1", "at": 0, "len": 120, "color": "#101014", "tags": ["template:intro"]},
+{"id": "cook", "track": "V1", "at": 120, "len": 240, "asset": "cook-mp4"},
+{"id": "intro-bar", "track": "T1", "at": 0, "len": 120, "shape": {"type": "rect", "size": [864, 12], "radius": 6, "fill": "#ffd400"}, "x": 960, "y": 332, "scale": [[0, [0, 1], "outCubic"], [15, [1, 1]]], "tags": ["template:intro"]},
+{"id": "intro-dot", "track": "V2", "at": 0, "len": 120, "shape": {"type": "ellipse", "size": [160, 160], "fill": "#ffd400"}, "x": 1724, "y": 154, "scale": [[0, 0, "outBack"], [15, 1], [119, 1.4]], "opacity": 0.25, "tags": ["template:intro"]},
+{"id": "intro-title", "track": "V3", "at": 0, "len": 120, "text": "Kitchen Lab", "style": {"size": 120, "maxLines": 2, "box": [1555, 276], "base": "title"}, "animate": {"in": "pop", "out": "fade", "by": "word"}, "x": 960, "y": 500, "scale": [[0, 1], [119, 1.08]], "tags": ["template:intro"]}
+]
+}

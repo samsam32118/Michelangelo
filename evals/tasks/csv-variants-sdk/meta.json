@@ -1,0 +1,24 @@
+{
+  "id": "csv-variants-sdk",
+  "tags": [
+    "sdk",
+    "batch"
+  ],
+  "timeout_min": 20,
+  "expects_weak": false,
+  "fixtures": [
+    "products.csv (10 rows)",
+    "promo.mgl.json (bg solid, name text, price text)"
+  ],
+  "deliverables": [
+    "out/*.png"
+  ],
+  "library_only": false,
+  "checks": [
+    "10 PNGs out/<id>.png at the comp size (1080x1080)",
+    "background colour of each matches its CSV colour (delta E < 5)",
+    "[lib] made with the library: a script importing michelangelo, or 10 valid variant projects each with its name and price",
+    "name glyph region differs between variants (and has text)",
+    "price region has text in each variant and differs between rows with different prices"
+  ]
+}

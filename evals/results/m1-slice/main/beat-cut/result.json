@@ -1,0 +1,56 @@
+{
+ "task": "beat-cut",
+ "pass": false,
+ "score": 0.5,
+ "checks": [
+  {
+   "name": "cut times (frame-colour changes) within 2 frames of the beats 0.5, 1.0, ... 4.0 s; 1080x1080",
+   "pass": false,
+   "detail": "photo starts (frames) 0,15,30,45,60,75,90,105; expected 15,30,45,60,75,90,105,120"
+  },
+  {
+   "name": "8 distinct colours appear in order",
+   "pass": true,
+   "detail": "first frames 0,15,30,45,60,75,90,105"
+  }
+ ],
+ "metrics": {
+  "turns": 23,
+  "inputTokens": 38,
+  "outputTokens": 6642,
+  "cacheReadTokens": 851086,
+  "cacheCreationTokens": 28581,
+  "costUsd": 0.5330112,
+  "toolCalls": 21,
+  "toolCounts": {
+   "Skill": 1,
+   "Bash": 16,
+   "Write": 3,
+   "Read": 1
+  },
+  "bashTimeouts": 0,
+  "failedEdits": 0,
+  "errorCodes": {},
+  "verbs": {
+   "docs": 3,
+   "new": 3,
+   "show": 6,
+   "edit": 7,
+   "look": 6,
+   "render": 2
+  },
+  "violations": [],
+  "resultSubtype": "success",
+  "isError": false,
+  "apiMs": 71364
+ },
+ "wallSec": 89.385,
+ "timedOut": false,
+ "dir": "/tmp/mgl-eval-beat-cut-IbP0j0",
+ "timeoutMin": 20,
+ "expectsWeak": true,
+ "exitCode": 0,
+ "outputs": 4,
+ "dirRemoved": true,
+ "baselineScore": 0
+}

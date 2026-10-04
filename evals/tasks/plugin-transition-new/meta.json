@@ -1,0 +1,22 @@
+{
+  "id": "plugin-transition-new",
+  "tags": [
+    "plugins",
+    "transitions"
+  ],
+  "timeout_min": 25,
+  "expects_weak": false,
+  "fixtures": [
+    "two.mgl.json (red solid 3 s then blue solid 3 s)"
+  ],
+  "deliverables": [
+    "out/iris.mp4"
+  ],
+  "library_only": false,
+  "checks": [
+    "[lib] plugin test passes (plugins/iris, manifest api ^1)",
+    "[lib] two.mgl.json uses the iris transition between the clips, 1 s long; clips unchanged",
+    "at the transition midpoint (3.0 s): centre pixel blue, corner pixel red",
+    "before (2.0 s): all red; after (4.0 s): all blue; duration 6 s"
+  ]
+}

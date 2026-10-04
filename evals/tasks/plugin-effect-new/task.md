@@ -1,0 +1,1 @@
+Write a new effect plugin `posterize` that reduces each colour channel to N levels (param `levels`, default 4). Register it in `demo.mgl.json`, apply it to the video clip with 3 levels, and render a still at 1 s to `out/poster.png`.

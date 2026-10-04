@@ -1,0 +1,23 @@
+{"michelangelo": 1,
+"project": {"platform": "youtube"},
+"assets": [
+{"id": "screen-mp4", "src": "screen.mp4"},
+{"id": "cam-mp4", "src": "cam.mp4"}
+],
+"comps": [
+{"id": "main", "size": [1920, 1080], "fps": 30}
+],
+"tracks": [
+{"id": "V1", "comp": "main"},
+{"id": "PIPSHADOW", "comp": "main"},
+{"id": "V2", "comp": "main"},
+{"id": "T1", "comp": "main"},
+{"id": "A1", "comp": "main", "audio": true, "bus": "dialogue"},
+{"id": "A2", "comp": "main", "audio": true, "bus": "music"}
+],
+"clips": [
+{"id": "screen", "track": "V1", "at": 0, "len": 180, "asset": "screen-mp4", "fit": "cover"},
+{"id": "cam-shadow", "track": "PIPSHADOW", "at": 0, "len": 180, "shape": {"type": "rect", "size": [480, 270], "radius": 24, "fill": "#000000"}, "x": 1632, "y": 909, "opacity": 0.45, "fx": [{"type": "blur", "radius": 22, "edges": "transparent"}]},
+{"id": "cam", "track": "V2", "at": 0, "len": 180, "asset": "cam-mp4", "x": 1632, "y": 897, "scale": 0.25, "masks": [{"shape": "rect", "box": [0, 0, 1, 1], "space": "clip", "radius": 96}]}
+]
+}

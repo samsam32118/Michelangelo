@@ -1,0 +1,22 @@
+{
+  "id": "fix-caption-logo-overlap",
+  "tags": [
+    "qa",
+    "captions"
+  ],
+  "timeout_min": 15,
+  "expects_weak": false,
+  "fixtures": [
+    "promo.mgl.json (1080x1920; logo image top-right on a track above the captions; captions placed in the upper third so the 3-line cue c5 at 8 s overlaps the logo)"
+  ],
+  "deliverables": [
+    "promo.mgl.json"
+  ],
+  "library_only": true,
+  "checks": [
+    "[lib] frame at cue c5: caption glyphs and the logo both present and disjoint",
+    "[lib] logo clip x, y, scale, opacity, hidden, blend unchanged",
+    "[lib] caption clip and style: size not smaller, not hidden, opacity unchanged, scale not < 1",
+    "[lib] cue count, texts and timings unchanged"
+  ]
+}

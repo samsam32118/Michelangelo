@@ -1,0 +1,17 @@
+{"michelangelo": 1,
+"project": {"name": "Orbit", "platform": "youtube"},
+"assets": [
+{"id": "circle-mp4", "src": "media/circle.mp4"}
+],
+"comps": [
+{"id": "main", "size": [1920, 1080], "fps": 30, "length": 180}
+],
+"tracks": [
+{"id": "V1", "comp": "main"},
+{"id": "T1", "comp": "main"}
+],
+"clips": [
+{"id": "shot", "track": "V1", "at": 0, "len": 180, "asset": "circle-mp4"},
+{"id": "title", "track": "T1", "at": 0, "len": 90, "text": "Orbit", "style": {"base": "title", "color": "#ffd400", "size": 100}, "y": 150}
+]
+}

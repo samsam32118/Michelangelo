@@ -1,0 +1,1 @@
+Make a 6-second 1920x1080 animated bar chart of `stats.csv` (5 categories) on a white background: the bars grow up from a common baseline one after another, each in its own colour from the CSV, with the category name under each bar, and hold at their final heights for the last 2 seconds. Save `chart.mgl.json` and render `out/chart.mp4`.

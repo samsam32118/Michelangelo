@@ -1,0 +1,23 @@
+{"michelangelo": 1,
+"project": {"name": "Interview", "platform": "youtube"},
+"assets": [
+{"id": "talk-mp4", "src": "media/talk.mp4"}
+],
+"comps": [
+{"id": "main", "size": [1920, 1080], "fps": 30, "length": 300}
+],
+"tracks": [
+{"id": "V1", "comp": "main"},
+{"id": "V2", "comp": "main"},
+{"id": "V3", "comp": "main"},
+{"id": "V4", "comp": "main"},
+{"id": "V5", "comp": "main"}
+],
+"clips": [
+{"id": "talk", "track": "V1", "at": 0, "len": 300, "asset": "talk-mp4"},
+{"id": "lower-third-bar", "track": "V2", "at": 60, "len": 150, "shape": {"type": "rect", "size": [12, 152], "fill": "#ffd400"}, "x": 116, "y": 920, "anchor": [0, 0.5], "scale": [[0, [1, 0], "outCubic"], [9, [1, 1]], [140, [1, 1], "inCubic"], [149, [1, 0]]], "tags": ["template:lower-third"]},
+{"id": "lower-third-plate", "track": "V3", "at": 60, "len": 150, "shape": {"type": "rect", "size": [900, 152], "fill": "#000000b3"}, "x": 128, "y": 920, "anchor": [0, 0.5], "scale": [[0, [0, 1], "outCubic"], [15, [1, 1]], [134, [1, 1], "inCubic"], [149, [0, 1]]], "tags": ["template:lower-third"]},
+{"id": "lower-third-name", "track": "V4", "at": 69, "len": 141, "text": "Dr. Ada Park", "style": {"size": 52, "lineHeight": 1.2, "maxLines": 1, "box": [852, 66], "base": "lower-third"}, "animate": {"in": "slide-left", "out": "fade", "by": "all"}, "x": 152, "y": 895, "anchor": [0, 0.5], "tags": ["template:lower-third"]},
+{"id": "lower-third-role", "track": "V5", "at": 74, "len": 136, "text": "Neuroscientist", "style": {"size": 36, "color": "#dddddd", "align": "left", "lineHeight": 1.2, "maxLines": 1, "box": [852, 46], "base": "body"}, "animate": {"in": "slide-left", "out": "fade", "by": "all"}, "x": 152, "y": 955, "anchor": [0, 0.5], "tags": ["template:lower-third"]}
+]
+}

@@ -1,0 +1,26 @@
+{
+  "id": "highlight-reel-script",
+  "tags": [
+    "sdk",
+    "editing",
+    "batch"
+  ],
+  "timeout_min": 25,
+  "expects_weak": false,
+  "fixtures": [
+    "clips/a.mp4, clips/b.mp4, clips/c.mp4, clips/d.mp4 (1920x1080 30 fps 20 s each: testsrc2, smptebars, mandelbrot, and color=teal with a drawbox; each with a different sine tone audio 330/440/550/660 Hz)",
+    "highlights.json (5 entries, 2-4 s each, one source used twice, in/out given as m:ss.s strings, short captions)"
+  ],
+  "checks": [
+    "make-reel.mjs exists and re-running it with a modified highlights.json (grader drops one entry) produces a reel 1 entry shorter without errors",
+    "[lib] make-reel.mjs imports michelangelo, and its re-run writes reel.mgl.json with one media clip fewer",
+    "out/reel.mp4: 1920x1080, duration = sum of moments - 4 x 0.5 s (+/- 2 frames), not black, not static, audio not silent",
+    "at each moment's midpoint the frame matches the source at in + offset (SSIM >= 0.8 outside the label area); during each crossfade the frame is a blend (SSIM with both neighbours between 0.3 and 0.95)",
+    "the dominant audio tone at each moment's midpoint matches its source",
+    "lower-left quadrant glyph density at each midpoint higher than the source frame there, and the label region differs between consecutive moments",
+    "[lib] reel.mgl.json loads and validates with 5 media clips"
+  ],
+  "deliverables": [
+    "out/reel.mp4"
+  ]
+}

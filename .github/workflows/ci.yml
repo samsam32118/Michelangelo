@@ -1,0 +1,32 @@
+name: ci
+on:
+  push:
+    branches: [main]
+  pull_request:
+jobs:
+  check:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install ffmpeg
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends ffmpeg
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npx vitest run
+      - name: Build and pack (no GPL files in the tarball)
+        run: |
+          npm run build
+          npm pack --dry-run --json > pack.json
+          node -e "const f=require('./pack.json')[0].files.map(x=>x.path);const bad=f.filter(p=>/(^|\/)(ffmpeg|ffprobe)(\.exe)?$|\.(so|dll|dylib|exe|tar\.xz|zip)$|^evals\//i.test(p));if(bad.length){console.error('unexpected files in package:',bad);process.exit(1)}console.log(f.length+' files ok')"
+      - name: Smoke render
+        run: |
+          mkdir -p /tmp/smoke && cd /tmp/smoke
+          node $GITHUB_WORKSPACE/dist/cli/main.js new shorts -o smoke.mgl.json
+          node $GITHUB_WORKSPACE/dist/cli/main.js edit smoke.mgl.json clip.add text=Hello len=2s
+          node $GITHUB_WORKSPACE/dist/cli/main.js render smoke.mgl.json out.mp4 --draft
+          ffprobe -v error -show_entries format=duration -of csv=p=0 out.mp4

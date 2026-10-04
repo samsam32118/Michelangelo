@@ -1,0 +1,22 @@
+{
+  "id": "audiogram-square",
+  "tags": [
+    "audio",
+    "motion",
+    "weak"
+  ],
+  "timeout_min": 25,
+  "expects_weak": true,
+  "fixtures": [
+    "clip.wav (12 s, 48 kHz: flite speech 0-4 s, digital silence 4-6 s, flite speech 6-10 s, a 2 s 300 Hz tone burst at -6 dBFS 10-12 s)"
+  ],
+  "checks": [
+    "out/audiogram.mp4: 1080x1080, H.264 + AAC, duration 12 s +/- 0.2 s, audio not silent and correlates with clip.wav (lag 0 +/- 2 frames)",
+    "background pixel at (20, 1060) within delta E 5 of #101828 at 1 s and 9 s; frames not all one colour",
+    "text glyph density in the top quarter (y < 270) is high at 1 s and 9 s (title present)",
+    "visualiser reacts: count of non-background pixels in the central band (y 400-680) at 2 s, 8 s and 11 s is each >= 3x its value at 5 s (the silent gap); band content differs between 2 s and 2.5 s (not a static image)"
+  ],
+  "deliverables": [
+    "out/audiogram.mp4"
+  ]
+}

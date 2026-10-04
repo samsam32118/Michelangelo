@@ -1,0 +1,362 @@
+/**
+ * planAudio: flatten every audible span of a comp (audio clips, video clips' own audio, nested comps)
+ * into absolute 48 kHz sample spans. Pure: no ffmpeg, no file access (pass `hasAudio` to know which
+ * video assets carry sound). Sample maths per DESIGN §16 #7: sample(f) = floor(f × 48000 × den / num).
+ */
+import { resolve } from 'node:path';
+import { fail, suggest } from '../core/errors.js';
+import type { Clip, Comp, Easing, ProjectFile, Track } from '../core/schema/index.js';
+import { easingFn, interpolate } from '../render/keyframes.js';
+import { parseRate, parseSpeed, type Rate } from '../core/time.js';
+import type { AudioPlan, AudioSegment, FilterSpec } from '../render/types.js';
+import type { PluginRegistry } from '../plugin/registry.js';
+
+export const SAMPLE_RATE = 48000;
+const AUDIO_EXT = /\.(wav|mp3|m4a|aac|opus|ogg|oga|flac|aiff?|caf|wma)$/i;
+const NOT_AUDIBLE = /\.(png|jpe?g|webp|gif|bmp|svg|tiff?|avif|cube|3dl|srt|vtt|ttf|otf|woff2?|json|txt)$/i;
+
+// ---------------------------------------------------------------------------- exact rationals
+interface Q { n: bigint; d: bigint }
+const gcd = (a: bigint, b: bigint): bigint => { a = a < 0n ? -a : a; b = b < 0n ? -b : b; while (b) [a, b] = [b, a % b]; return a || 1n; };
+const q = (n: bigint | number, d: bigint | number = 1n): Q => {
+  let N = BigInt(n), D = BigInt(d);
+  if (D < 0n) { N = -N; D = -D; }
+  const g = gcd(N, D);
+  return { n: N / g, d: D / g };
+};
+const add = (a: Q, b: Q) => q(a.n * b.d + b.n * a.d, a.d * b.d);
+const sub = (a: Q, b: Q) => q(a.n * b.d - b.n * a.d, a.d * b.d);
+const mul = (a: Q, b: Q) => q(a.n * b.n, a.d * b.d);
+const div = (a: Q, b: Q) => q(a.n * b.d, a.d * b.n);
+const cmp = (a: Q, b: Q) => { const x = a.n * b.d - b.n * a.d; return x < 0n ? -1 : x > 0n ? 1 : 0; };
+const max = (a: Q, b: Q) => (cmp(a, b) >= 0 ? a : b);
+const min = (a: Q, b: Q) => (cmp(a, b) <= 0 ? a : b);
+const floorQ = (a: Q): bigint => { const f = a.n / a.d; return a.n < 0n && f * a.d !== a.n ? f - 1n : f; };
+const toNum = (a: Q) => Number(a.n) / Number(a.d);
+const fromRate = (r: Rate) => q(r.num, r.den);
+/** A float (≤ 3 decimals in practice) as a rational. */
+const fromFloat = (v: number): Q => (Number.isInteger(v) ? q(v) : q(Math.round(v * 1000), 1000));
+
+/** Exact sample index of a (rational) frame position at `rate`. */
+export function sampleOf(frame: Q | number, rate: Rate): number {
+  const f = typeof frame === 'number' ? q(frame) : frame;
+  return Number(floorQ(q(f.n * BigInt(SAMPLE_RATE) * BigInt(rate.den), f.d * BigInt(rate.num))));
+}
+
+// ---------------------------------------------------------------------------- planning
+export interface PlanAudioOptions {
+  /** directory asset paths resolve against (the project file's directory) */
+  baseDir: string;
+  /** [start, end) in frames of the comp: the plan covers only this range and starts at its start */
+  range?: [number, number];
+  /** does this video asset have an audio stream? (default: assume yes; renderAudio skips files without audio) */
+  hasAudio?: (assetId: string, src: string) => boolean;
+  /** an asset's duration in seconds, when known: looped clips (`loop: true`) repeat their audio with this period */
+  duration?: (assetId: string, src: string) => number | undefined;
+  /** the plugin registry: clip and bus `fx` entries whose effect has an audio stage become segment / bus filters */
+  registry?: Pick<PluginRegistry, 'effects'>;
+}
+
+type FxEntry = { type: string; id?: string; enabled?: boolean; [k: string]: unknown };
+
+/**
+ * Audio-stage filters of an fx list (clip or bus). Effects with an audio stage contribute their filters (params at
+ * the first frame; keyframed audio params are not animated). On a sound-only owner (an audio clip or a bus), an
+ * effect without an audio stage would do nothing, so it is an error (E_FX_STAGE) with a fix.
+ */
+export function audioFxFilters(fx: readonly FxEntry[] | undefined, registry: Pick<PluginRegistry, 'effects'>, owner: { what: string; soundOnly: boolean; removeFix: string }): FilterSpec[] {
+  const out: FilterSpec[] = [];
+  (fx ?? []).forEach((e, i) => {
+    if (e.enabled === false) return;
+    const def = registry.effects.get(e.type);
+    if (!def) {
+      const dym = suggest(e.type, registry.effects.keys());
+      fail('E_UNKNOWN_EFFECT', `${owner.what}: effect "${e.type}" does not exist.`, dym.length ? `did you mean "${dym[0]}"?` : `use one of ${[...registry.effects.keys()].join(', ') || '(none registered)'}.`);
+    }
+    if (!def.audio) {
+      if (owner.soundOnly) {
+        const audioFx = [...registry.effects.values()].filter((d) => d.audio).map((d) => d.type);
+        fail('E_FX_STAGE', `${owner.what}: effect "${e.type}" has no audio stage (it works on pictures only), so it would do nothing to this sound.`,
+          `${owner.removeFix.replace('<i>', String(i))}${audioFx.length ? `; for sound use an audio effect: ${audioFx.slice(0, 8).join(', ')}` : ''}.`);
+      }
+      return;
+    }
+    const { type: _t, id: _id, enabled: _en, ...raw } = e;
+    const vals = Object.fromEntries(Object.entries(raw).map(([k, v]) => [k, interpolate(v as never, 0)]));
+    const r = def.params.safeParse(vals);
+    if (!r.success) {
+      const iss = r.error.issues[0]!;
+      const key = iss.path.map(String).join('.');
+      fail('E_PARAMS', `${owner.what} effect "${e.type}": ${key ? `"${key}" ` : ''}${iss.message}.`, `fix the parameter${key ? ` "${key}"` : ''} (see "mgl docs effects").`);
+    }
+    out.push(...def.audio(r.data as never));
+  });
+  return out;
+}
+
+/** Map from a comp's frames to top-comp frames: top = a + f × m, visible for f in [w0, w1). */
+interface Ctx { compId: string; a: Q; m: Q; w0: Q; w1: Q; depth: number }
+
+function compLength(p: ProjectFile, comp: Comp, clipsByComp: Map<string, Clip[]>): number {
+  if (typeof comp.length === 'number') return comp.length;
+  let end = 0;
+  for (const c of clipsByComp.get(comp.id) ?? []) end = Math.max(end, c.at + c.len);
+  return end;
+}
+
+const speedOf = (c: Clip): Q => { const s = parseSpeed(c.speed ?? 1); return q(s.num, s.den); };
+
+/** clip-local frames [at, at + len) play the source from `in` (frames of the comp's rate) at `speed` */
+interface Piece { at: Q; len: Q; in: Q; speed: Q }
+
+/** Most a remap piece may stray from the eased curve (source frames) before it is split. */
+const REMAP_TOLERANCE = 0.5;
+/** Eased remap pieces slower than this play silent, as a freeze does (atempo cannot stretch sound that far usefully). */
+const MIN_EASED_SPEED = 1 / 16;
+
+/**
+ * A clip's playback as constant-speed pieces in clip-local frames (remap keyframes become pieces). Eased remap
+ * segments follow the same easing as the picture (evaluate's interpolate): they are cut into short linear pieces
+ * that stay within REMAP_TOLERANCE source frames of the curve; frames where the curve stands still or runs
+ * backwards are silent.
+ */
+function piecesOf(c: Clip): Piece[] {
+  const r = c.remap;
+  if (r === undefined) return [{ at: q(0), len: q(c.len), in: q(c.in ?? 0), speed: speedOf(c) }];
+  if (typeof r === 'number') return []; // a constant remap is a freeze: silent
+  const keys = (r as [number, number, Easing?][]).map(([f, v, e]) => ({ f, v, e })).sort((x, y) => x.f - y.f);
+  const out: Piece[] = [];
+  for (let i = 0; i + 1 < keys.length; i++) {
+    const k = keys[i]!, k2 = keys[i + 1]!;
+    const s = Math.max(0, k.f), e = Math.min(c.len, k2.f);
+    if (e <= s || k.e === 'hold') continue;
+    if (k.e === undefined || k.e === 'linear') {
+      const v0 = fromFloat(k.v), v1 = fromFloat(k2.v);
+      const speed = div(sub(v1, v0), q(k2.f - k.f));
+      if (cmp(speed, q(0)) <= 0) continue; // frozen or reversed: silent
+      out.push({ at: q(s), len: q(e - s), in: add(v0, mul(speed, q(s - k.f))), speed });
+      continue;
+    }
+    const fn = easingFn(k.e);
+    const val = (f: number) => k.v + (k2.v - k.v) * fn((f - k.f) / (k2.f - k.f));
+    const vq = (f: number) => fromFloat(Math.round(val(f) * 1000) / 1000);
+    let a = s;
+    while (a < e) {
+      if (!(val(a + 1) > val(a))) { a++; continue; } // standing still or reversing: silent
+      let b = a + 1;
+      // extend while the chord stays close to the curve and the curve keeps moving forward
+      while (b < e && val(b + 1) > val(b)) {
+        const nb = b + 1, va = val(a), vb = val(nb);
+        let ok = true;
+        for (let f = a + 1; f < nb && ok; f++) ok = Math.abs(val(f) - (va + ((vb - va) * (f - a)) / (nb - a))) <= REMAP_TOLERANCE;
+        if (!ok) break;
+        b = nb;
+      }
+      const v0 = vq(a), speed = div(sub(vq(b), v0), q(b - a));
+      if (toNum(speed) >= MIN_EASED_SPEED) out.push({ at: q(a), len: q(b - a), in: v0, speed }); // slower is a near-freeze: silent
+      a = b;
+    }
+  }
+  return out;
+}
+
+/** Split pieces where a looped source wraps (source frames ≥ period start again at 0, as the picture does). */
+function loopPieces(pieces: Piece[], period: Q): Piece[] {
+  const out: Piece[] = [];
+  for (const p of pieces) {
+    const end = add(p.at, p.len);
+    let at = p.at, src = p.in;
+    for (let guard = 0; cmp(at, end) < 0 && guard < 100_000; guard++) {
+      const local = sub(src, mul(q(floorQ(div(src, period))), period));
+      // clip frames until this period ends
+      const stop = min(end, add(at, div(sub(period, local), p.speed)));
+      out.push({ at, len: sub(stop, at), in: local, speed: p.speed });
+      src = add(src, mul(sub(stop, at), p.speed));
+      at = stop;
+    }
+  }
+  return out;
+}
+
+/** Gain points [clip-local frame, dB] from a constant or keyframes (hold → step; other easings → linear). */
+function gainKeys(c: Clip): [number, number][] {
+  const g = c.gain;
+  if (g === undefined) return [[0, 0]];
+  if (typeof g === 'number') return [[0, g]];
+  const keys = [...(g as [number, number, unknown?][])].sort((a, b) => a[0] - b[0]);
+  const out: [number, number][] = [];
+  keys.forEach(([f, v, e], i) => {
+    out.push([f, v]);
+    const next = keys[i + 1];
+    if (e === 'hold' && next && next[0] - f > 0) out.push([next[0] - 1e-3, v]);
+  });
+  return out;
+}
+
+function interp(points: [number, number][], x: number): number {
+  if (x <= points[0]![0]) return points[0]![1];
+  for (let i = 1; i < points.length; i++) {
+    const [x1, y1] = points[i]!, [x0, y0] = points[i - 1]!;
+    if (x <= x1) return x1 === x0 ? y1 : y0 + ((y1 - y0) * (x - x0)) / (x1 - x0);
+  }
+  return points[points.length - 1]![1];
+}
+
+export function planAudio(project: ProjectFile, compId: string, opts: PlanAudioOptions): AudioPlan {
+  const comps = new Map((project.comps ?? []).map((c) => [c.id, c]));
+  const tracks = new Map((project.tracks ?? []).map((t) => [t.id, t]));
+  const assets = new Map((project.assets ?? []).map((a) => [a.id, a]));
+  const clipsByComp = new Map<string, Clip[]>();
+  for (const c of project.clips ?? []) {
+    const t = tracks.get(c.track);
+    if (!t) continue;
+    if (!clipsByComp.has(t.comp)) clipsByComp.set(t.comp, []);
+    clipsByComp.get(t.comp)!.push(c);
+  }
+  const top = comps.get(compId);
+  if (!top) fail('E_REF', `comp "${compId}" does not exist.`, `use one of: ${[...comps.keys()].join(', ')}.`);
+  const topRate = parseRate(top.fps);
+  const len = compLength(project, top, clipsByComp);
+  const [r0, r1] = opts.range ?? [0, len];
+  if (!(r1 >= r0 && r0 >= 0)) fail('E_RANGE', `range ${r0}-${r1} is not valid.`, 'give a range start ≤ end within the comp.');
+  const base = sampleOf(r0, topRate);
+  const segments: AudioSegment[] = [];
+
+  const visit = (ctx: Ctx) => {
+    if (ctx.depth > 32) fail('E_CYCLE', `comp nesting deeper than 32 levels at "${ctx.compId}".`, 'remove the cycle of nested comps.');
+    const comp = comps.get(ctx.compId)!;
+    const rate = parseRate(comp.fps);
+    for (const c of clipsByComp.get(ctx.compId) ?? []) {
+      const track = tracks.get(c.track)!;
+      if (track.muted) continue;
+      if (c.comp !== undefined) { nested(ctx, c, rate); continue; }
+      if (c.asset === undefined || c.muted) continue;
+      const asset = assets.get(c.asset);
+      if (!asset) continue;
+      const src = resolve(opts.baseDir, asset.src);
+      if (asset.kind ? asset.kind !== 'audio' && asset.kind !== 'video' : NOT_AUDIBLE.test(asset.src)) continue;
+      if (!track.audio && asset.kind !== 'audio' && opts.hasAudio && !opts.hasAudio(asset.id, src)) continue;
+      leaf(ctx, c, track, src, rate);
+    }
+  };
+
+  /**
+   * A looped clip's source period in frames of `rate`: the picture wraps after floor(duration × rate) frames
+   * (evaluate's mediaSource), so a video's sound does too; an audio asset loops over its exact duration.
+   */
+  const loopPeriod = (c: Clip, rate: Rate, src: string): Q | undefined => {
+    const d = opts.duration?.(c.asset!, src);
+    if (!(d !== undefined && d > 0)) return undefined;
+    const asset = assets.get(c.asset!);
+    const isAudio = asset?.kind ? asset.kind === 'audio' : AUDIO_EXT.test(asset?.src ?? '');
+    if (isAudio) return mul(fromFloat(Math.round(d * 1000) / 1000), fromRate(rate));
+    return q(Math.max(1, Math.floor((d * rate.num) / rate.den)));
+  };
+
+  const fxCache = new Map<string, FilterSpec[]>();
+  const clipFilters = (c: Clip, track: Track, src: string): FilterSpec[] => {
+    if (!opts.registry || !c.fx?.length) return [];
+    let f = fxCache.get(c.id);
+    if (!f) {
+      const asset = assets.get(c.asset!);
+      const soundOnly = !!track.audio || (asset?.kind ? asset.kind === 'audio' : AUDIO_EXT.test(src));
+      f = audioFxFilters(c.fx as FxEntry[], opts.registry, { what: `clip "${c.id}"`, soundOnly, removeFix: `remove it: mgl edit <file> fx.remove ${c.id} fx=<i>` });
+      fxCache.set(c.id, f);
+    }
+    return f;
+  };
+
+  const leaf = (ctx: Ctx, c: Clip, track: Track, src: string, rate: Rate) => {
+    const bus = track.bus ?? 'master';
+    const filters = clipFilters(c, track, src);
+    /** output sample of a clip-local frame */
+    const S = (local: Q) => sampleOf(add(ctx.a, mul(add(q(c.at), local), ctx.m)), topRate) - base;
+    const [fin, fout] = c.fade ?? [0, 0];
+    const fadeInEnd = S(q(Math.min(fin, c.len))), fadeOutStart = S(q(c.len - Math.min(fout, c.len)));
+    const gk = gainKeys(c).map(([f, db]) => [S(fromFloat(f)), db] as [number, number]);
+    const period = c.loop ? loopPeriod(c, rate, src) : undefined;
+    const pieces = period ? loopPieces(piecesOf(c), period) : piecesOf(c);
+    for (const p of pieces) {
+      if (cmp(p.speed, q(0)) <= 0) continue; // freeze: silent
+      const pAt = add(q(c.at), p.at);
+      const v0 = max(pAt, ctx.w0), v1 = min(add(pAt, p.len), ctx.w1);
+      if (cmp(v1, v0) <= 0) continue;
+      const t0 = max(add(ctx.a, mul(v0, ctx.m)), q(r0)), t1 = min(add(ctx.a, mul(v1, ctx.m)), q(r1));
+      if (cmp(t1, t0) <= 0) continue;
+      const start = sampleOf(t0, topRate) - base, end = sampleOf(t1, topRate) - base;
+      if (end <= start) continue;
+      // source position at t0, in frames of this comp's rate: in + (local frames since piece start) × speed
+      const local = sub(div(sub(t0, ctx.a), ctx.m), pAt);
+      const srcFrame = add(p.in, mul(local, p.speed));
+      // output speed: source seconds per output second
+      const speed = div(mul(p.speed, fromRate(topRate)), mul(fromRate(rate), ctx.m));
+      segments.push({
+        clipId: c.id, src, start, end,
+        sourceFrame: toNum(srcFrame), rate,
+        speed: { num: Number(speed.n), den: Number(speed.d) },
+        bus,
+        gain: gk.length === 1 ? [[0, gk[0]![1]]] : clipGain(gk, start, end),
+        fadeIn: fin > 0 ? Math.max(0, Math.min(end, fadeInEnd) - start) : 0,
+        fadeOut: fout > 0 ? Math.max(0, end - Math.max(fadeOutStart, start)) : 0,
+        ...(filters.length ? { filters } : {}),
+      });
+    }
+  };
+
+  const clipGain = (pts: [number, number][], start: number, end: number): [number, number][] => {
+    const out: [number, number][] = [[0, interp(pts, start)]];
+    for (const [s, db] of pts) if (s > start && s < end) out.push([s - start, db]);
+    if (pts.some(([s]) => s >= end) && end - start > 1) out.push([end - start, interp(pts, end)]);
+    const dedup = out.filter((p, i) => i === 0 || p[0] !== out[i - 1]![0]);
+    return dedup.length > 1 && dedup.every((p) => p[1] === dedup[0]![1]) ? [dedup[0]!] : dedup;
+  };
+
+  const nested = (ctx: Ctx, c: Clip, parentRate: Rate) => {
+    const child = comps.get(c.comp!);
+    if (!child) return;
+    const sp = speedOf(c);
+    if (cmp(sp, q(0)) <= 0) return; // frozen nested comp: silent
+    const childRate = parseRate(child.fps);
+    // parent frame = at + (cf - in) × R, R = parentRate / (childRate × speed)
+    const R = div(fromRate(parentRate), mul(fromRate(childRate), sp));
+    const m = mul(R, ctx.m);
+    const inQ = q(c.in ?? 0);
+    const a = add(ctx.a, mul(sub(q(c.at), mul(inQ, R)), ctx.m));
+    const pv0 = max(q(c.at), ctx.w0), pv1 = min(q(c.at + c.len), ctx.w1);
+    if (cmp(pv1, pv0) <= 0) return;
+    const cv0 = add(inQ, div(sub(pv0, q(c.at)), R)), cv1 = add(inQ, div(sub(pv1, q(c.at)), R));
+    const L = compLength(project, child, clipsByComp);
+    if (L <= 0) return;
+    if (!c.loop) {
+      visit({ compId: child.id, a, m, w0: max(cv0, q(0)), w1: min(cv1, q(L)), depth: ctx.depth + 1 });
+      return;
+    }
+    for (let k = Number(floorQ(div(cv0, q(L)))); cmp(q(k * L), cv1) < 0; k++) {
+      const off = q(k * L);
+      visit({ compId: child.id, a: add(a, mul(off, m)), m, w0: max(sub(cv0, off), q(0)), w1: min(sub(cv1, off), q(L)), depth: ctx.depth + 1 });
+    }
+  };
+
+  visit({ compId, a: q(0), m: q(1), w0: q(0), w1: q(len), depth: 0 });
+  segments.sort((x, y) => x.start - y.start || x.clipId.localeCompare(y.clipId));
+
+  // buses: every bus referenced, project settings applied; master last
+  const busDefs = new Map((project.buses ?? []).map((b) => [b.id, b]));
+  const ids = new Set<string>(['master']);
+  for (const s of segments) ids.add(s.bus);
+  for (const b of project.buses ?? []) { ids.add(b.id); if (b.to) ids.add(b.to); if (b.duck) ids.add(b.duck.by); }
+  for (const t of project.tracks ?? []) if (t.bus) ids.add(t.bus);
+  const buses: AudioPlan['buses'] = [...ids].map((id) => {
+    const b = busDefs.get(id);
+    const e: AudioPlan['buses'][number] = { id, gainDb: b?.gain ?? 0, muted: !!b?.muted, to: id === 'master' ? '' : b?.to ?? 'master' };
+    if (b?.duck) e.duck = { by: b.duck.by, db: b.duck.db, attack: b.duck.attack ?? 20, release: b.duck.release ?? 300 };
+    if (b?.loudness) e.loudness = { lufs: b.loudness.lufs, peak: b.loudness.peak ?? -1 };
+    const bfx = (b as { fx?: FxEntry[] } | undefined)?.fx;
+    if (bfx?.length && opts.registry) {
+      const f = audioFxFilters(bfx, opts.registry, { what: `bus "${id}"`, soundOnly: true, removeFix: `remove entry <i> from the "fx" list of bus "${id}" in the project file` });
+      if (f.length) e.filters = f;
+    }
+    return e;
+  });
+  return { sampleRate: SAMPLE_RATE, length: sampleOf(r1, topRate) - base, segments, buses };
+}

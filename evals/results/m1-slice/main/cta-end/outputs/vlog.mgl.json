@@ -1,0 +1,19 @@
+{"michelangelo": 1,
+"project": {"name": "Day in the life", "platform": "shorts"},
+"assets": [
+{"id": "vlog-mp4", "src": "media/vlog.mp4"}
+],
+"comps": [
+{"id": "main", "size": [1080, 1920], "fps": 30, "length": 450}
+],
+"tracks": [
+{"id": "V1", "comp": "main"},
+{"id": "V2", "comp": "main"},
+{"id": "V3", "comp": "main"}
+],
+"clips": [
+{"id": "vlog", "track": "V1", "at": 0, "len": 450, "asset": "vlog-mp4"},
+{"id": "cta-button", "track": "V2", "at": 360, "len": 90, "shape": {"type": "rect", "size": [560, 130], "radius": 65, "fill": "#ff0033"}, "x": 481, "y": 1229, "scale": [[0, 0.6, "outQuad"], [8, 1.08, "inOutQuad"], [16, 1], [36, 1, "outQuad"], [40, 1.08, "inQuad"], [44, 1]], "opacity": [[0, 0], [4, 1]], "tags": ["template:cta"]},
+{"id": "cta-label", "track": "V3", "at": 360, "len": 90, "text": "Subscribe", "style": {"size": 56, "color": "#ffffff", "maxLines": 1, "box": [500, 100], "base": "cta"}, "animate": {"in": "pop", "by": "all", "len": 16}, "x": 481, "y": 1229, "scale": [[0, 0.6, "outQuad"], [8, 1.08, "inOutQuad"], [16, 1], [36, 1, "outQuad"], [40, 1.08, "inQuad"], [44, 1]], "tags": ["template:cta"]}
+]
+}

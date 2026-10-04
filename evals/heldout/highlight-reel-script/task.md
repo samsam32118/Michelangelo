@@ -1,0 +1,1 @@
+Write me a reusable Node script `make-reel.mjs` that reads `highlights.json` (a list of source file, in/out timestamps and a caption) and uses the Michelangelo SDK to build a 1920x1080 highlight reel with 0.5 s crossfades between moments and each moment's caption as a lower-left label. Run it so it produces `reel.mgl.json` and `out/reel.mp4`.

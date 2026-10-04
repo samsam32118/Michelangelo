@@ -1,0 +1,21 @@
+{
+  "id": "masks-and-blend",
+  "tags": [
+    "motion",
+    "compositing"
+  ],
+  "timeout_min": 15,
+  "expects_weak": false,
+  "fixtures": [
+    "layers.mgl.json (bottom testsrc2, top smptebars, light leak = orange gradient video)"
+  ],
+  "deliverables": [
+    "*.png"
+  ],
+  "library_only": false,
+  "checks": [
+    "[lib] top clip has a centred ellipse mask with feather > 0 (not hidden, opacity unchanged)",
+    "[lib] light leak clip blend = screen",
+    "still: centre = smptebars screen leak, corners = testsrc2 screen leak, nothing darker than the base"
+  ]
+}

@@ -1,0 +1,1 @@
+Using the Node SDK, make 10 product promo variants from `products.csv` (name, price, colour) based on the template project `promo.mgl.json`: each with that product's name, price and background colour. Render a PNG still of each at 1 s into `out/` named by product id.

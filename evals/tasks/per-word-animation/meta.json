@@ -1,0 +1,20 @@
+{
+  "id": "per-word-animation",
+  "tags": [
+    "motion",
+    "text"
+  ],
+  "timeout_min": 15,
+  "expects_weak": false,
+  "fixtures": [],
+  "deliverables": [
+    "out/w.png"
+  ],
+  "library_only": false,
+  "checks": [
+    "out/w.png is 1080x1920 and shows text (>= 5 glyph columns at 270 px)",
+    "[lib] 1080x1920 project with a per-word text animation (animate by word) or per-word clips",
+    "[lib] still at 0.6 s (out/w.png) shows fewer glyph columns than the project rendered at 2.5 s",
+    "[lib] look contact sheet exists (.mgl/**/sheet.png), long edge <= 1568"
+  ]
+}

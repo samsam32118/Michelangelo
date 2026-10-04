@@ -1,0 +1,21 @@
+{
+  "id": "captions-vtt-words",
+  "tags": [
+    "captions",
+    "text"
+  ],
+  "timeout_min": 15,
+  "expects_weak": false,
+  "fixtures": [
+    "clip.mgl.json (1080x1920 solid bg + vo.wav)",
+    "words.vtt (cues with <00:00:04.100> word tags)"
+  ],
+  "deliverables": [
+    "out/still.png"
+  ],
+  "library_only": false,
+  "checks": [
+    "[lib] cues carry word timings matching the VTT within 1 frame (texts unchanged)",
+    "out/still.png 1080x1920; the caption at 4.2 s shows 2 dominant text colours (highlighted word)"
+  ]
+}

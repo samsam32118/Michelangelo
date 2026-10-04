@@ -1,0 +1,22 @@
+{
+  "id": "cut-silences",
+  "tags": [
+    "audio",
+    "editing"
+  ],
+  "timeout_min": 20,
+  "expects_weak": false,
+  "fixtures": [
+    "interview.wav (flite phrases separated by silences 0.3-2 s, total 40 s)"
+  ],
+  "deliverables": [
+    "out/tight.wav"
+  ],
+  "library_only": false,
+  "checks": [
+    "out/tight.wav duration = original minus removed silences (+-0.48 s); interview.wav unchanged",
+    "[lib] tight.mgl.json exists and is valid",
+    "silencedetect -40 dB d=0.6 finds no silence",
+    "all 8 phrases present, in order (energy envelope cross-correlation)"
+  ]
+}

@@ -1,0 +1,19 @@
+{
+  "name": "iris",
+  "version": "0.1.0",
+  "description": "A transition that wipes from left to right.",
+  "type": "module",
+  "main": "src/index.ts",
+  "michelangelo": {
+    "api": "^1.0.0",
+    "kinds": [
+      "transition"
+    ]
+  },
+  "scripts": {
+    "test": "node --test test/*.test.ts"
+  },
+  "peerDependencies": {
+    "michelangelo": "*"
+  }
+}

@@ -1,0 +1,8 @@
+{
+  "id": "glitch-basic",
+  "tags": ["plugins", "effect"],
+  "timeout_min": 15,
+  "expects_weak": false,
+  "fixtures": ["demo.mgl.json (testsrc2 clip, 1080x1920 30 fps)", "plugins/glitch"],
+  "checks": ["demo.mgl.json names glitch and the video clip has fx glitch amount 0.9", "out/glitch.png: red and blue channels are offset against each other in the clip area"]
+}

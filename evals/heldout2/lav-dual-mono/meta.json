@@ -1,0 +1,26 @@
+{
+  "id": "lav-dual-mono",
+  "tags": [
+    "audio",
+    "mixing",
+    "corporate"
+  ],
+  "timeout_min": 15,
+  "expects_weak": false,
+  "fixtures": [
+    "interview.mp4 (testsrc2 1280x720 30 fps 10 s; stereo AAC: left = flite speech (the lav) silent after 8.5 s, right = faint delayed speech + brown noise + a 3150 Hz whine)"
+  ],
+  "checks": [
+    "out/fixed.mp4: 1280x720, 10 s +/- 0.15, stereo audio, not black/static/silent",
+    "both output channels are the lav (correlation >= 0.95 with interview.mp4's left channel)",
+    "camera mic gone: 3150 Hz whine >= 25 dB below the source right channel's, both channels below -55 dBFS RMS in the 8.7-9.8 s pause",
+    "channels balanced within 1.5 dB RMS",
+    "integrated loudness -16 +/- 1.2 LUFS",
+    "picture unchanged (SSIM >= 0.9 at 2/5/8 s)",
+    "input unchanged",
+    "[lib] fixed.mgl.json validates, uses interview.mp4"
+  ],
+  "deliverables": [
+    "out/fixed.mp4"
+  ]
+}

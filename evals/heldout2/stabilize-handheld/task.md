@@ -1,0 +1,1 @@
+`handheld.mp4` is way too shaky to use. Stabilize it so the scene holds steady (the yellow ball rolling across should of course still move), with no black edges showing and without zooming in more than about 20%. Keep it 1920x1080 and the same length, save the project as `stable.mgl.json` and render `out/stable.mp4`.

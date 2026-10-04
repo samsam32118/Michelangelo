@@ -1,0 +1,23 @@
+{"michelangelo": 1,
+"project": {"name": "Podcast intro"},
+"assets": [
+{"id": "vo-wav", "src": "media/vo.wav"},
+{"id": "bed-wav", "src": "media/bed.wav"}
+],
+"comps": [
+{"id": "main", "size": [1280, 720], "fps": 30, "length": 900}
+],
+"tracks": [
+{"id": "V1", "comp": "main"},
+{"id": "A1", "comp": "main", "audio": true, "bus": "dialogue"},
+{"id": "A2", "comp": "main", "audio": true, "bus": "music"}
+],
+"clips": [
+{"id": "bg", "track": "V1", "at": 0, "len": 900, "color": "#202020"},
+{"id": "vo", "track": "A1", "at": 180, "len": 420, "asset": "vo-wav"},
+{"id": "bed", "track": "A2", "at": 0, "len": 900, "asset": "bed-wav"}
+],
+"buses": [
+{"id": "music", "duck": {"by": "dialogue", "db": 12}}
+]
+}

@@ -1,0 +1,1 @@
+Introduce the speaker in `demo.mgl.json`: a lower third (the `lower-third-pro` plugin) reading "Grace Hopper" / "Rear Admiral" from 1 s to 5 s with a teal accent, on the right side. Render a still at 3 s to `out/lt.png`.

@@ -1,0 +1,1 @@
+Make an Instagram-style boomerang from `jump.mp4`: take the part from 1.0 s to 2.5 s, play it forwards and then backwards, and repeat that forward-backward cycle 3 times (9 seconds in total, normal speed, no audio needed). Keep it 1080x1080 at 30 fps, save the project as `boomerang.mgl.json` and render `out/boomerang.mp4`.

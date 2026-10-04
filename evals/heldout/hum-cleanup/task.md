@@ -1,0 +1,1 @@
+My lav mic picked up mains hum. `voice_hum.wav` has a 60 Hz buzz with harmonics under the speech. Clean it up in a project `clean.mgl.json` so the hum is basically gone but the voice still sounds natural, normalise to -16 LUFS, and export `out/clean.wav`.

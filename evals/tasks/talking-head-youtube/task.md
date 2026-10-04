@@ -1,0 +1,1 @@
+`interview.mp4` is a 60-second interview. Edit it for YouTube: remove the dead air, add a lower third for the speaker, burned-in captions, chapter markers at the topic changes listed in `notes.txt`, and an intro title. Render `out/final.mp4`, and write the chapters in YouTube description format to `out/chapters.txt` (or embed them as chapter metadata in the video).

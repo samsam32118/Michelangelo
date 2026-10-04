@@ -1,0 +1,46 @@
+{"michelangelo": 1,
+"assets": [
+{"id": "beat", "src": "beat.wav"},
+{"id": "photo1", "src": "photos/photo1.png"},
+{"id": "photo2", "src": "photos/photo2.png"},
+{"id": "photo3", "src": "photos/photo3.png"},
+{"id": "photo4", "src": "photos/photo4.png"},
+{"id": "photo5", "src": "photos/photo5.png"},
+{"id": "photo6", "src": "photos/photo6.png"},
+{"id": "photo7", "src": "photos/photo7.png"},
+{"id": "photo8", "src": "photos/photo8.png"}
+],
+"comps": [
+{"id": "main", "size": [1080, 1080], "fps": 30}
+],
+"tracks": [
+{"id": "V1", "comp": "main"},
+{"id": "T1", "comp": "main"},
+{"id": "A1", "comp": "main", "audio": true, "bus": "dialogue"},
+{"id": "A2", "comp": "main", "audio": true, "bus": "music"}
+],
+"clips": [
+{"id": "photo12", "track": "V1", "at": 0, "len": 15, "asset": "photo1", "fit": "cover"},
+{"id": "photo22", "track": "V1", "at": 15, "len": 15, "asset": "photo2", "fit": "cover"},
+{"id": "photo32", "track": "V1", "at": 30, "len": 15, "asset": "photo3", "fit": "cover"},
+{"id": "photo42", "track": "V1", "at": 45, "len": 15, "asset": "photo4", "fit": "cover"},
+{"id": "photo52", "track": "V1", "at": 60, "len": 15, "asset": "photo5", "fit": "cover"},
+{"id": "photo62", "track": "V1", "at": 75, "len": 15, "asset": "photo6", "fit": "cover"},
+{"id": "photo72", "track": "V1", "at": 90, "len": 15, "asset": "photo7", "fit": "cover"},
+{"id": "photo82", "track": "V1", "at": 105, "len": 30, "asset": "photo8", "fit": "cover"},
+{"id": "music", "track": "A2", "at": 0, "len": 135, "asset": "beat", "in": 15, "clock": 15}
+],
+"buses": [
+{"id": "master", "loudness": {"lufs": -16, "peak": -1}}
+],
+"markers": [
+{"id": "beat1", "comp": "main", "at": 0, "note": "beat 1 of \"music\""},
+{"id": "beat2", "comp": "main", "at": 15, "note": "beat 2 of \"music\""},
+{"id": "beat3", "comp": "main", "at": 30, "note": "beat 3 of \"music\""},
+{"id": "beat4", "comp": "main", "at": 45, "note": "beat 4 of \"music\""},
+{"id": "beat5", "comp": "main", "at": 60, "note": "beat 5 of \"music\""},
+{"id": "beat6", "comp": "main", "at": 75, "note": "beat 6 of \"music\""},
+{"id": "beat7", "comp": "main", "at": 90, "note": "beat 7 of \"music\""},
+{"id": "beat8", "comp": "main", "at": 105, "note": "beat 8 of \"music\""}
+]
+}

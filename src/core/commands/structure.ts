@@ -20,14 +20,15 @@ export const PRESETS: Record<string, { size: [number, number]; platform?: (typeo
 };
 
 defineCommand({
-  op: 'project.set', group: 'project', doc: 'Set project settings: name, platform (safe zones, loudness), main comp, plugins.',
-  schema: z.strictObject({ name: z.string().optional(), platform: z.enum(PLATFORMS).optional(), main: Id.optional(), plugins: z.record(z.string(), z.string().nullable()).optional() }),
+  op: 'project.set', group: 'project', doc: 'Set project settings: name, platform (safe zones, loudness), main comp, plugins, commercial (true: non-commercial media is an error).',
+  schema: z.strictObject({ name: z.string().optional(), platform: z.enum(PLATFORMS).optional(), main: Id.optional(), plugins: z.record(z.string(), z.string().nullable()).optional(), commercial: z.boolean().optional() }),
   example: { name: 'Focus tips', platform: 'shorts' },
   apply(ctx, p) {
     const proj = { ...(ctx.project.project ?? {}) };
     if (p.name !== undefined) proj.name = p.name;
     if (p.platform !== undefined) proj.platform = p.platform;
     if (p.main !== undefined) { ctx.comp(p.main); proj.main = p.main; }
+    if (p.commercial !== undefined) proj.commercial = p.commercial;
     if (p.plugins) {
       const pl = { ...(proj.plugins ?? {}) };
       for (const [k, v] of Object.entries(p.plugins)) { if (v === null) delete pl[k]; else pl[k] = v; }

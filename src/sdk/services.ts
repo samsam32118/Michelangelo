@@ -3,7 +3,7 @@
  * text metrics, and the plugin providers: speak / transcribe), bound to a project directory.
  */
 import { realpathSync } from 'node:fs';
-import { mkdir, readFile, rename, rm, stat } from 'node:fs/promises';
+import { mkdir, readFile, rename, rm, stat, writeFile } from 'node:fs/promises';
 import { dirname, isAbsolute, relative, resolve, sep } from 'node:path';
 import { MglError, fail } from '../core/errors.js';
 import type { CommandServices, ProbeInfo, SpeakService, TranscribeService } from '../core/commands/registry.js';
@@ -13,6 +13,7 @@ import type { SpeakProvider, TranscribeProvider } from '../plugin/api.js';
 import type { MediaBackend } from '../media/types.js';
 import type { ResolvedTextStyle, TextLayouter } from '../render/types.js';
 import { createTextLayouter } from '../render/text.js';
+import { stockService } from './stock.js';
 import type { Rate } from '../core/time.js';
 import type { AudioLevelsData } from '../media/levels.js';
 
@@ -39,6 +40,10 @@ export function confined(projectDir: string, p: string): string {
 export interface ServiceOptions {
   /** a media backend (default: native ffmpeg, loaded on first use) */
   backend?: MediaBackend;
+  /** the project's work folder .mgl/<name>/ (reports such as media.search's list and sheet) */
+  workDir?: string;
+  /** open media: HTTP, environment and cache folder for stock providers (tests inject recorded responses) */
+  stock?: import('./stock.js').StockOptions;
 }
 
 /** CommandServices plus SDK extras: per-frame sound levels (RMS + spectrum) of a media file, for sync and audio-reactive work. */
@@ -91,11 +96,41 @@ export function makeServices(projectDir: string, registry?: PluginRegistry, opts
   const generated = () => (gen ??= import('../audiogen/node.js').then((m) => m.generatedFileServices(projectDir)));
   services.writeFile = async (rel, data) => (await generated()).writeFile(rel, data);
   services.fileExists = async (rel) => (await generated()).fileExists(rel);
+  if (opts.workDir) {
+    const wd = opts.workDir;
+    services.writeWork = async (name, data) => {
+      if (!/^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(name)) fail('E_PATH', `work files are plain names, not "${name}".`, 'use a name like search.json.');
+      await mkdir(wd, { recursive: true });
+      const abs = resolve(wd, name), tmp = `${abs}.${process.pid}.tmp`;
+      await writeFile(tmp, data);
+      await rename(tmp, abs);
+      const rel = relative(process.cwd(), abs);
+      return outside(rel) ? abs : rel;
+    };
+  }
+  services.writeProjectText = async (rel, text) => {
+    if (!/^(?:[A-Za-z0-9][A-Za-z0-9._-]*\/)*[A-Za-z0-9][A-Za-z0-9._-]*\.(txt|md)$/.test(rel)) fail('E_PATH', `"${rel}" is not a .txt or .md file name inside the project folder.`, 'use a name like credits.txt.');
+    const abs = confined(projectDir, rel);
+    await mkdir(dirname(abs), { recursive: true });
+    confined(projectDir, rel);
+    const tmp = `${abs}.${process.pid}.tmp`;
+    await writeFile(tmp, text);
+    await rename(tmp, abs);
+    return abs;
+  };
+  services.describeSound = async (src) => {
+    const abs = confined(projectDir, src);
+    const b = await media();
+    const { describeSound } = await import('./sound.js');
+    return describeSound(abs, b);
+  };
   if (registry) {
     const speak = firstProvider<SpeakProvider>(registry, 'speak');
     if (speak) services.speak = speakService(projectDir, speak);
     const transcribe = firstProvider<TranscribeProvider>(registry, 'transcribe');
     if (transcribe) services.transcribe = transcribeService(projectDir, transcribe);
+    const stock = stockService(projectDir, registry, opts.stock);
+    if (stock) services.stock = stock;
     services.catalog = registry.catalog();
     // plugins that failed to load (a LoadedRegistry carries them), so a command can name the load error
     const problems = (registry as PluginRegistry & { problems?: CommandServices['pluginProblems'] }).problems;

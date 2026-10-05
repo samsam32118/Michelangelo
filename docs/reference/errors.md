@@ -37,11 +37,13 @@ exception is `E_INTERNAL` (exit 1). Below: each code with one example message an
 | `E_KEYFRAMED` | 1 | clip "…" gain is animated by keyframes; a constant would discard them. | clear them first: mgl edit <file> key.clear … prop=gain value=… (or pass at= to set a keyframe). |
 | `E_KEYFRAMES` | 1 | clip "…" …: keyframe times must increase (frame … after …). | sort the keyframes by frame and remove duplicates. |
 | `E_LAST_COMP` | 1 | a project needs at least one comp. | add another comp first. |
+| `E_LICENCE` | 1 | … (…) is refused: …. | pick another result (media.search shows only usable ones by default). |
 | `E_LOCKED` | 1 | clip "…" is locked. | unlock it: mgl edit <file> clip.set … locked=false |
 | `E_LOCKED_FILE` | 1 | the project is locked by another process (…). | wait for the other command to finish, or delete the lock file if no other command runs. |
 | `E_MASK` | 1 | a path mask on "…" needs d (SVG path data). | e.g. d="M0 0 L500 0 L250 400 Z" |
 | `E_MATTE` | 1 | clip "…" cannot be its own matte. | use another clip of the same comp as the matte. |
 | `E_MEDIA` | 1 | cannot analyse the sound of "…" (…). | check the file with mgl show, or omit voice to spread the cues evenly. |
+| `E_MEDIA_FILE` | 1 | … did not download as …. | pick another result (media.search). |
 | `E_MEDIA_MISSING` | 1 | media file … does not exist. | check the path (relative to the project file) or relink the asset: mgl edit <project> asset.relink <id> src=<path>. |
 | `E_MISSING` | 1 | … is required. | add "…" to the entity. |
 | `E_MOTION_PRESET` | 1 | motion preset "…" returned invalid keys: …. | fix the preset (keys(len) must return [frame, value, easing?] lists with integer frames rising from 0 to len), or use another preset. |

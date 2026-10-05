@@ -75,7 +75,10 @@ export function formatProject(p0: ProjectFile): string {
   lines.push(inline(head).slice(0, -1) + ',');
   if (p.project && Object.keys(p.project).length) {
     const proj: Record<string, unknown> = {};
-    for (const k of ['name', 'platform', 'main', 'plugins'] as const) if (p.project[k] !== undefined) proj[k] = p.project[k];
+    // known keys in a stable order, then any others (a field is never dropped on save)
+    const order = ['name', 'platform', 'main', 'plugins', 'commercial', 'credits'];
+    const src = p.project as Record<string, unknown>;
+    for (const k of [...order, ...Object.keys(src).filter((x) => !order.includes(x)).sort()]) if (src[k] !== undefined) proj[k] = src[k];
     lines.push('"project": ' + inline(proj) + ',');
   }
   for (const t of TABLES) {

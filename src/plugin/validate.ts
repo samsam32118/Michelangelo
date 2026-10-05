@@ -57,12 +57,13 @@ export function checkPluginDef(def: unknown, deep = false): string[] {
           }
         }
       }
-      if (kind === 'provider' && o.kind !== 'speak' && o.kind !== 'transcribe') { out.push(`${where} has kind ${JSON.stringify(o.kind)} (fix: kind: "speak" or kind: "transcribe").`); continue; }
+      if (kind === 'provider' && o.kind !== 'speak' && o.kind !== 'transcribe' && o.kind !== 'stock') { out.push(`${where} has kind ${JSON.stringify(o.kind)} (fix: kind: "speak", "transcribe" or "stock").`); continue; }
       if (kind === 'motion-preset' && !['in', 'out', 'emphasis', 'loop'].includes(o.phase as string)) out.push(`${where} has phase ${JSON.stringify(o.phase)} (fix: phase: "in", "out", "emphasis" or "loop").`);
-      const providerFn = o.kind === 'speak' ? 'speak' : 'transcribe';
+      const providerFn = o.kind === 'speak' ? 'speak' : o.kind === 'stock' ? 'search' : 'transcribe';
       const fn = { effect: o.draw ?? o.source ?? o.audio, transition: o.draw, generator: o.draw, template: o.build, command: o.apply, check: o.run, importer: o.import, exporter: o.export, style: true, 'text-animation': o.state, 'motion-preset': o.keys, provider: o[providerFn] }[kind as PluginKind];
       if (typeof fn !== 'function' && fn !== true) out.push(`${where} has no ${kind === 'effect' ? 'draw, source or audio' : ({ transition: 'draw', generator: 'draw', template: 'build', command: 'apply', check: 'run', importer: 'import', exporter: 'export', 'text-animation': 'state', 'motion-preset': 'keys', provider: providerFn } as Record<string, string>)[kind]} function (fix: implement it).`);
       if (kind === 'provider' && o.kind === 'speak' && typeof o.voices !== 'function') out.push(`${where} has no voices function (fix: implement voices(), it may return []).`);
+      if (kind === 'provider' && o.kind === 'stock' && (!Array.isArray(o.media) || !o.media.length)) out.push(`${where} has no media list (fix: media: ["image", "video", "music", "sfx"], the kinds it serves).`);
     }
   }
   if (!items && !out.length) out.push('the plugin defines nothing (fix: add effects, transitions, generators, templates, commands, checks, importers, exporters, styles, text animations, motion presets or providers).');

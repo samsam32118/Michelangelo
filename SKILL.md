@@ -143,7 +143,9 @@ Motion and sound in one call each: `motion.apply <clip> in=pop emphasis=pulse@1s
 for any layer), `audio.music mood=upbeat len=30s`, `audio.sfx type=whoosh at=2s`, `audio.auto-sfx` (SFX on every
 cut, transition and entrance); all generated offline. Speech needs a provider plugin (`kokoro-voice`: natural; `flite-voice`:
 offline drafts): `audio.speak text="..."` then `captions.from-speech` (word-timed captions, in sync by default;
-`mgl docs audio`). A recorded voice-over with its script: `captions.from-text voice=<clip> file=script.txt`.
+`mgl docs audio`). A recorded voice-over with its script: `captions.from-text voice=<clip> file=script.txt`. Real images, footage,
+music and sound effects with a stock plugin (open-media): `media.search kind=image|video|music|sfx query=...`,
+`media.fetch id=i1 at=...` (the handle from the list), then `media.credits card=true` (licences checked, sounds described as text; `mgl docs media`).
 `mgl docs commands` lists all of them; `mgl docs <op>` prints one with its fields and an example.
 
 ## Look and QA
@@ -154,6 +156,8 @@ stretches, gaps, clipping or off-target loudness, music over voice) and reports 
 (LUFS, true peak, silences, tempo). Each finding has a crop image, the file line and a `fix:` command.
 `mgl check` runs the checks that need no pixels. Both exit 0 with findings; `--strict` exits 1 on errors;
 `--fix` applies the findings' fix commands for you and re-checks.
+A 9:16 comp is checked against the TikTok, Reels and Shorts interfaces by default (`ui-overlap`: captions, text and
+stickers under buttons or caption panels); `look --safe` outlines those panels on the sheet.
 `--platforms tiktok,reels,shorts` checks several platforms' safe zones at once. Tag a clip `qa-ignore:<rule>`
 (e.g. `tags='["qa-ignore:safe-zone"]'` on a burned-in timecode) when a finding is intended.
 

@@ -7,7 +7,7 @@
  * Layers in a frame are in draw order: a later layer is stacked above an earlier one.
  * Clips tagged "qa-ignore:<rule>" (or "qa-ignore:all") are skipped by that rule (see IGNORE_ALIASES).
  */
-import { definePlugin, defineCheck, type CheckContext, type CheckDef, type Finding } from '../../plugin/api.js';
+import { definePlugin, defineCheck, licenceClass, licenceName, type CheckContext, type CheckDef, type Finding } from '../../plugin/api.js';
 import { retentionChecks } from './retention.js';
 import { captionTiming } from './captions.js';
 
@@ -82,12 +82,13 @@ function allLayers(ctx: QaContext): [number, Layer[]][] {
 
 /** Which rules a "qa-ignore:<word>" tag covers besides the rule id itself. */
 export const IGNORE_ALIASES: Record<string, string[]> = {
-  'safe-zone': ['text-outside-safe'], safe: ['text-outside-safe'],
+  'safe-zone': ['text-outside-safe', 'ui-overlap'], safe: ['text-outside-safe', 'ui-overlap'], ui: ['ui-overlap'],
   covered: ['layer-hidden'], hidden: ['layer-hidden'],
   overlap: ['caption-overlap', 'overlap-alpha'],
   'cut-off': ['text-cut-off'], 'off-frame': ['media-off-frame', 'text-cut-off'],
   black: ['black-frames', 'trailing-black'], silence: ['long-silence'],
   frozen: ['frozen', 'clip-past-source'], levels: ['luma-range'], broadcast: ['luma-range'],
+  credits: ['stock-credits'], licence: ['stock-licence'],
   static: ['static-visuals'], motion: ['static-visuals'], contrast: ['low-contrast'], legibility: ['low-contrast'], gap: ['edge-gap'], edge: ['edge-gap'],
 };
 
@@ -421,6 +422,89 @@ const textOutsideSafe = defineCheck({
       out.push({ rule: 'text-outside-safe', severity: 'warning', frame: f, clip: l.clipId, box: round(b),
         message: `${l.kind} ${quote(l.text)}(${l.clipId}) crosses the ${andList(edges)} of the ${ctx.platform === 'none' ? 'title' : ctx.platform}-safe area at ${sec(f, c.fps)}`,
         fix: fitFix(clips.get(l.clipId), l.clipId, b, r, c) });
+    }
+    return out;
+  },
+});
+
+/** Vertical platforms whose interface covers the video (header, action buttons, caption panel). */
+const UI_PLATFORMS = ['tiktok', 'reels', 'shorts'];
+const UI_NAMES: Record<string, string> = { tiktok: 'TikTok', reels: 'Reels', shorts: 'Shorts' };
+/** Layer kinds that count as stickers when small (logos, emoji, arrows, product shots, lower-third plates). */
+const STICKER_KINDS = new Set(['image', 'video', 'gen', 'shape', 'comp', 'solid']);
+
+/** Which platforms' interfaces to test: the project's own when it is vertical-only, all three when none is set. */
+function uiPlatforms(platform: string): string[] {
+  if (UI_PLATFORMS.includes(platform)) return [platform];
+  return platform === 'none' ? UI_PLATFORMS : [];
+}
+
+/** The part of the frame clear of every listed platform's interface (intersection of their safe areas). */
+function sharedSafe(ctx: QaContext, platforms: string[]): Rect {
+  let x0 = 0, y0 = 0, x1 = Infinity, y1 = Infinity;
+  for (const p of platforms) {
+    const r = ctx.safeArea(p);
+    x0 = Math.max(x0, r.x); y0 = Math.max(y0, r.y); x1 = Math.min(x1, r.x + r.w); y1 = Math.min(y1, r.y + r.h);
+  }
+  return { x: x0, y: y0, w: Math.max(0, x1 - x0), h: Math.max(0, y1 - y0) };
+}
+
+/** A fix for a sticker: move it into r, scaling it down first when it is larger than r. */
+function stickerFix(clip: Clip | undefined, id: string, box: Box, r: Rect, c: Comp): string {
+  const k = Math.min(1, r.w / Math.max(1, box[2]), r.h / Math.max(1, box[3]));
+  if (k >= 1) return fitFix(clip, id, box, r, c);
+  const sc = clip?.scale;
+  if (keyed(sc) || Array.isArray(sc)) return fitFix(clip, id, box, r, c);
+  const s = (typeof sc === 'number' ? sc : 1) * k * 0.98;
+  const w = box[2] * k * 0.98, h = box[3] * k * 0.98, cx = box[0] + box[2] / 2, cy = box[1] + box[3] / 2;
+  const nx = Math.min(Math.max(cx, r.x + w / 2), r.x + r.w - w / 2), ny = Math.min(Math.max(cy, r.y + h / 2), r.y + r.h - h / 2);
+  const move = moveFix(clip, id, nx - cx, ny - cy, c, box);
+  const xy = move.includes('key.clear') ? [] : move.split(' ').filter((q) => /^[xy]=/.test(q));
+  return `mgl edit <file> clip.set ${id} scale=${Math.round(s * 1000) / 1000}${xy.length ? ' ' + xy.join(' ') : ''}`;
+}
+
+const uiOverlap = defineCheck({
+  id: 'ui-overlap', stage: 'project',
+  describe: 'captions, text and stickers under the TikTok / Reels / Shorts interface (header, action buttons, caption panel); all three when the project names no platform',
+  run(ctx: QaContext) {
+    const c = compOf(ctx);
+    const platforms = uiPlatforms(ctx.platform);
+    if (c.H <= c.W || !platforms.length || !ctx.uiZones) return [];
+    const zones = platforms.map((p) => [p, ctx.uiZones!(p)] as const);
+    const clips = byId(c), every = allClips(ctx.project), samples = allLayers(ctx);
+    const hits = new Map<string, { f: number; l: Layer; under: Map<string, number> }>();
+    const skip = new Set<string>();
+    for (const [f, layers] of samples) for (const l of layers) {
+      if (skip.has(l.clipId)) continue;
+      const clip = clips.get(l.clipId);
+      const text = isText(l.kind);
+      const b = l.box;
+      if (!text) {
+        const tagged = !!clip?.tags?.includes('sticker');
+        // stickers are small elements: a layer spanning (nearly) the full width or height is picture, not a sticker
+        if (!STICKER_KINDS.has(l.kind) || (!tagged && (area(intersect(b, frameBox(c))) >= 0.4 * c.W * c.H || b[2] >= 0.9 * c.W || b[3] >= 0.9 * c.H))) continue;
+      }
+      if (b[0] + b[2] <= 0 || b[1] + b[3] <= 0 || b[0] >= c.W || b[1] >= c.H) continue; // off-screen (animating in)
+      if (ignores(clip, 'ui-overlap') || moving(ctx.project, every, l.clipId, samples, c)) { skip.add(l.clipId); continue; }
+      for (const [p, zs] of zones) for (const z of zs) {
+        const r = z.rect, i = intersect(b, [r.x, r.y, r.w, r.h]);
+        // depth into the panel: the smallest move that clears it
+        const depth = Math.min(i[2], i[3]);
+        if (area(i) <= 0 || depth <= 2) continue;
+        let h = hits.get(l.clipId);
+        if (!h) hits.set(l.clipId, h = { f, l, under: new Map() });
+        const key = `${UI_NAMES[p]} ${z.name}`;
+        h.under.set(key, Math.max(h.under.get(key) ?? 0, Math.round(depth)));
+      }
+    }
+    const safe = sharedSafe(ctx, platforms), out: Finding[] = [];
+    for (const [id, h] of hits) {
+      const { f, l } = h, text = isText(l.kind), clip = clips.get(id);
+      const what = l.kind === 'captions' ? 'caption cue' : text ? 'text' : `sticker (${l.kind})`;
+      const where = [...h.under].map(([k, d]) => `${k} (${d} px)`);
+      out.push({ rule: 'ui-overlap', severity: text ? 'error' : 'warning', frame: f, clip: id, box: round(l.box),
+        message: `${what} ${quote(l.text)}(${id}) is under the ${andList(where)} at ${sec(f, c.fps)}`,
+        fix: text ? fitFix(clip, id, l.box, safe, c) : stickerFix(clip, id, l.box, safe, c) });
     }
     return out;
   },
@@ -1121,6 +1205,50 @@ const lumaRange = defineCheck({
   },
 });
 
+// ------------------------------------------------------------------------------------------- open media licences
+
+/** Assets with an open-media licence that a clip of any comp uses, with their first user. */
+function licensedInUse(p: Project): { a: NonNullable<Project['assets']>[number]; user: Clip }[] {
+  const first = new Map<string, Clip>();
+  for (const c of p.clips ?? []) if (c.asset && !c.hidden && !first.has(c.asset)) first.set(c.asset, c);
+  return (p.assets ?? []).filter((a) => a.licence && first.has(a.id)).map((a) => ({ a, user: first.get(a.id)! }));
+}
+
+const stockCredits = defineCheck({
+  id: 'stock-credits', stage: 'project', describe: 'open media under an attribution licence (CC BY ...) used without credits (media.credits)',
+  run(ctx) {
+    const credited = new Set(ctx.project.project?.credits?.assets ?? []);
+    const missing = licensedInUse(ctx.project).filter(({ a, user }) => ['attribution', 'share-alike', 'non-commercial'].includes(licenceClass(a.licence)) && !credited.has(a.id) && !ignores(user, 'stock-credits'));
+    if (!missing.length) return [];
+    const card = (ctx.project.clips ?? []).some((c) => c.tags?.includes('credits'));
+    const fix = `mgl edit <file> media.credits${card || !ctx.project.project?.credits?.file ? ' card=true' : ''}${ctx.project.project?.credits?.file ? ` out=${ctx.project.project.credits.file}` : ''}`;
+    // one finding: every uncredited asset has the same fix, so the agent reads the fix once
+    const { a, user } = missing[0]!;
+    const ids = missing.map((m) => m.a.id);
+    const message = missing.length === 1
+      ? `asset "${a.id}" (${licenceName(a.licence!)}) is used by "${user.id}" but not credited`
+      : `${missing.length} assets need a credit and have none: ${ids.slice(0, 8).join(', ')}${ids.length > 8 ? ` +${ids.length - 8}` : ''}`;
+    return [{ rule: 'stock-credits', severity: 'warning', clip: user.id, frame: user.at, message, fix }];
+  },
+});
+
+const stockLicence = defineCheck({
+  id: 'stock-licence', stage: 'project', describe: 'open media whose licence the video cannot meet: no-derivatives always, non-commercial in a commercial project, share-alike (the video inherits it)',
+  run(ctx) {
+    const out: Finding[] = [];
+    for (const { a, user } of licensedInUse(ctx.project)) {
+      if (ignores(user, 'stock-licence')) continue;
+      const cls = licenceClass(a.licence), name = licenceName(a.licence!);
+      const replace = `mgl edit <file> media.search kind=${a.kind === 'audio' ? 'sfx' : a.kind ?? 'image'} query="<what it shows>"`;
+      if (cls === 'no-derivatives') out.push({ rule: 'stock-licence', severity: 'error', clip: user.id, frame: user.at, message: `asset "${a.id}" is ${name}: no-derivatives forbids putting it in an edit`, fix: replace });
+      else if (cls === 'non-commercial' && ctx.project.project?.commercial) out.push({ rule: 'stock-licence', severity: 'error', clip: user.id, frame: user.at, message: `asset "${a.id}" is ${name} (non-commercial) and the project is commercial`, fix: replace });
+      else if (cls === 'share-alike') out.push({ rule: 'stock-licence', severity: 'info', clip: user.id, frame: user.at, message: `asset "${a.id}" is ${name}: the finished video must be released under the same licence`, fix: replace });
+      else if (cls === 'unknown') out.push({ rule: 'stock-licence', severity: 'warning', clip: user.id, frame: user.at, message: `asset "${a.id}" has an unrecognised licence "${a.licence}"`, fix: replace });
+    }
+    return out;
+  },
+});
+
 // ------------------------------------------------------------------------------------------- audio stage
 
 const PLATFORM_LUFS: Record<string, number> = { shorts: -14, tiktok: -14, reels: -14, youtube: -14 };
@@ -1164,8 +1292,8 @@ const longSilence = defineCheck({
   },
 });
 
-export const builtinChecks: CheckDef[] = [gaps, textOutsideSafe, tinyText, captionOverlap, clipPastEnd, keyframesOutside,
+export const builtinChecks: CheckDef[] = [gaps, textOutsideSafe, uiOverlap, tinyText, captionOverlap, clipPastEnd, keyframesOutside,
   layerHidden, mediaOffFrame, trailingBlack, clipPastSource, alphaWithBg, textCutOff, musicOverVoice, captionTiming,
-  blackFrames, frozen, overlapAlpha, lumaRange, clipping, loudness, longSilence, ...retentionChecks];
+  stockCredits, stockLicence, blackFrames, frozen, overlapAlpha, lumaRange, clipping, loudness, longSilence, ...retentionChecks];
 
 export default definePlugin({ name: 'builtin-checks', version: '1.3.0', checks: builtinChecks });

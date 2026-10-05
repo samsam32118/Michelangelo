@@ -33,6 +33,10 @@ describe('delivery settings', () => {
     expect(enc('mov', {})).toMatch(/-profile:v 3 /);
     expect(enc('mp4', { colorRange: 'pc' })).toMatch(/out_range=pc.*-color_range pc/);
     expect(enc('mp4', {})).toMatch(/-color_range tv/);
+    // the default rate cap: by frame size, only when neither crf nor bitrate is given
+    expect(enc('mp4', {})).toMatch(/-crf 20 -maxrate 8M -bufsize 16M/);
+    expect(encodeArgs({ out: 'o', width: 1080, height: 1920, rate: { num: 30, den: 1 }, format: 'mp4', quality: 'final', delivery: {} }, FF).join(' ')).toMatch(/-maxrate 16M -bufsize 32M/);
+    expect(enc('mp4', { crf: 16 })).not.toMatch(/-maxrate/);
     expect(enc('mov', { timecode: '10:00:00:00' })).toMatch(/-timecode 10:00:00:00/);
   });
 

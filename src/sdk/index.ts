@@ -11,7 +11,7 @@ import { PLATFORMS, type ProjectFile } from '../core/schema/index.js';
 import { parseRate, parseTime } from '../core/time.js';
 import type { PluginRegistry } from '../plugin/registry.js';
 import type { Command } from '../core/commands/registry.js';
-import { Project, emptyProject, type EditResult } from './project.js';
+import { Project, emptyProject, workDir, type EditResult } from './project.js';
 import { makeServices, type MglServices } from './services.js';
 import '../core/commands/index.js';
 
@@ -39,6 +39,8 @@ export interface LookOptions {
   platforms?: string[];
   /** the render will use --alpha (enables the alpha-with-bg rule) */
   alpha?: boolean;
+  /** outline the TikTok / Reels / Shorts interface panels on the sheet and crops (never rendered) */
+  safe?: boolean;
   /** how fixes name the project file (default: the file relative to the cwd when below it, else as opened) */
   displayFile?: string;
   /** apply verified auto-fixes (one undo step) and report what remains; the result gains `fix` */
@@ -153,7 +155,7 @@ async function attach(p: Project): Promise<MglProject> {
     if (self.registry && want === loaded) return;
     const reg = await loadRegistry(p.data, p.dir);
     loaded = want;
-    p.services = makeServices(p.dir, reg);
+    p.services = makeServices(p.dir, reg, { workDir: workDir(p.file) });
     self.registry = reg;
     self.pluginProblems = reg.problems;
   };
@@ -276,7 +278,7 @@ async function lookProject(p: MglProject, o: LookOptions): Promise<LookResult> {
     const r = await fixLook(p, {
       comp: comp.id, ...(o.at?.length ? { frames: o.at.map((t) => parseTime(t, rate, 'at')) } : {}), ...(o.frames !== undefined ? { n: o.frames } : {}),
       ...(o.cuts ? { cuts: true } : {}), ...(o.audio === false ? { audio: false } : {}), ...(o.platforms?.length ? { platforms: parsePlatforms(o.platforms) } : {}),
-      ...(o.alpha ? { alpha: true } : {}), ...(o.displayFile ? { displayFile: o.displayFile } : {}), ...(o.dryRun ? { dryRun: true } : {}),
+      ...(o.alpha ? { alpha: true } : {}), ...(o.safe ? { safe: true } : {}), ...(o.displayFile ? { displayFile: o.displayFile } : {}), ...(o.dryRun ? { dryRun: true } : {}),
     });
     return { ...(r.report as unknown as LookResult), findings: r.remaining as LookResult['findings'], fix: fixJson(r) };
   }
@@ -293,6 +295,7 @@ async function lookProject(p: MglProject, o: LookOptions): Promise<LookResult> {
   // several platforms: the QA module runs the platform-dependent rules once per platform and tags what differs
   if (o.platforms?.length) opts.platforms = parsePlatforms(o.platforms);
   if (o.alpha) opts.alpha = true;
+  if (o.safe) opts.safe = true;
   if (o.displayFile) opts.displayFile = o.displayFile;
   return qa.look(p.data, opts) as Promise<LookResult>;
 }

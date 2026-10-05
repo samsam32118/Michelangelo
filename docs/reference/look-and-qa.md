@@ -2,7 +2,11 @@
 
 ## mgl look
 
-`mgl look <file> [--at 1s,2.5s] [-n 12] [--cuts] [--comp id] [--no-audio] [--strict] [--platforms a,b] [--alpha]`
+`mgl look <file> [--at 1s,2.5s] [-n 12] [--cuts] [--comp id] [--no-audio] [--strict] [--platforms a,b] [--safe] [--alpha]`
+
+`--safe` outlines the TikTok (cyan), Reels (magenta) and Shorts (yellow) interface panels (header, action buttons,
+caption panel) on the contact sheet and the crops, and names the panels under each crop. The outlines are drawn on the
+QA images only; they never reach a render.
 
 `--alpha` says the delivery will be rendered with transparency (enables the `alpha-with-bg` rule).
 
@@ -56,7 +60,12 @@ mgl check qa.mgl.json --json > check.json
 node -e "const r = require('./check.json'); console.log('issues:', r.issues)"
 ```
 
-Rules (each finding names its rule): `text-outside-safe`, `text-cut-off`, `tiny-text`, `caption-overlap`,
+Rules (each finding names its rule): `text-outside-safe`, `ui-overlap` (on a 9:16 comp, a caption cue, text or
+sticker under the TikTok, Reels or Shorts interface: header, action buttons or caption panel. With no
+`project.platform` it checks all three at once, so a vertical video is covered by default; with one platform set, only
+that one. Each finding names the platforms and panels and by how many px; the fix moves the clip, or scales a sticker
+down, into the area clear of all of them. Error for text, warning for stickers: an image, generator, shape or nested
+comp layer under 40 % of the frame and narrower than 90 % of its width and height, or any clip tagged `sticker`), `text-cut-off`, `tiny-text`, `caption-overlap`,
 `overlap-alpha`, `layer-hidden` (a layer fully covered by an opaque one above it), `media-off-frame`, `gaps`,
 `trailing-black`, `clip-past-end`, `clip-past-source` (a media clip longer than its source: the last frame holds
 or the sound stops; uses probed durations), `keyframes-outside`, `alpha-with-bg`, `music-over-voice`, `caption-timing`
@@ -117,7 +126,7 @@ mgl check qa.mgl.json --platform tiktok,reels,shorts
 ## Telling QA what is intentional
 
 Tag a clip `qa-ignore:<rule>` (or `qa-ignore:all`) and that rule skips it: credits that roll off the frame,
-burned-in timecode outside the safe zone, leader black. Short aliases: `safe-zone`, `cut-off`, `off-frame`,
+burned-in timecode outside the safe zone, leader black. Short aliases: `safe-zone` (both safe-zone rules), `ui` (`ui-overlap`), `cut-off`, `off-frame`,
 `overlap`, `covered`, `black`, `silence`, `frozen`, `levels`. Tags are a list: `clip.set tc tags='["qa-ignore:safe-zone"]'`.
 
 A tag covers its own clip and the timeline under it:

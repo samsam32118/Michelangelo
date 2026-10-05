@@ -23,6 +23,12 @@ describe('file format', () => {
     const r = parseProjectText(text);
     expect(formatProject(r.project)).toBe(text);
   });
+  it('keeps every project field on save (commercial, credits)', () => {
+    const text = base('{"id": "bg", "track": "V1", "at": 0, "len": 90, "color": "#202020"}').replace('{"michelangelo": 1,\n', '{"michelangelo": 1,\n"project": {"platform": "shorts", "commercial": true, "credits": {"file": "credits.txt", "assets": ["a"]}},\n');
+    const r = parseProjectText(text);
+    expect(r.problems.filter((x) => x.severity === 'error')).toEqual([]);
+    expect(formatProject(r.project)).toBe(text);
+  });
   it('normalises time strings and drops defaults', () => {
     const r = parseProjectText(base('{"id": "t", "track": "T1", "at": "1s", "len": "2.5s", "text": "Hi", "opacity": 1, "scale": [[0, 0.5], ["0.5s", 1, "outBack"]]}'));
     const out = formatProject(r.project);

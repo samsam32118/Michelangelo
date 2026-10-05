@@ -267,6 +267,30 @@ export async function runCommandOn(project: ProjectFile, cmd: { op: string; [k: 
   return core.runCommand(project, cmd, { catalog: registry.catalog() });
 }
 
+/**
+ * (API 1.5) A StockContext for testing a stock provider without the network: `routes` maps URL patterns to recorded
+ * answers (a string or object is sent as the body with status 200; a number is a status; a function builds a Response).
+ * An unmatched URL answers 404 and is listed in `misses`. Every request is recorded in `calls`.
+ */
+export function testStockContext(o: { routes?: [RegExp, unknown][]; env?: Record<string, string>; cacheDir?: string } = {}): import('./api.js').StockContext & { calls: { url: string; headers: Record<string, string> }[]; misses: string[] } {
+  const calls: { url: string; headers: Record<string, string> }[] = [], misses: string[] = [];
+  const dir = o.cacheDir ?? mkdtempSync(join(tmpdir(), 'mgl-stock-test-'));
+  return {
+    calls, misses, cacheDir: dir,
+    env: (name) => o.env?.[name],
+    async fetch(url, init) {
+      calls.push({ url, headers: { ...(init?.headers ?? {}) } });
+      const hit = (o.routes ?? []).find(([re]) => re.test(url));
+      if (!hit) { misses.push(url); return new Response('not found', { status: 404 }); }
+      const v = hit[1];
+      if (typeof v === 'function') return (v as (u: string) => Response | Promise<Response>)(url);
+      if (typeof v === 'number') return new Response(`status ${v}`, { status: v });
+      if (v instanceof Uint8Array) return new Response(v as unknown as BodyInit, { status: 200 });
+      return new Response(typeof v === 'string' ? v : JSON.stringify(v), { status: 200, headers: { 'content-type': typeof v === 'string' ? 'text/plain' : 'application/json' } });
+    },
+  };
+}
+
 /** A CheckContext for a project-stage check. */
 export function checkContext(project: ProjectFile, opts: { compId?: string; platform?: string } = {}): CheckContext {
   const compId = opts.compId ?? project.project?.main ?? project.comps[0]!.id;

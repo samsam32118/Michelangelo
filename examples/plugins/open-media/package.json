@@ -1,0 +1,10 @@
+{
+  "name": "open-media",
+  "version": "1.0.0",
+  "description": "Openly licensed images, footage, music and sound effects from public archives for media.search / media.fetch: Openverse, Freesound, Wikimedia Commons, NASA, Smithsonian, Library of Congress, The Met, Cleveland, Wellcome, SMK, Prelinger; Pexels, Pixabay, Unsplash, Europeana with keys.",
+  "type": "module",
+  "main": "src/index.ts",
+  "michelangelo": { "api": "^1.5.0", "kinds": ["provider", "command"] },
+  "scripts": { "test": "node --test test/*.test.ts" },
+  "peerDependencies": { "michelangelo": ">=0.1.0" }
+}

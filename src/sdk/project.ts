@@ -26,7 +26,7 @@ export interface EditResult {
   patch: Patch;
 }
 
-interface HistoryEntry { at: string; summary: string; commands: Command[]; patch: Patch }
+export interface HistoryEntry { at: string; summary: string; commands: Command[]; patch: Patch }
 interface HistoryFile { undo: HistoryEntry[]; redo: HistoryEntry[] }
 const HISTORY_LIMIT = 200;
 
@@ -207,6 +207,9 @@ export class Project {
     const h = this.readHistory();
     return { undo: h.undo.map((e) => e.summary).reverse(), redo: h.redo.map((e) => e.summary).reverse() };
   }
+
+  /** The recorded steps that can be undone, oldest first (what `review` shows step by step). */
+  historyEntries(): HistoryEntry[] { return this.readHistory().undo; }
 
   async undo(steps = 1): Promise<EditResult> { return this.step('undo', steps); }
   async redo(steps = 1): Promise<EditResult> { return this.step('redo', steps); }

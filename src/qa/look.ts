@@ -1,21 +1,30 @@
 /**
- * `mgl look`: check work without watching it. Renders a few frames into a contact sheet, runs the project,
- * frame and audio checks, writes a zoomed crop per finding, and summarises the mix as text.
+ * `mgl look`: check work without watching it. Renders a few frames, runs the project, frame and audio checks,
+ * writes a zoomed crop per finding, and summarises the mix as text. By default the sheet is the storyboard (scene
+ * tiles + lane strip) with storyboard.html next to it; --at / -n / --cuts give the plain contact sheet; --scene n
+ * draws one scene's moments and each visual lane alone.
  */
-import { mkdirSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { basename, dirname, isAbsolute, join, relative, resolve } from 'node:path';
-import { createCanvas, ImageData, type Canvas } from '@napi-rs/canvas';
+import { createCanvas, type Canvas } from '@napi-rs/canvas';
 import type { Finding } from '../plugin/api.js';
 import type { PluginRegistry } from '../plugin/registry.js';
 import type { ProjectFile } from '../core/schema/index.js';
+import { fail } from '../core/errors.js';
+import { entityEquals } from '../core/commands/registry.js';
 import { parseRate, rateToNumber } from '../core/time.js';
 import type { AudioAnalysisReport, MediaBackend } from '../media/types.js';
 import type { AudioPlan, RGBAFrame } from '../render/types.js';
 import { uiZones, type Rect } from './safezones.js';
+import { assignFindings, diffStoryboard, readPrevious, sceneDetail, sceneFrames, sceneMoments, laneOf, writeSnapshot, type HistoryLike, type Lane, type Storyboard, type StoryScene } from './storyboard.js';
+import { dataUrl, drawScene, drawStoryboard, marksOf, sceneScale, SHEET_MAX, storyLayout, toCanvas, type Pic } from './storyboard-draw.js';
+import { pageData, storyboardPage, type SceneImages } from './storyboard-page.js';
 import { compIdOf, makeContext, mergePlatforms, missingMedia, platformsOf, probeAssets, problemFindings, projectLayers, projectRegistry, qaExtras, restFrames, runStage, sampleFrames, sortFindings, withFile, type Layers, type PlatformFinding, type ProbeFn } from './check.js';
 
-export const SHEET_MAX = 1568;
+export { SHEET_MAX };
 const LABEL_H = 20, PAD = 6, MAX_FRAMES = 24, CROP_MIN = 512;
+/** Scenes (⚠ or ●) whose moments and layers a default look renders for the page; the rest show their middle frame. */
+const FOCUS_MAX = 4;
 
 type StillsFn = (project: ProjectFile, opts: { baseDir: string; comp?: string; frames: number[]; scale?: number; registry?: PluginRegistry }) =>
   Promise<{ frame: number; image: RGBAFrame; layers: { clipId: string; kind: string; box: [number, number, number, number]; text?: string; fontPx?: number }[] }[]>;
@@ -44,6 +53,14 @@ export interface LookOptions {
   /** how fixes name the project file (default: `file` relative to the cwd when below it, else as given) */
   displayFile?: string;
   registry?: PluginRegistry;
+  /** one scene (number or id): its three moments and each visual lane alone (scene-<n>.png) and its level-2 text */
+  scene?: number | string;
+  /** false: the plain contact sheet even without frames / n / cuts, no page, no storyboard snapshot */
+  storyboard?: boolean;
+  /** the project's edit history: changes no recorded command made read "(by hand)" */
+  history?: HistoryLike[];
+  /** 1-based line of a clip in the project file (the page's level 3, the scene text) */
+  lineOf?: (clipId: string) => number | undefined;
   /** injected for tests / other backends (a backend with `probe` gives clip-past-source and source-end aware frozen checks) */
   deps?: { renderStills?: StillsFn; backend?: Pick<MediaBackend, 'renderAudio' | 'analyzeAudio'> & Partial<Pick<MediaBackend, 'probe'>>; planAudio?: PlanFn };
 }
@@ -72,6 +89,21 @@ export interface LookReport {
   fps: number;
   seconds: number;
   notes: string[];
+  /** the storyboard (default look and --scene; additive) */
+  storyboard?: StoryboardSummary;
+}
+
+export interface StoryboardSummary {
+  /** storyboard.html (absent for --scene) */
+  page?: string;
+  scenes: { n: number; id: string; label: string; at: number; len: number; marks: string[]; changes: string[]; issues: number; /** the first issue */ issue?: string; /** a scene marker's note (the label) */ note?: boolean }[];
+  /** changes outside any scene (comps, buses, point markers) */
+  notes: string[];
+  /** when the previous storyboard (the one ● compares against) was made */
+  since?: string;
+  /** --scene: the scene shown and its level-2 text */
+  scene?: number;
+  detail?: string[];
 }
 
 export function lookDir(file: string): string {
@@ -104,13 +136,6 @@ export function sheetLayout(count: number, W: number, H: number, max = SHEET_MAX
   }
   const tileW = Math.max(2, Math.floor(W * best.scale)), tileH = Math.max(2, Math.floor(H * best.scale));
   return { ...best, tileW, tileH, scale: tileW / W, width: best.cols * tileW + PAD * (best.cols + 1), height: best.rows * (tileH + LABEL_H) + PAD * (best.rows + 1) };
-}
-
-function toCanvas(img: RGBAFrame): Canvas {
-  const cv = createCanvas(img.width, img.height);
-  const data = new Uint8ClampedArray(img.data.buffer, img.data.byteOffset, img.width * img.height * 4);
-  cv.getContext('2d').putImageData(new ImageData(data, img.width, img.height), 0, 0);
-  return cv;
 }
 
 /** Outline colours of each platform's interface with --safe. */
@@ -203,6 +228,129 @@ function summarise(a: AudioAnalysisReport): SoundSummary {
   return s;
 }
 
+type Still = Awaited<ReturnType<StillsFn>>[number];
+type Stage = Pick<LookOptions, 'baseDir' | 'registry' | 'deps' | 'alpha' | 'platform' | 'platforms'>;
+const VISUAL: Lane[] = ['picture', 'graphics', 'captions'];
+/** Page images: tiles ≤ 360 px tall (≤ 640 wide), so the page stays small and look fast. */
+export const pageScale = (W: number, H: number) => Math.min(1, 360 / H, 640 / W);
+
+/** The project stage (no pixels) and what the later stages need: registry, media facts, platforms, extras. */
+async function projectStage(project: ProjectFile, compId: string, opts: Stage) {
+  let registry = opts.registry, problems = (registry as { problems?: Parameters<typeof problemFindings>[0] } | undefined)?.problems ?? [];
+  if (!registry) ({ registry, problems } = await projectRegistry(project, opts.baseDir));
+  // media facts (sizes, durations) for exact boxes, clip-past-source and source-end aware frozen checks
+  const probeFn: ProbeFn | undefined = opts.deps ? opts.deps.backend?.probe?.bind(opts.deps.backend) : await realProbe(opts.baseDir);
+  const facts = await probeAssets(project, opts.baseDir, probeFn);
+  const platforms = platformsOf(project, opts);
+  // its boxed findings' frames are rendered too, for their crops
+  const lo = { baseDir: opts.baseDir, registry, media: facts };
+  const rest = await projectLayers(project, compId, restFrames(project, compId), lo);
+  const sampled = await projectLayers(project, compId, sampleFrames(project, compId).filter((f) => !rest.has(f)), lo);
+  for (const [f, ls] of rest) sampled.set(f, ls);
+  const extras = qaExtras(facts, opts.alpha, sampled, !!probeFn);
+  const projectRuns: [string, Finding[]][] = [];
+  for (const pf of platforms) projectRuns.push([pf, await runStage(registry, 'project', makeContext(project, compId, pf, { layers: rest, ...extras }))]);
+  return { registry, problems, probeFn, platforms, extras, projectFindings: mergePlatforms(projectRuns) };
+}
+
+/** Sorted, one per rule + clip + message, with <file> filled in. */
+function finishFindings(list: PlatformFinding[], file: string): PlatformFinding[] {
+  const seen = new Set<string>();
+  const out = sortFindings(list).filter((f) => { const k = `${f.rule}|${f.clip ?? ''}|${f.message}`; return !seen.has(k) && !!seen.add(k); });
+  withFile(out, file);
+  return out;
+}
+
+/** Start + 2, middle, end − 2 of a scene (inside it), or none past the end of the comp. */
+export function momentFrames(sb: Storyboard, s: StoryScene): [number, number, number] | undefined {
+  const m = sceneMoments(sb, s);
+  return m && [Math.min(m.start + 2, m.middle), m.middle, Math.max(m.end - 2, m.middle)];
+}
+
+/** A copy of the project with only one lane's clips visible on the comp's visual tracks (no comp bg above the picture). */
+export function soloProject(p: ProjectFile, compId: string, lane: Lane): ProjectFile {
+  const visual = new Set((p.tracks ?? []).filter((t) => t.comp === compId && !t.audio).map((t) => t.id));
+  return {
+    ...p,
+    comps: lane === 'picture' ? p.comps : p.comps.map((c) => { if (c.id !== compId) return c; const { bg: _bg, ...rest } = c; return rest; }),
+    clips: (p.clips ?? []).map((c) => (visual.has(c.track) && laneOf(p, c) !== lane ? { ...c, hidden: true } : c)),
+  };
+}
+
+interface Shots { comp: Map<number, Pic>; solos: Map<Lane, Map<number, Pic>> }
+
+/** The scenes' moments (minus `skip`, rendered elsewhere) and each visual lane alone at the middle. */
+async function sceneShots(project: ProjectFile, compId: string, sb: Storyboard, scenes: StoryScene[], scale: number, stills: StillsFn, base: { baseDir: string; registry: PluginRegistry }, skip = new Set<number>()): Promise<Shots> {
+  const comp = [...new Set(scenes.flatMap((s) => momentFrames(sb, s) ?? []))].filter((f) => !skip.has(f));
+  const has = (s: StoryScene, l: Lane) => s.items.some((i) => i.lane === l && !i.faded);
+  const lanes = VISUAL.filter((l) => scenes.some((s) => has(s, l)));
+  const mids = (l: Lane) => [...new Set(scenes.filter((s) => has(s, l)).map((s) => momentFrames(sb, s)?.[1]).filter((f): f is number => f !== undefined))];
+  const run = (p: ProjectFile, frames: number[]): Promise<Still[]> => (frames.length ? stills(p, { baseDir: base.baseDir, comp: compId, frames, scale, registry: base.registry }) : Promise.resolve([]));
+  // one after another: parallel stills sessions contend (measured ≈ 2x slower than in turn)
+  const c = await run(project, comp), ss: Still[][] = [];
+  for (const l of lanes) ss.push(await run(soloProject(project, compId, l), mids(l)));
+  return { comp: new Map(c.map((x) => [x.frame, x.image])), solos: new Map(lanes.map((l, i) => [l, new Map(ss[i]!.map((x) => [x.frame, x.image]))])) };
+}
+
+const secs = (f: number, fps: number) => `${(f / fps).toFixed(2)}s`;
+
+/** The images of one scene for level 2 (labels, pictures; a solo is empty when the scene has nothing on that lane). */
+function sceneShotsOf(sb: Storyboard, s: StoryScene, shots: Shots, more = new Map<number, Pic>()) {
+  const m = momentFrames(sb, s), pic = (f: number) => shots.comp.get(f) ?? more.get(f);
+  return {
+    moments: (['start', 'middle', 'end'] as const).map((w, i) => ({ label: m ? `${w} ${secs(m[i]!, sb.fps)}` : w, ...(m && pic(m[i]!) ? { image: pic(m[i]!)! } : {}) })),
+    solos: VISUAL.map((lane) => { const img = m && shots.solos.get(lane)?.get(m[1]); return { lane, ...(img ? { image: img } : {}), ...(!s.items.some((i) => i.lane === lane && !i.faded) ? { empty: true } : {}) }; }),
+  };
+}
+
+/** The page's images of every scene, as data: URLs at page size (JPEG; WebP for the transparent lanes). */
+async function pageImages(sb: Storyboard, shots: Shots, more: Map<number, Pic>): Promise<Map<number, SceneImages>> {
+  const [W, H] = sb.size, k = pageScale(W, H), w = Math.max(2, Math.round(W * k)), h = Math.max(2, Math.round(H * k));
+  const out = new Map<number, SceneImages>();
+  await Promise.all(sb.scenes.map(async (s) => {
+    const sh = sceneShotsOf(sb, s, shots, more);
+    const url = (p: Pic | undefined, alpha = false) => (p ? dataUrl(p, w, h, alpha) : Promise.resolve(undefined));
+    const moments = await Promise.all(sh.moments.map(async (m) => { const src = await url(m.image); return { label: m.label, ...(src ? { src } : {}) }; }));
+    const solos = await Promise.all(sh.solos.map(async (x) => { const src = await url(x.image, x.lane !== 'picture'); return { lane: x.lane, ...(src ? { src } : {}) }; }));
+    out.set(s.n, { ...(!s.idea && moments[1]?.src ? { tile: moments[1].src } : {}), moments, solos });
+  }));
+  return out;
+}
+
+/** Line number and text of a clip in the project file (lineOf when given, else the line holding its id and a track). */
+function lineTexts(file: string, lineOf?: (clipId: string) => number | undefined): (clipId: string) => { line: number; text: string } | undefined {
+  let lines: string[] = [];
+  try { if (existsSync(file)) lines = readFileSync(file, 'utf8').split('\n'); } catch { /* no file: the page shows the clip's JSON */ }
+  return (id) => {
+    let n = lineOf?.(id);
+    if (n === undefined) { const i = lines.findIndex((l) => /"track"\s*:/.test(l) && new RegExp(`"id"\\s*:\\s*${JSON.stringify(id).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`).test(l)); if (i >= 0) n = i + 1; }
+    const text = n !== undefined ? lines[n - 1] : undefined;
+    return n !== undefined && text ? { line: n, text } : undefined;
+  };
+}
+
+function summary(sb: Storyboard, since?: string, page?: string): StoryboardSummary {
+  return {
+    ...(page ? { page } : {}),
+    scenes: sb.scenes.map((s) => ({ n: s.n, id: s.id, label: s.label, at: s.at, len: s.len, marks: marksOf(s), changes: s.changes, issues: s.findings.length, ...(s.findings[0] ? { issue: s.findings[0].message } : {}), ...(s.note ? { note: true } : {}) })),
+    notes: sb.notes, ...(since ? { since } : {}),
+  };
+}
+
+/** Write the storyboard page and the snapshot the next storyboard compares against (with the findings, for `show`'s ⚠). */
+async function writePage(sb: Storyboard, project: ProjectFile, shots: Shots, more: Map<number, Pic>, o: { html: string; file: string; display: string; since?: string; findings: Finding[]; lineOf?: (clipId: string) => number | undefined }): Promise<void> {
+  const images = await pageImages(sb, shots, more);
+  writeFileSync(o.html, storyboardPage(pageData(sb, project, { file: o.display, images, lineOf: lineTexts(o.file, o.lineOf), ...(o.since ? { since: o.since } : {}) })));
+  writeSnapshot(o.file, project, new Date(), { comp: sb.comp, findings: o.findings });
+}
+
+function pickScene(sb: Storyboard, want: number | string, file: string): StoryScene {
+  const w = String(want).trim();
+  const s = /^\d+$/.test(w) ? sb.scenes.find((x) => x.n === Number(w)) : sb.scenes.find((x) => x.id === w) ?? sb.scenes.find((x) => x.id.toLowerCase() === w.toLowerCase());
+  if (!s) fail('E_ARG', `no scene "${w}" (${sb.scenes.length ? `scenes 1–${sb.scenes.length}` : 'this comp has no scenes yet'}).`, `list them: mgl show ${file} --scenes`);
+  return s;
+}
+
 export async function look(project: ProjectFile, opts: LookOptions): Promise<LookReport> {
   const t0 = performance.now();
   const notes: string[] = [];
@@ -215,87 +363,114 @@ export async function look(project: ProjectFile, opts: LookOptions): Promise<Loo
   const dir = lookDir(opts.file);
   mkdirSync(dir, { recursive: true });
   for (const f of readdirSync(dir)) if (/^qa-\d+\.png$/.test(f)) rmSync(join(dir, f), { force: true });
+  const page = join(dir, 'storyboard.html');
 
-  let registry = opts.registry, problems = (registry as { problems?: Parameters<typeof problemFindings>[0] } | undefined)?.problems ?? [];
-  if (!registry) ({ registry, problems } = await projectRegistry(project, opts.baseDir));
-
-  // media facts (sizes, durations) for exact boxes, clip-past-source and source-end aware frozen checks
-  const probeFn: ProbeFn | undefined = opts.deps ? opts.deps.backend?.probe?.bind(opts.deps.backend) : await realProbe(opts.baseDir);
-  const facts = await probeAssets(project, opts.baseDir, probeFn);
-  const platforms = platformsOf(project, opts);
+  const { registry, problems, probeFn, platforms, extras, projectFindings } = await projectStage(project, compId, opts);
+  const display = opts.displayFile ?? displayName(opts.file);
   const zones = opts.safe ? safeOverlays(platforms, W, H) : [];
   if (opts.safe) notes.push(zones.length
     ? `--safe: interface panels outlined on the sheet and crops (${[...new Set(zones.map((z) => z.platform))].map((p) => `${p} ${colourName(p)}`).join(', ')}); outlines are never rendered`
     : `--safe: no interface panels for ${platforms.join(', ')} on a ${W}x${H} comp (they exist for tiktok, reels and shorts on vertical comps)`);
+  const stillsFn: StillsFn = opts.deps?.renderStills ?? (await import('../render/pipeline.js')).renderStills;
+  const base = { baseDir: opts.baseDir, registry };
 
-  // project stage first (no pixels): its boxed findings' frames are rendered too, for their crops
-  const lo = { baseDir: opts.baseDir, registry, media: facts };
-  const rest = await projectLayers(project, compId, restFrames(project, compId), lo);
-  const sampled = await projectLayers(project, compId, sampleFrames(project, compId).filter((f) => !rest.has(f)), lo);
-  for (const [f, ls] of rest) sampled.set(f, ls);
-  const extras = qaExtras(facts, opts.alpha, sampled, !!probeFn);
-  const projectRuns: [string, Finding[]][] = [];
-  for (const pf of platforms) projectRuns.push([pf, await runStage(registry, 'project', makeContext(project, compId, pf, { layers: rest, ...extras }))]);
-  const projectFindings = mergePlatforms(projectRuns);
+  // the storyboard: by default (no --at / -n / --cuts) and for --scene; ● against the previous storyboard
+  const mode = opts.scene !== undefined ? 'scene' : opts.storyboard !== false && !opts.frames?.length && opts.n === undefined && !opts.cuts ? 'board' : 'sheet';
+  if (mode === 'sheet') rmSync(page, { force: true }); // the plain sheet replaces sheet.png: a page from an earlier look would no longer match it
+  const prev = mode === 'sheet' ? undefined : readPrevious(opts.file);
+  const sb = mode === 'sheet' ? undefined : diffStoryboard(prev?.project, project, compId, opts.history, prev?.at);
+
+  if (sb && mode === 'scene') {
+    // level 2 of one scene: fast (no frame or audio checks; project-stage findings only)
+    const sc = pickScene(sb, opts.scene!, display);
+    const k = sceneScale(W, H);
+    const shots = await sceneShots(project, compId, sb, [sc], k, stillsFn, base);
+    const findings = finishFindings([...problemFindings(problems), ...missingMedia(project, opts.baseDir), ...projectFindings], display);
+    assignFindings(sb, findings);
+    const cv = drawScene(sb, sc, sceneShotsOf(sb, sc, shots));
+    const path = join(dir, `scene-${sc.n}.png`);
+    await savePng(cv, path);
+    return {
+      sheet: path, size: [cv.width, cv.height], grid: [3, 2], crops: [], findings: sc.findings as PlatformFinding[], frames: momentFrames(sb, sc) ?? [], scale: k, fps,
+      seconds: Math.round((performance.now() - t0) / 100) / 10, notes,
+      storyboard: { ...summary(sb, prev?.at), scene: sc.n, detail: sceneDetail(sb, sc.n, sb.rate, opts.lineOf) },
+    };
+  }
+
   const frames = chooseFrames(project, compId, length, opts);
   const extra = [...new Set(projectFindings.filter((f) => f.box && f.frame !== undefined && !frames.includes(f.frame)).map((f) => f.frame!))].slice(0, 8);
+  const qaFrames = [...frames, ...extra];
+  // the QA frames render at the old contact sheet's tile scale (QA unchanged); the scene middles join the same call
   const layout = sheetLayout(frames.length, W, H);
   const scale = opts.scale ?? layout.scale;
+  const mids = sb ? sceneFrames(sb).filter((f) => !qaFrames.includes(f)) : [];
 
-  const stillsFn: StillsFn = opts.deps?.renderStills ?? (await import('../render/pipeline.js')).renderStills;
   const audioJob = opts.audio === false ? Promise.resolve(undefined) : runAudio(project, compId, opts, dir, notes);
-  const [stills, audio] = await Promise.all([
-    stillsFn(project, { baseDir: opts.baseDir, comp: compId, frames: [...frames, ...extra], scale, registry }),
-    audioJob,
-  ]);
+  const stills = await stillsFn(project, { baseDir: opts.baseDir, comp: compId, frames: [...qaFrames, ...mids], scale, registry });
   const byFrame = new Map(stills.map((s) => [s.frame, s]));
 
-  // contact sheet
-  const sheet = createCanvas(layout.width, layout.height);
-  const ctx = sheet.getContext('2d');
-  ctx.fillStyle = '#16161a';
-  ctx.fillRect(0, 0, layout.width, layout.height);
-  ctx.font = '13px "JetBrains Mono", "Inter", sans-serif';
-  ctx.textAlign = 'center';
-  ctx.textBaseline = 'middle';
-  frames.forEach((f, i) => {
-    const s = byFrame.get(f);
-    const col = i % layout.cols, row = Math.floor(i / layout.cols);
-    const x = PAD + col * (layout.tileW + PAD), y = PAD + row * (layout.tileH + LABEL_H + PAD);
-    if (s) ctx.drawImage(toCanvas(s.image), x, y, layout.tileW, layout.tileH);
-    if (zones.length) drawZones(ctx, zones, x, y, layout.tileW / W);
-    ctx.fillStyle = '#e8e8ec';
-    ctx.fillText(`${(f / fps).toFixed(2)}s · f${f}`, x + layout.tileW / 2, y + layout.tileH + LABEL_H / 2);
-  });
-  const sheetPath = join(dir, 'sheet.png');
-
-  // frame stage on the rendered stills, audio stage on the analysis
-  const imgs = new Map(stills.map((s) => [s.frame, { width: s.image.width, height: s.image.height, data: s.image.data, scale: s.image.width / W }]));
-  const layers: Layers = new Map(stills.map((s) => [s.frame, s.layers]));
+  // frame stage on the rendered QA frames (while the mix renders), then the audio stage on the analysis
+  const qa = stills.filter((s) => qaFrames.includes(s.frame));
+  const imgs = new Map(qa.map((s) => [s.frame, { width: s.image.width, height: s.image.height, data: s.image.data, scale: s.image.width / W }]));
+  const layers: Layers = new Map(qa.map((s) => [s.frame, s.layers]));
   const frameRuns: [string, Finding[]][] = [], audioRuns: [string, Finding[]][] = [];
-  for (const pf of platforms) {
-    frameRuns.push([pf, await runStage(registry, 'frame', makeContext(project, compId, pf, { frames: imgs, layers, ...extras }))]);
-    if (audio) audioRuns.push([pf, await runStage(registry, 'audio', makeContext(project, compId, pf, { audio, ...extras }))]);
+  for (const pf of platforms) frameRuns.push([pf, await runStage(registry, 'frame', makeContext(project, compId, pf, { frames: imgs, layers, ...extras }))]);
+  const frameFindings = mergePlatforms(frameRuns);
+  // the page's level 2 costs frames: only the scenes worth digging into (⚠ or ●) get their moments and each layer alone
+  let shots: Shots | undefined;
+  if (sb) {
+    assignFindings(sb, [...projectFindings, ...frameFindings]);
+    const focus = sb.scenes.filter((s) => !s.idea && (s.changed || s.findings.length)).slice(0, FOCUS_MAX);
+    shots = focus.length ? await sceneShots(project, compId, sb, focus, pageScale(W, H), stillsFn, base, new Set(sceneFrames(sb))) : { comp: new Map(), solos: new Map() };
   }
-  const frameFindings = mergePlatforms(frameRuns), audioFindings = audio ? mergePlatforms(audioRuns) : [];
+  const audio = await audioJob;
+  if (audio) for (const pf of platforms) audioRuns.push([pf, await runStage(registry, 'audio', makeContext(project, compId, pf, { audio, ...extras }))]);
+  const audioFindings = audio ? mergePlatforms(audioRuns) : [];
   // overlap-alpha refines caption-overlap on every frame it saw
   const refined = registry.checks.has('overlap-alpha');
   const kept = projectFindings.filter((f) => !(refined && f.rule === 'caption-overlap' && f.frame !== undefined && imgs.has(f.frame)));
-  const seen = new Set<string>();
-  const findings = sortFindings([...problemFindings(problems), ...missingMedia(project, opts.baseDir), ...kept, ...frameFindings, ...audioFindings])
-    .filter((f) => { const k = `${f.rule}|${f.clip ?? ''}|${f.message}`; return !seen.has(k) && !!seen.add(k); });
-  withFile(findings, opts.displayFile ?? displayName(opts.file));
+  const findings = finishFindings([...problemFindings(problems), ...missingMedia(project, opts.baseDir), ...kept, ...frameFindings, ...audioFindings], display);
+
+  // the sheet: the storyboard (scene tiles + lane strip), or the contact sheet with --at / -n / --cuts
+  let sheet: Canvas, size: [number, number], grid: [number, number];
+  if (sb) {
+    assignFindings(sb, findings);
+    const tiles = new Map<number, Pic>();
+    for (const s of sb.scenes) { const m = sceneMoments(sb, s), st = m && byFrame.get(m.middle); if (st) tiles.set(s.n, st.image); }
+    const d = drawStoryboard(sb, tiles, zones.length ? { onTile: (ctx, x, y, w) => drawZones(ctx, zones, x, y, w / W) } : {});
+    sheet = d.canvas; size = [d.layout.width, d.layout.height]; grid = [d.layout.cols, d.layout.rows];
+  } else {
+    sheet = createCanvas(layout.width, layout.height);
+    const ctx = sheet.getContext('2d');
+    ctx.fillStyle = '#16161a';
+    ctx.fillRect(0, 0, layout.width, layout.height);
+    ctx.font = '13px "JetBrains Mono", "Inter", sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    frames.forEach((f, i) => {
+      const s = byFrame.get(f);
+      const col = i % layout.cols, row = Math.floor(i / layout.cols);
+      const x = PAD + col * (layout.tileW + PAD), y = PAD + row * (layout.tileH + LABEL_H + PAD);
+      if (s) ctx.drawImage(toCanvas(s.image), x, y, layout.tileW, layout.tileH);
+      if (zones.length) drawZones(ctx, zones, x, y, layout.tileW / W);
+      ctx.fillStyle = '#e8e8ec';
+      ctx.fillText(`${(f / fps).toFixed(2)}s · f${f}`, x + layout.tileW / 2, y + layout.tileH + LABEL_H / 2);
+    });
+    size = [layout.width, layout.height]; grid = [layout.cols, layout.rows];
+  }
+  const sheetPath = join(dir, 'sheet.png');
 
   // crops come from a sharper render of the frames with boxed findings (enough px for a 512 px crop, at most comp size)
   const boxed = findings.filter((f) => f.box && f.frame !== undefined && byFrame.has(f.frame));
   const want = Math.min(1, Math.max(0, ...boxed.map((f) => CROP_MIN / (1.6 * Math.max(f.box![2], f.box![3], 1)))));
   const cropFrames = [...new Set(boxed.map((f) => f.frame!))].slice(0, 8);
-  const sharp = new Map<number, (typeof stills)[number]>();
+  const sharp = new Map<number, Still>();
   if (cropFrames.length && want > scale * 1.25) {
     for (const s of await stillsFn(project, { baseDir: opts.baseDir, comp: compId, frames: cropFrames, scale: want, registry })) sharp.set(s.frame, s);
   }
   const crops: LookReport['crops'] = [];
   const writes: Promise<void>[] = [savePng(sheet, sheetPath)];
+  if (sb && shots) writes.push(writePage(sb, project, shots, new Map(stills.map((s) => [s.frame, s.image])), { html: page, file: opts.file, display, findings, ...(prev ? { since: prev.at } : {}), ...(opts.lineOf ? { lineOf: opts.lineOf } : {}) }));
   findings.forEach((f, i) => {
     if (!f.box || f.frame === undefined) return;
     const s = sharp.get(f.frame) ?? byFrame.get(f.frame);
@@ -307,11 +482,44 @@ export async function look(project: ProjectFile, opts: LookOptions): Promise<Loo
   await Promise.all(writes);
 
   const report: LookReport = {
-    sheet: sheetPath, size: [layout.width, layout.height], grid: [layout.cols, layout.rows], crops, findings,
+    sheet: sheetPath, size, grid, crops, findings,
     frames, scale, fps, seconds: Math.round((performance.now() - t0) / 100) / 10, notes,
   };
   if (audio) report.sound = summarise(audio);
+  if (sb) report.storyboard = summary(sb, prev?.at, page);
   return report;
+}
+
+export interface StoryboardFiles { png: string; html: string; size: [number, number]; seconds: number; storyboard: StoryboardSummary }
+
+/**
+ * The storyboard alone (what `render` writes next to a video): the image and the page, ⚠ from the project-stage
+ * checks (no pixels), ● against the previous storyboard; then this one becomes the previous.
+ */
+export async function writeStoryboard(project: ProjectFile, o: Stage & { file: string; comp?: string; png?: string; html?: string; displayFile?: string; history?: HistoryLike[]; lineOf?: (clipId: string) => number | undefined }): Promise<StoryboardFiles> {
+  const t0 = performance.now();
+  const compId = compIdOf(project, o.comp);
+  const [W, H] = project.comps.find((c) => c.id === compId)!.size;
+  (await import('../render/text.js')).registerFonts();
+  const { registry, problems, projectFindings } = await projectStage(project, compId, o);
+  const display = o.displayFile ?? displayName(o.file);
+  const prev = readPrevious(o.file);
+  const sb = diffStoryboard(prev?.project, project, compId, o.history, prev?.at);
+  // the last look's frame and sound findings still hold when the project has not changed since (render follows a look)
+  const kept = prev?.findings && prev.comp === compId && entityEquals(prev.project, project) ? (prev.findings as PlatformFinding[]) : [];
+  const findings = finishFindings([...problemFindings(problems), ...missingMedia(project, o.baseDir), ...projectFindings, ...kept], display);
+  assignFindings(sb, findings);
+  const stillsFn: StillsFn = o.deps?.renderStills ?? (await import('../render/pipeline.js')).renderStills;
+  const k = Math.min(1, Math.max(storyLayout(sb.scenes.length, W, H).scale, pageScale(W, H)));
+  const shots = await sceneShots(project, compId, sb, sb.scenes, k, stillsFn, { baseDir: o.baseDir, registry });
+  const tiles = new Map<number, Pic>();
+  for (const s of sb.scenes) { const m = sceneMoments(sb, s), img = m && shots.comp.get(m.middle); if (img) tiles.set(s.n, img); }
+  const d = drawStoryboard(sb, tiles);
+  const dir = lookDir(o.file), png = o.png ?? join(dir, 'storyboard.png'), html = o.html ?? join(dir, 'storyboard.html');
+  mkdirSync(dirname(resolve(png)), { recursive: true });
+  mkdirSync(dirname(resolve(html)), { recursive: true });
+  await Promise.all([savePng(d.canvas, png), writePage(sb, project, shots, new Map(), { html, file: o.file, display, findings, ...(prev ? { since: prev.at } : {}), ...(o.lineOf ? { lineOf: o.lineOf } : {}) })]);
+  return { png, html, size: [d.layout.width, d.layout.height], seconds: Math.round((performance.now() - t0) / 100) / 10, storyboard: summary(sb, prev?.at, html) };
 }
 
 /** How a fix names the project file: relative to the cwd when it is below it, else as given. */

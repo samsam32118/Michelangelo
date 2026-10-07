@@ -1,4 +1,4 @@
-/** `mgl show`: the outline of a project in ≤ 40 lines, one clip, what is on screen at a time, or a media probe. */
+/** `mgl show`: the outline of a project in ≤ 40 lines, the storyboard as text, one clip, what is on screen at a time, or a media probe. */
 import { mkdirSync, writeFileSync, existsSync, statSync } from 'node:fs';
 import { basename, join, relative, resolve } from 'node:path';
 import { fail, suggest } from '../core/errors.js';
@@ -20,6 +20,8 @@ export async function show(a: Args, o: Out) {
   const p = await Project.open(file);
   const v = new View(p.data, p, a);
   if (str(a, 'clip')) return v.clipDetail(str(a, 'clip')!, o);
+  if (str(a, 'scene') !== undefined) return v.scene(str(a, 'scene')!, o, file);
+  if (bool(a, 'scenes')) return v.scenes(o, file);
   if (bool(a, 'assets')) return v.assets(o);
   if (str(a, 'at')) return v.at(str(a, 'at')!, o);
   return v.outline(o, file);
@@ -238,6 +240,50 @@ class View {
     o.line(...head, ...perTrack.slice(0, MAX_LINES - head.length - foot.length - 2), ...foot);
     o.line(`full outline (${shown.length} clips): ${rel}  · narrow it: --track V1, --from 10s --to 20s, --clip <id>`);
     o.set({ outline: outFile });
+  }
+
+  /** The storyboard with ● against the previous one (`look` / `render` save it; show never writes it). No QA: show stays fast. */
+  private async storyboard() {
+    let sbm: typeof import('../qa/storyboard.js');
+    try { sbm = await import('../qa/storyboard.js'); } catch (e) {
+      if ((e as NodeJS.ErrnoException).code !== 'ERR_MODULE_NOT_FOUND') throw e;
+      return fail('E_NOT_AVAILABLE', 'the storyboard is not available in this build (src/qa is missing).', 'read the outline instead: mgl show <file>');
+    }
+    const comp = this.comp();
+    const prev = sbm.readPrevious(this.p.file);
+    const sb = sbm.diffStoryboard(prev?.project, this.d, comp.id, this.p.historyTrace(), prev?.at);
+    // ⚠ is what the last look (or render) found; show runs no QA itself
+    if (prev?.findings && prev.comp === comp.id) sbm.assignFindings(sb, prev.findings);
+    return { sbm, sb, comp, prev };
+  }
+
+  /** Level 1: one line per scene with its six lanes in words. */
+  async scenes(o: Out, file: string) {
+    const { sbm, sb, comp, prev } = await this.storyboard();
+    const r = this.rateOf(comp);
+    const changed = sb.scenes.filter((s) => s.changed).length;
+    const when = prev?.at.slice(0, 16).replace('T', ' ');
+    const since = prev ? `● ${changed} changed since the storyboard of ${when}` : 'no earlier storyboard (mgl look saves one)';
+    const warned = sb.scenes.filter((s) => s.findings.length).length, whole = sb.unplaced.length;
+    const qa = prev?.findings && prev.comp === comp.id ? `⚠ ${warned ? plural(warned, 'scene') : 'no scene'}${whole ? ` + ${whole} for the whole video` : ''} at the look of ${when}` : '⚠ comes from mgl look';
+    const head = `${file} ${comp.id}: ${plural(sb.scenes.length, 'scene')}, ${formatSeconds(sb.length, r, 1)}s · ${since} · ${qa}`;
+    const lines = sbm.sceneLines(sb, r), room = MAX_LINES - 2;
+    o.line(head, ...(o.unbounded || lines.length <= room ? lines : [...lines.slice(0, room - 1), `… ${lines.length - room + 1} more lines (--json)`]));
+    o.hint(`dig in: mgl show ${file} --scene <n> · see it: mgl look ${file}`);
+    o.set({ comp: comp.id, header: head, previous: prev?.at ?? null, length: sb.length, scenes: sb.scenes, points: sb.points, notes: sb.notes });
+  }
+
+  /** Level 2: one scene, its lanes item by item with file lines, what changed. `ref` is the number or the scene id. */
+  async scene(ref: string, o: Out, file: string) {
+    const { sbm, sb, comp } = await this.storyboard();
+    const s = /^\d+$/.test(ref) ? sb.scenes.find((x) => x.n === Number(ref)) : sb.scenes.find((x) => x.id === ref);
+    if (!s) {
+      const dym = /^\d+$/.test(ref) ? [] : suggest(ref, sb.scenes.map((x) => x.id));
+      fail('E_REF', `scene "${ref}" does not exist (scenes 1–${sb.scenes.length}).`, dym.length ? `did you mean "${dym[0]}"? (or a number: --scene 1)` : `list them: mgl show ${file} --scenes`);
+    }
+    o.line(...sbm.sceneDetail(sb, s.n, this.rateOf(comp), (id) => this.p.line('clips', id)));
+    o.hint(`see it: mgl look ${file} --scene ${s.n} · one clip: mgl show ${file} --clip <id>`);
+    o.set({ comp: comp.id, scene: s, lines: Object.fromEntries(s.items.map((i) => [i.clip, this.p.line('clips', i.clip) ?? null])) });
   }
 
   clipDetail(id: string, o: Out) {

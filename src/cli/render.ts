@@ -1,4 +1,4 @@
-/** `mgl render` (estimate first, then render, verify) and `mgl look` (contact sheet + QA + sound). */
+/** `mgl render` (estimate first, then render, verify, storyboard next to a video) and `mgl look` (storyboard or contact sheet + QA + sound). */
 import { basename, dirname, extname, join, relative } from 'node:path';
 import { fail } from '../core/errors.js';
 import { parseRate, parseTime } from '../core/time.js';
@@ -110,6 +110,18 @@ export async function render(a: Args, o: Out) {
   o.line(`wrote ${resultLine(r)}`);
   for (const n of r.notes ?? []) o.line(`note: ${n}`);
   o.set({ out: r.out, result: r });
+  // the storyboard next to a video or GIF (not stills, audio, subtitles or stems)
+  if (isVideo && still === undefined && !opts.bus && !bool(a, 'no-storyboard')) {
+    const stem = r.out.slice(0, r.out.length - extname(r.out).length);
+    try {
+      const sb = await p.storyboard({ png: `${stem}.storyboard.png`, html: `${stem}.storyboard.html`, displayFile: file, ...(comp ? { comp } : {}) });
+      const n = sb.storyboard.scenes, issues = n.filter((s) => s.marks.includes('issue')).length, changed = n.filter((s) => s.marks.includes('changed')).length;
+      o.line(`storyboard: ${shown(sb.png)} ${shown(sb.html)} (${n.length} scene${n.length === 1 ? '' : 's'}${issues ? `, ${issues} with issues` : ''}${changed ? `, ${changed} changed` : ''})`);
+      o.set({ storyboard: { png: sb.png, html: sb.html, scenes: n.length } });
+    } catch (e) {
+      o.line(`note: storyboard not written: ${(e as Error).message.split('\n')[0]}`);
+    }
+  }
 }
 
 async function detach(p: MglProject, file: string, out: string, opts: Parameters<MglProject['render']>[1] & object, isVideo: boolean, o: Out) {
@@ -155,8 +167,10 @@ export async function look(a: Args, o: Out) {
   if (str(a, 'platform')) opts.platforms = parsePlatforms(str(a, 'platform')!);
   if (bool(a, 'alpha')) opts.alpha = true;
   if (bool(a, 'safe')) opts.safe = true;
+  const scene = str(a, 'scene');
+  if (scene !== undefined) opts.scene = /^\d+$/.test(scene) ? Number(scene) : scene;
   opts.displayFile = file;
-  await lookEstimate(p, opts, o);
+  if (scene === undefined) await lookEstimate(p, opts, o);
   const qa = await qaModule();
   const report = await p.look(opts);
   o.line(...(qa?.formatLook ? (qa.formatLook(report, { file, lineOf: (id: string) => p.line('clips', id) }) as string[]) : [JSON.stringify(report)]));

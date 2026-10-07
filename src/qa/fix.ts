@@ -297,6 +297,7 @@ export async function fixLook(p: MglProject, o: FixLookOptions = {}): Promise<Fi
         ...(o.comp ? { comp: o.comp } : {}), ...(o.frames?.length ? { frames: o.frames } : {}), ...(o.n !== undefined ? { n: o.n } : {}),
         ...(o.cuts ? { cuts: true } : {}), ...(o.audio === false ? { audio: false } : {}),
         ...(o.platforms?.length ? { platforms: o.platforms } : {}), ...(o.alpha ? { alpha: true } : {}), ...(o.safe ? { safe: true } : {}),
+        storyboard: false, // candidates may be rejected: never let one become the snapshot ● compares against
       });
       return { findings: report.findings, report };
     },

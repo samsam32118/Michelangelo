@@ -4,7 +4,8 @@ import { fail, type MglErrorInfo } from '../core/errors.js';
 import { entityLine } from '../core/format.js';
 import type { Problem } from '../core/load.js';
 import type { Command } from '../core/commands/registry.js';
-import type { TableName } from '../core/schema/index.js';
+import type { ProjectFile, TableName } from '../core/schema/index.js';
+import { applyPatch } from '../core/commands/registry.js';
 import { Project, type EditResult } from '../sdk/project.js';
 import { open, parsePlatforms, qaModule, withPluginProblems } from '../sdk/index.js';
 import { MAX_LINES, bool, clip, str, type Args, type Out } from './io.js';
@@ -20,7 +21,8 @@ export async function edit(a: Args, o: Out) {
     const n = rest[0] === undefined ? 1 : Number(rest[0]);
     if (!Number.isInteger(n) || n < 1) fail('E_ARG', `${op} takes a number of steps, got "${rest[0]}".`, `mgl edit ${file} ${op} 2`);
     const p = await Project.open(file);
-    return report(await p[op](n), o, file);
+    const before = p.data;
+    return report(await p[op](n), o, file, await scenesLine(before, p));
   }
   if (op === 'history') {
     const p = await Project.open(file);
@@ -49,11 +51,26 @@ export async function edit(a: Args, o: Out) {
   if (!cmds) {
     try { cmds = [kvCommand(op, rest)]; } catch (e) { throw withPluginProblems(e, p.pluginProblems); }
   }
+  const before = p.data;
   const r = await p.edit(cmds, { dryRun: bool(a, 'dry-run') });
-  report(r, o, file);
+  report(r, o, file, await scenesLine(before, p, r));
 }
 
-function report(r: EditResult, o: Out, file: string) {
+/** The storyboard scenes an edit touched (before vs after, main comp); undefined without the QA module or a change. */
+async function scenesLine(before: ProjectFile, p: Project, r?: EditResult): Promise<{ line: string; scenes: { n: number; label: string }[] } | undefined> {
+  // a dry run leaves p.data as it was: rebuild the result from the patch
+  const after = r?.dryRun ? applyPatch(before, r.patch, false) : p.data;
+  if (after === before) return undefined;
+  try {
+    const sbm = await import('../qa/storyboard.js');
+    const comp = after.project?.main ?? (after.comps.some((c) => c.id === 'main') ? 'main' : after.comps[0]?.id);
+    if (!comp || !before.comps.some((c) => c.id === comp)) return undefined;
+    const scenes = sbm.touchedScenes(before, after, comp);
+    return scenes.length ? { line: sbm.touchedLine(scenes), scenes } : undefined;
+  } catch { return undefined; } // the scenes line is a courtesy: never fail an edit that already happened
+}
+
+function report(r: EditResult, o: Out, file: string, sc?: { line: string; scenes: { n: number; label: string }[] }) {
   const lines: string[] = [];
   lines.push(...(r.summary.length ? r.summary : ['nothing changed.']));
   for (const n of r.notes) lines.push(`note: ${n}`);
@@ -68,6 +85,7 @@ function report(r: EditResult, o: Out, file: string) {
   });
   lines.push(...changes.slice(0, CHANGE_LINES));
   if (changes.length > CHANGE_LINES) lines.push(`  … ${changes.length - CHANGE_LINES} more changed lines (re-read the file or mgl show ${file})`);
+  if (sc) lines.push(sc.line);
   if (r.issues.length) {
     lines.push(`${r.issues.length} render-blocking issue${r.issues.length > 1 ? 's' : ''} remain:`);
     for (const i of r.issues.slice(0, 3)) lines.push(`  ${i.code}: ${clip(i.message, 150)}`, `    fix: ${clip(i.fix, 150)}`);
@@ -75,7 +93,7 @@ function report(r: EditResult, o: Out, file: string) {
   if (r.dryRun) lines.push('dry run: nothing written');
   o.line(...lines);
   if (!r.dryRun && r.patch.length) o.hint(`re-read the changed lines before editing ${file} by hand`);
-  o.set({ file, dryRun: r.dryRun, summary: r.summary, notes: r.notes, changes: r.changes, out: r.out, issues: r.issues.map(info) });
+  o.set({ file, dryRun: r.dryRun, summary: r.summary, notes: r.notes, changes: r.changes, out: r.out, issues: r.issues.map(info), scenes: sc?.scenes ?? [] });
 }
 
 function info(p: Problem): MglErrorInfo & { severity: string } {

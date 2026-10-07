@@ -7,7 +7,8 @@ description: Edit videos and make motion graphics from the terminal with Michela
 
 A project is one `*.mgl.json` file: valid JSON, one entity per line, readable ids. You change it with
 commands (`mgl edit`), by editing a line yourself, or from a Node script (the SDK). You check your work
-with `mgl look` (a contact sheet image plus QA and a sound report) because you cannot watch video.
+with `mgl look` (the storyboard image: scenes and their layers, plus QA and a sound report) because you cannot watch
+video; `mgl show <file> --scenes` is the same map as text (⚠ issues, ● changes per scene).
 Every command prints ≤ 40 lines (`--all` lifts the cap; `mgl docs <topic>` guides print whole); add `--json`
 for one machine-readable object.
 
@@ -59,6 +60,12 @@ mgl render demo.mgl.json out/demo.mp4 --draft
 The first line of `render` is always the estimate (`est. 24 s (...)`). **If it says more than 2 minutes,
 render in the background** so your shell does not time out: `mgl render demo.mgl.json out/final.mp4 --detach`,
 then poll `mgl render demo.mgl.json --status` until it says `done`.
+
+**Work from the storyboard.** Start from `mgl show <file> --scenes`: one line per scene (its words, time, and six
+lanes: picture, graphics, captions, voice, music, sfx; ● changed since the last `look` or `render`, `idea` an empty
+scene). Dig in with `--scene <n>`; `mgl edit` names the scenes it touched. Hand over each round with the storyboard
+image (`look`'s `sheet.png`) and page (`storyboard.html`), and refer to scenes by number and words (scene 3 "Work in
+25-minute blocks"). Mark a scene or an idea: `mgl edit <file> marker.add at=6s len=3s scene=true note="show a timer"`.
 
 ## Three ways to change a project
 
@@ -150,7 +157,8 @@ music and sound effects with a stock plugin (open-media): `media.search kind=ima
 
 ## Look and QA
 
-`mgl look <file> [--at 1s,2.5s] [-n 12] [--cuts]` renders frames into one sheet (long edge ≤ 1568 px),
+`mgl look <file> [--at 1s,2.5s] [-n 12] [--cuts]` renders frames into one sheet (long edge ≤ 1568 px; without
+`--at` / `-n` / `--cuts` the sheet is the storyboard, and `--scene <n>` shows one scene's moments and layers),
 runs QA (safe zones per platform, text overlapping other elements, tiny or cut-off text, black or frozen
 stretches, gaps, clipping or off-target loudness, music over voice) and reports the sound as text
 (LUFS, true peak, silences, tempo). Each finding has a crop image, the file line and a `fix:` command.

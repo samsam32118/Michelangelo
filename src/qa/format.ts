@@ -48,8 +48,44 @@ export function formatSound(s: SoundSummary): string {
   return parts.join(' · ');
 }
 
+const SCENE_LINES = 14;
+const MARK = { idea: 'idea', issue: '⚠', changed: '●' } as Record<string, string>;
+const trunc = (s: string, n: number) => (s.length <= n ? s : `${s.slice(0, n - 1).trimEnd()}…`);
+
+/** One line per scene: `  3 "Work in 25-minute blocks" 5.8–9.1s ⚠ ● · hook higher (y 691→500)`. */
+function storyLines(sb: NonNullable<LookReport['storyboard']>, fps: number, o: FormatOptions): string[] {
+  const t = (f: number) => (f / fps).toFixed(1);
+  const lines = sb.scenes.slice(0, sb.scenes.length > SCENE_LINES ? SCENE_LINES - 1 : SCENE_LINES).map((s) => {
+    const m = s.marks.map((x) => MARK[x] ?? x).join(' ');
+    const why = s.changes[0] ?? s.issue ?? (s.issues ? `${s.issues} issue${s.issues > 1 ? 's' : ''}` : '');
+    return `  ${s.n} ${s.note ? 'note ' : ''}"${trunc(s.label, 40)}" ${t(s.at)}–${t(s.at + s.len)}s${m ? ' ' + m : ''}${why ? ` · ${trunc(why, 48)}` : ''}`;
+  });
+  if (sb.scenes.length > lines.length) lines.push(`  … ${sb.scenes.length - lines.length} more: mgl show ${o.file} --scenes`);
+  if (sb.notes.length) lines.push(`changed outside scenes: ${trunc(sb.notes.slice(0, 3).join('; '), 100)}`);
+  return lines;
+}
+
 export function formatLook(r: LookReport, o: FormatOptions): string[] {
   const max = o.max ?? 40;
+  const sb = r.storyboard;
+  if (sb?.detail) {
+    // --scene: the level-2 image and text
+    const head = `wrote ${rel(r.sheet, o)} (scene ${sb.scene} of ${sb.scenes.length}: 3 moments + each layer alone, ${r.size[0]}x${r.size[1]}) in ${r.seconds.toFixed(1)} s`;
+    const tail = r.notes.slice(0, 2).map((n) => `note: ${n}`);
+    const body = sb.detail.slice(0, max - 1 - tail.length);
+    return [head, ...body, ...tail];
+  }
+  if (sb) {
+    const qaSpan = r.frames.length ? `${(r.frames[0]! / r.fps).toFixed(2)}–${(r.frames.at(-1)! / r.fps).toFixed(2)}` : '-';
+    const head = [
+      `wrote ${rel(r.sheet, o)} (storyboard: ${sb.scenes.length} scene${sb.scenes.length === 1 ? '' : 's'}, ${r.size[0]}x${r.size[1]}; QA on ${r.frames.length} frames ${qaSpan}) in ${r.seconds.toFixed(1)} s`,
+      ...(sb.page ? [`page: ${rel(sb.page, o)}${sb.since && (sb.notes.length || sb.scenes.some((s) => s.marks.includes('changed'))) ? ` (● = changed since the storyboard of ${sb.since.slice(0, 16).replace('T', ' ')})` : ''}`] : []),
+    ];
+    const tail = [...(r.sound ? [formatSound(r.sound)] : []), ...r.notes.slice(0, 2).map((n) => `note: ${n}`)];
+    const scenes = storyLines(sb, r.fps, o).slice(0, Math.max(1, max - head.length - tail.length - 3));
+    const crops = new Map(r.crops.map((c) => [c.finding, c.path]));
+    return [...head, ...scenes, issues(r.findings.length), ...findingLines(r.findings, Math.max(1, max - head.length - scenes.length - 1 - tail.length), o, crops, `; all of them: mgl look ${o.file} --json`), ...tail].slice(0, max);
+  }
   const span = r.frames.length ? `${(r.frames[0]! / r.fps).toFixed(2)}–${(r.frames.at(-1)! / r.fps).toFixed(2)}` : '-';
   const head = [`wrote ${rel(r.sheet, o)} (${r.frames.length} frames ${span}, ${r.size[0]}x${r.size[1]}) in ${r.seconds.toFixed(1)} s`, issues(r.findings.length)];
   const tail = [...(r.sound ? [formatSound(r.sound)] : []), ...r.notes.slice(0, 2).map((n) => `note: ${n}`)];

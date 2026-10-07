@@ -1,7 +1,8 @@
 # Plan: the storyboard, one living map of the video for people and agents (2026-10-07)
 
-Status: **proposed**, waiting for the owner. Replaces the earlier versions of this plan (kept in git history);
-the approval loop is gone. Nothing is built except `Project.historyEntries()` (additive, 4 lines).
+Status: **approved, being built** (2026-10-07). Replaces the earlier versions of this plan (kept in git history);
+the approval loop is gone. The owner's decisions (below, "Decisions taken") override the text where they differ;
+"As built" notes record what the code does.
 
 ## Why
 
@@ -45,9 +46,11 @@ LEVEL 3  one element: clip "bg3" (line 18) ────────────�
 
 Scenes are the units people think in, so they come from the story, not from tracks:
 
-1. **Ranges you marked as scenes**: markers with a length, `{"id": "timer", "comp": "main", "at": 270, "len": 60,
-   "note": "show a timer"}`. Use them to plan, to group, or to drop an idea anywhere in the video. No schema
-   change: markers already have `len` and `note`.
+1. **Ranges you marked as scenes**: markers with `scene: true`, `{"id": "timer", "comp": "main", "at": 270,
+   "len": 60, "note": "show a timer", "scene": true}`. Use them to plan, to group, or to drop an idea anywhere in
+   the video. Additive schema field `Marker.scene`; a scene needs a `len` (load error `E_SCENE`). Made with
+   `marker.add ... scene=true` or `marker.set <id> scene=true len=2s`. Markers without `scene` stay points, whatever
+   their length.
 2. Otherwise **sentences**: caption cues grouped until one ends in `.`, `!` or `?`. Every project made from a
    script has them.
 3. Otherwise **shots**: each clip on the bottom picture track.
@@ -126,7 +129,7 @@ The same three levels, as text and images within the existing budgets (≤ 40 li
 
 | Level | Text (`mgl show`) | Image (`mgl look`) |
 |---|---|---|
-| 1 whole video | `show <file> --scenes`: one line per scene with its lanes in words | `look <file>`: the scene row and lanes (`storyboard.png`) |
+| 1 whole video | `show <file> --scenes`: one line per scene with its lanes in words | `look <file>`: the scene row and lanes (in `sheet.png`) |
 | 2 one scene | `show <file> --scene 3` | `look <file> --scene 3`: the moments and each layer alone |
 | 3 one element | `show <file> --clip bg3` (exists) | `render --still` (exists) |
 
@@ -150,7 +153,7 @@ to scenes by number and words."
 | Command | Change |
 |---|---|
 | `mgl show` | `--scenes` (level 1 text), `--scene n` (level 2 text) |
-| `mgl look` | its contact sheet becomes the storyboard (`storyboard.png` + `storyboard.html`); `--scene n` for level 2; `--at` / `-n` keep the old sheet; QA crops unchanged |
+| `mgl look` | without `--at` / `-n` / `--cuts` its contact sheet is laid out as the storyboard (still `sheet.png`, plus `storyboard.html`); `--scene n` for level 2; `--at` / `-n` / `--cuts` keep the old sheet; QA frames and crops unchanged |
 | `mgl render` | writes `<out>.storyboard.png` and `.html` next to every video or GIF (`--no-storyboard` turns it off) |
 | `mgl edit` | one line: the scenes the edit touched |
 
@@ -195,11 +198,53 @@ built from the existing clip commands, so "swap scenes 2 and 3" is one step.
 
 Each step lands with `npm run test:fast` passing, on a branch off `main`.
 
-## Decisions for the owner
+## Decisions taken (owner, 2026-10-07)
 
-- **(Ask)** `look`'s default contact sheet becomes the storyboard (recommended: agent and human read the same
-  map), or the storyboard is written next to it?
-- **(Ask)** Markers with a length count as scenes. Today markers with a length are rare (`marker.beats` makes
-  points, not ranges); if ranges are wanted for other uses, an additive `scene: true` on markers is the
-  alternative.
+- `look` without `--at` / `-n` / `--cuts` lays out its contact sheet as the storyboard. The file keeps its name
+  (`sheet.png`) and `LookReport` keeps its fields. QA coverage does not drop: `report.frames` stays the QA sample
+  (12 evenly spaced, or the ones given), and the storyboard tiles use each scene's middle frame, rendered in the
+  same stills call (the union of both sets).
+- Scenes are marked explicitly with `scene: true` on a marker, not by any marker with a length.
+- No approval loop anywhere.
 - **(R)** Six lanes; ≤ 12 scenes per row; three moments per scene; ● compares against the previous storyboard.
+
+## As built
+
+- **Model** (`src/qa/storyboard.ts`, pure, unit-tested): `deriveScenes`, `buildStoryboard`, `diffStoryboard`,
+  `assignFindings`, `touchedScenes` / `touchedLine`, snapshots (`readPrevious`, `writeSnapshot` in
+  `.mgl/<name>/storyboard/project.json`), text levels `sceneLines` / `sceneDetail` (≤ 40 lines). At most 24
+  scenes (more are grouped evenly). Before the first sentence comes a `lead` scene (the hook), id from its text
+  clip. A scene marker inside a base scene splits it; the second piece's id gets `.2`. Shots and chunks take a
+  label from a text clip only when it covers half the scene or starts in it. `role:watermark` clips are picture.
+  Lengthened or shortened clips mark only the scenes at their changed edges, so inserting a sentence moves the
+  later scenes without marking them. A change inside a nested comp marks the clips that show it.
+- **Schema / commands:** `Marker.scene`, `E_SCENE`, `marker.add scene=true`, `marker.set` (at, len, note, scene).
+- **`show --scenes`:** a header (`<file> <comp>: N scenes, 9.0s · ● k changed since the storyboard of <time>` or
+  `no earlier storyboard`, `⚠ k scenes at the look of <time>`), then `sceneLines`. No QA (show stays fast); ● against the snapshot
+  with `(by hand)` from the history; show never writes the snapshot. `--json`: `scenes`, `points`, `notes`,
+  `previous`. **`show --scene <n|id>`:** `sceneDetail` with each clip's line in the project file; E_REF for an
+  unknown scene.
+- **`edit`:** after the change lines (cap of 10 unchanged), `scenes: 3 "…", 4 "…"` for the scenes the edit touched,
+  also on `--dry-run`, `undo` and `redo`; none → no line. `--json` gains `scenes: [{n, label}]`.
+- **Integration:** a piece of a base scene under 0.5 s left by a scene marker merges into the scene it touches (its
+  other piece, else the marker), so scenes never leave gaps. The three moments step out of picture transitions
+  (cut-centred windows), so a tile never shows a half-pushed frame. The lane strip (image and page) runs to the end
+  of the last scene, shading the part past the video. `look --fix` verifies without the storyboard, so a rejected
+  candidate never becomes the snapshot ● compares against. Change words name what changed (`hook now says "…"`,
+  `bg5 noise colors changed`, `bg4 fainter (opacity 1→0.8)`).
+- **After the first evaluation (agent quiz, vision review, code review):** the snapshot keeps the findings of the
+  look that wrote it, so `show --scenes` / `--scene n` show ⚠ per scene and the issue text (render keeps a look's
+  findings while the project is unchanged). A scene marker's label reads `note "…"`; an idea past the end says it is
+  not rendered; lane words list every member by id (no bare `+2`). Lanes are one block per clip (per cue on
+  captions), overlapping tracks in up to three rows, transitions as wedges, `none` on an empty lane, scene columns
+  tinted. The page: cards and the level-1 text are static HTML (readable without the script), cards carry layer chips
+  and the first issue / change, a legend and whole-video banners up top; level 2 leads with issues and changes,
+  splits "in this scene" (times clipped, "starts 0.4s before") from "runs across the whole video", shows the caption
+  words, and `copy scene` copies the level-2 text; level 3 shows seconds and frames, readable settings with colour
+  swatches, a type-aware edit hint and the JSON behind a toggle; on a phone the panel is a full-screen sheet.
+  Diff: an explicit move (clip or cue) marks where it was and where it is unless it is a ripple (the scene there
+  moved by the same amount and kept its length); a change with no scene there now goes to the notes; overlapping
+  scene markers tile; a track change inside a nested comp marks its holders; undo / redo stamp `stepped` on the
+  history entry, so they are not "(by hand)". Speed: a default look adds only the scene middles to the QA stills
+  call; the page's start / end and layers alone are rendered only for ⚠ / ● scenes (≤ 4); `--scene n` and `render`
+  render them in full. `-n` / `--at` / `--cuts` delete a stale `storyboard.html`.

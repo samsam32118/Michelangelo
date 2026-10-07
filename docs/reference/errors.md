@@ -65,7 +65,7 @@ exception is `E_INTERNAL` (exit 1). Below: each code with one example message an
 | `E_NO_SPEECH` | 1 | transcribe provider "…" found no words in …. | check that the clip has speech, or use captions.from-text voice=… text="..." with the script. |
 | `E_NO_SUBJECT` | 1 | comp "…" has no video clip to track. | add a video clip, or reframe without track=true. |
 | `E_NOT_AUDIO` | 1 | clip "…" has no audio. | set gain on a media or nested comp clip. |
-| `E_NOT_AVAILABLE` | 1 | look is not available in this build (src/qa is missing). | render stills instead: mgl render <file> frame.png --still 1s |
+| `E_NOT_AVAILABLE` | 1 | the storyboard is not available in this build (src/qa is missing). | read the outline instead: mgl show <file> |
 | `E_NOT_CAPTIONS` | 1 | clip "…" is not a captions clip. | use the id of a clip with "captions": true, or omit it to create one. |
 | `E_NOT_EMPTY` | 1 | comp "…" already has … clip(s); recipe.short builds a whole Short into an empty comp. | start a new project: mgl new shorts -o short.mgl.json --script script.txt (or pass comp=<an empty comp>). |
 | `E_NOT_KEYFRAMED` | 1 | … has no keyframes. | add one with: mgl edit <file> key.set <id> prop=<prop> at=<frame> value=<v> |

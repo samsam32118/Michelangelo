@@ -95,6 +95,7 @@ exception is `E_INTERNAL` (exit 1). Below: each code with one example message an
 | `E_RENDER_UNAVAILABLE` | 1 | the render pipeline could not be loaded: … | reinstall michelangelo (npm install michelangelo); renderEffect / renderGenerator work without it. |
 | `E_RENDER_VERIFY` | 1 | … was written but has no … stream. | render again; if it repeats, run mgl doctor to check the ffmpeg build. |
 | `E_SCALE` | 1 | scale … is out of range. | use a scale between 0.05 and 4 (0.5 = half size). |
+| `E_SCENE` | 1 | a scene needs a length. | mgl edit <file> marker.add at=… len=3s scene=true note="..." |
 | `E_SCHEMA` | 1 | the project file must be a JSON object. | start from "mgl new" and compare. |
 | `E_SPEED` | 1 | speed 0 would freeze the whole clip. | use clip.freeze to hold a frame for a while. |
 | `E_TIME` | 1 | … is not a number. | give frames as an integer or seconds as "2.5s". |

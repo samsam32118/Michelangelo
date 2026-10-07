@@ -286,6 +286,8 @@ export function makeSchemas<T extends TimeSchema>(Time: T) {
     at: Time,
     len: z.optional(Time),
     note: z.string().optional(),
+    /** a storyboard scene: the range at..at+len is one scene, labelled by `note` (needs `len`) */
+    scene: z.boolean().optional(),
   });
 
   const File = z.strictObject({
@@ -370,5 +372,5 @@ export const KEY_ORDER: Record<TableName, string[]> = {
     'blend', 'parent', 'matte', 'remap', 'link', 'gain', 'fade', 'muted', 'fx', 'masks', 'transition', 'clock', 'hidden', 'locked', 'tags', 'note'],
   cues: ['id', 'clip', 'at', 'len', 'text', 'words', 'speaker'],
   buses: ['id', 'to', 'gain', 'muted', 'duck', 'loudness', 'fx'],
-  markers: ['id', 'comp', 'at', 'len', 'note'],
+  markers: ['id', 'comp', 'at', 'len', 'note', 'scene'],
 };

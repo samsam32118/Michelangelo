@@ -6,6 +6,7 @@ An agent working with Michelangelo never watches a video. It uses:
 
 - small project files with one entity per line;
 - commands that print at most 40 lines;
+- a storyboard of the whole video, as text and as one image;
 - contact sheets and sound reports;
 - QA findings that come with a ready-to-run fix.
 
@@ -82,7 +83,8 @@ A vertical Short from a script, in one call:
 ```sh
 echo "Three tips for better sleep. Keep the room cold. No screens after ten." > script.txt
 mgl new shorts --script script.txt          # backgrounds, hook, captions, progress bar, CTA, music, SFX
-mgl look video.mgl.json                     # contact sheet + QA findings + sound report
+mgl show video.mgl.json --scenes            # the storyboard as text: one line per scene
+mgl look video.mgl.json                     # the storyboard image + QA findings + sound report
 mgl render video.mgl.json video.mp4         # estimates first, then renders and verifies
 ```
 
@@ -112,11 +114,11 @@ The CLI has nine verbs:
 | Verb | Use |
 |---|---|
 | `new` | create a project, or a whole Short from a script |
-| `show` | outline the project |
+| `show` | outline the project, or the storyboard as text (`--scenes`, `--scene n`) |
 | `edit` | run typed commands, which are validated, undoable and dry-runnable |
 | `check` | QA without rendering |
-| `look` | render a contact sheet and run QA and sound checks |
-| `render` | render the output |
+| `look` | render the storyboard (or a contact sheet) and run QA and sound checks |
+| `render` | render the output, with its storyboard next to it |
 | `docs` | print the documentation |
 | `plugin` | create, test and trust plugins |
 | `doctor` | check the environment |
@@ -126,6 +128,64 @@ Every verb takes `--json` and exits with one of three codes:
 - 0: ok;
 - 1: the input is wrong;
 - 2: the environment is wrong.
+
+## The storyboard
+
+The person asking for a video rarely opens the project, and the agent never watches the video. The storyboard is
+one map of the video that both can read: the video as numbered **scenes**, each with its words, its time, a picture
+and its **six lanes** (picture, graphics, captions, voice, music, sfx). Lanes are worked out from what each clip is;
+effects, masks and transitions show as marks on their clip.
+
+Scenes come from the story, in this order:
+
+1. ranges you marked as scenes: `mgl edit video.mgl.json marker.add at=6s len=3s scene=true note="show a timer"`
+   (`marker.set <id> scene=true len=3s` turns an existing marker into one). A marked scene with nothing in it yet
+   is an `idea`, so you can drop an idea anywhere, even in a finished video;
+2. otherwise sentences of the captions;
+3. otherwise shots on the bottom picture track;
+4. otherwise 5-second chunks.
+
+Each scene carries at most two marks: `idea`, ⚠ (QA found a problem in it, from `mgl look`) and ● (it changed since
+the previous storyboard, with the change in words: `title higher (y 691→500)`, `new whoosh.wav`, `(by hand)`). The
+storyboard keeps a copy of the project it was made from in `.mgl/<name>/storyboard/`, so ● needs no step from
+anyone. Nothing is approved or locked: it always shows the project as it is now.
+
+It has three levels, as text for agents and as images and a page for people:
+
+| Level | Text | Image |
+|---|---|---|
+| 1, the whole video | `mgl show video.mgl.json --scenes` (≤ 40 lines) | `mgl look video.mgl.json` (`sheet.png` laid out as the storyboard; `storyboard.html` next to it) |
+| 2, one scene | `mgl show video.mgl.json --scene 3` (each lane item by item, with file lines) | `mgl look video.mgl.json --scene 3` (its moments and each layer alone) |
+| 3, one clip | `mgl show video.mgl.json --clip bg3` | `mgl render video.mgl.json f.png --still 6s` |
+
+`mgl look` with `--at`, `-n` or `--cuts` makes the plain contact sheet instead. QA checks the same frames either way
+(12 evenly spaced, or the ones you name).
+`mgl render` writes `<out>.storyboard.png` and `<out>.storyboard.html` next to every video or GIF
+(`--no-storyboard` turns it off). `mgl edit` adds one line naming the scenes an edit touched:
+
+```text
+scenes: 3 "Work in 25-minute blocks", 4 "Follow for more"
+```
+
+The page is one static file with an inline script. Scene cards (with their layers, first issue and first change)
+and the storyboard as text are plain HTML; the lane strip draws every clip and caption cue as its own block. Click a
+scene for level 2 (its issues, changes, words, what is in it and what runs across the whole video; the scenes with ⚠
+or ● also get their start and end and each layer alone, which you can switch on and off), an element for its times,
+settings and line in the project file; filter by issues or changes; `copy scene` copies the scene as text to paste
+into chat. It reads the project and never writes it. `mgl show --scenes` repeats the ⚠ of the last look.
+
+For Codex and other agents that read `AGENTS.md`, add:
+
+```markdown
+## Video (Michelangelo)
+- Start from `mgl show <file> --scenes`; dig in with `mgl show <file> --scene <n>`.
+- After each round, hand over the storyboard: `mgl look <file>` (image `.mgl/<name>/look/sheet.png` and the page
+  `storyboard.html`), or the `<out>.storyboard.png` / `.html` that `mgl render` writes.
+- Refer to scenes by number and words: scene 3 "Work in 25-minute blocks".
+- Mark a scene or an idea: `mgl edit <file> marker.add at=6s len=3s scene=true note="..."`.
+```
+
+Claude Code reads the same instruction from [SKILL.md](SKILL.md).
 
 ## What it can do
 

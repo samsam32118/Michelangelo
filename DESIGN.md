@@ -270,11 +270,11 @@ Binary `michelangelo` with short alias `mgl` (Ask, §13). Nine verbs:
 | Verb | Does |
 |---|---|
 | `new [preset] [--from script.txt\|--template id] [-o file]` | create a project (`shorts` 1080×1920, `youtube` 1920×1080, `square`, `portrait`); with `--from` a first edit from a script |
-| `show <file> [--at t] [--clip id] [--comp id] [--frames]` | the outline: one line per track and clip (id, kind, span, text or asset, fx); `show media.mp4` probes a media file |
-| `edit <file> <op> [k=v ...] \| '<json>' \| --batch f.jsonl [--dry-run]` | apply commands; prints what changed in ≤ 10 lines |
+| `show <file> [--scenes] [--scene n\|id] [--at t] [--clip id] [--comp id] [--frames]` | the outline: one line per track and clip (id, kind, span, text or asset, fx); `--scenes` the storyboard as text (one line per scene, its six lanes in words, ● changed since the previous storyboard), `--scene n` one scene lane by lane with file lines (§8.1); `show media.mp4` probes a media file |
+| `edit <file> <op> [k=v ...] \| '<json>' \| --batch f.jsonl [--dry-run]` | apply commands; prints what changed in ≤ 10 lines, then one line naming the storyboard scenes it touched |
 | `check <file>` | validate + QA checks that need no pixels (overlaps, gaps, missing media, text off the safe zone by layout) |
-| `look <file> [--at t,...] [-n 12] [--comp id]` | contact sheet + crops + QA with pixels + sound report |
-| `render <file> [out] [--draft\|--final] [--range a-b] [--still t]` | estimate, render, verify (format from the extension: mp4, webm, mov, gif, png, wav, mp3) |
+| `look <file> [--scene n] [--at t,...] [-n 12] [--comp id]` | the storyboard (or, with `--at` / `-n` / `--cuts`, a plain contact sheet) + crops + QA with pixels + sound report |
+| `render <file> [out] [--draft\|--final] [--range a-b] [--still t] [--no-storyboard]` | estimate, render, verify (format from the extension: mp4, webm, mov, gif, png, wav, mp3); writes `<out>.storyboard.png` / `.html` next to a video or GIF |
 | `docs [topic\|op]` | offline docs: the skill, a topic reference, or one command's schema and example |
 | `plugin new\|test\|list <...>` | scaffold, test and list plugins |
 | `doctor` | node, ffmpeg (which one, version, encoders/decoders that matter), fonts, cores, memory, disk, proxy, plugins |
@@ -406,7 +406,9 @@ cached static build in `~/.cache/michelangelo/ffmpeg/<version>/` → download.
 
 1. Pick frames: 12 evenly spaced plus the first frame of every clip change if `--cuts`, or `--at`.
 2. Render them at half size (stills path, parallel decoders), assemble a **contact sheet** (grid,
-   timestamp + frame number under each, long edge ≤ 1568 px) → `.mgl/look/sheet.png`.
+   timestamp + frame number under each, long edge ≤ 1568 px) → `.mgl/<name>/look/sheet.png`. Without `--at`, `-n`
+   or `--cuts` the sheet is laid out as the **storyboard** (§8.1): the middle frame of each scene, rendered in the
+   same stills call as the QA frames (the union of both), so QA coverage is the same either way.
 3. **QA checks** (each a plugin-API check, so plugins can add more):
    safe zones per platform (Shorts / TikTok / Reels UI overlays), text overlapping another visible
    element (e.g. a caption over a logo, by rendered alpha, not by box), tiny text (cap height < 2.5 %
@@ -428,6 +430,26 @@ QA 2 issues
   2 warn music −4 LU under voice only; voice masked 12.0–15.0s   fix: mgl edit video.mgl.json audio.duck bus=music by=dialogue db=9
 sound -15.8 LUFS, peak -1.2 dBTP, LRA 6.1 · silences 3.10–3.90, 19.40–20.20 · ~112 BPM
 ```
+
+### 8.1 The storyboard
+
+One map of the video for the person and the agent (plan: `docs/plans/STORYBOARD-2026-10.md`; model:
+`src/qa/storyboard.ts`, pure). The video as numbered **scenes**: markers with `scene: true` (they need a `len`,
+E_SCENE), else caption sentences, else shots on the bottom picture track, else 5 s chunks; at most 24. Each scene's
+clips sit in **six fixed lanes** derived from what they are (picture, graphics, captions, voice, music, sfx);
+effects, masks, transitions and keyframes are marks on the clip, hidden or muted clips are drawn faded.
+
+Marks, at most two per scene: `idea` (a scene marker with nothing visual yet), ⚠ (a QA finding, placed by frame
+or clip; only `look` runs QA), ● (changed since the previous storyboard). ● compares with the copy of the project
+that `look` and `render` keep in `.mgl/<name>/storyboard/project.json` (with the findings of that look, so `show`
+repeats its ⚠); `show` reads it and never writes it. A ripple (a scene shifted by an insert, keeping its length) is
+not a change; an explicit move marks where the element was and where it is now; a change where no scene is now goes
+to the notes. Changes come in words (`hook higher (y 691→500)`), with `(by hand)` when no recorded command (undo and
+redo included) touched the entity. No approval, locks or baselines.
+
+Three levels: `show --scenes` / `look` (whole video), `show --scene n` / `look --scene n` (one scene: three
+moments, each visual lane alone, the sound in words, its issues), `show --clip id` / `render --still` (one element).
+Text levels stay within 40 lines. `mgl edit` prints `scenes: 3 "…"` for the scenes an edit touched.
 
 ---
 

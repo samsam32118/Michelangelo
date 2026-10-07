@@ -6,7 +6,7 @@ Every change to a project is a command `{"op": ..., fields}`, run with `mgl edit
 (`mgl edit <file> '{"op": ...}'`, `--batch f.jsonl`) or from the SDK (`p.edit({op, ...})`). Times accept frames (75),
 "2.5s", "1:02.5" and "00:01:02:15". `k=v` values are JSON when they parse, else strings. `mgl docs <op>` prints one entry.
 
-81 commands: [asset](#asset) · [audio](#audio) · [captions](#captions) · [clip](#clip) · [comp](#comp) · [effects](#effects) · [project](#project) · [keyframes](#keyframes) · [layout](#layout) · [marker](#marker) · [masks](#masks) · [media](#media) · [motion](#motion) · [recipes](#recipes) · [text](#text) · [templates](#templates) · [track](#track)
+82 commands: [asset](#asset) · [audio](#audio) · [captions](#captions) · [clip](#clip) · [comp](#comp) · [effects](#effects) · [project](#project) · [keyframes](#keyframes) · [layout](#layout) · [marker](#marker) · [masks](#masks) · [media](#media) · [motion](#motion) · [recipes](#recipes) · [text](#text) · [templates](#templates) · [track](#track)
 
 ## asset
 
@@ -668,9 +668,9 @@ mgl edit video.mgl.json layout.grid ids='["camA","camB"]' cols=1 gap=8
 
 ### marker.add
 
-Add a marker (a named point or range) to a comp.
+Add a marker (a named point or range) to a comp. scene=true makes a range a storyboard scene, labelled by its note (an idea scene when nothing is built in it yet).
 
-fields: `at` time; `id?` string; `comp?` string; `len?` time; `note?` string
+fields: `at` time; `id?` string; `comp?` string; `len?` time; `note?` string; `scene?` boolean
 
 ```text
 mgl edit video.mgl.json marker.add at=15s id=drop note='beat drop'
@@ -697,6 +697,17 @@ fields: `id` string (bare word)
 ```text
 mgl edit video.mgl.json marker.remove drop
 {"op":"marker.remove","id":"drop"}
+```
+
+### marker.set
+
+Change a marker: at, len, note, scene (null removes len, note or scene).
+
+fields: `id` string (bare word); `at?` time; `len?` time\|null; `note?` string\|null; `scene?` boolean\|null
+
+```text
+mgl edit video.mgl.json marker.set intro note='hook: the problem in one line'
+{"op":"marker.set","id":"intro","note":"hook: the problem in one line"}
 ```
 
 ## masks

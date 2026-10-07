@@ -482,6 +482,7 @@ function semanticChecks(p: ProjectFile, err: Reporter, warn: Reporter, issue: Re
   });
   (p.markers ?? []).forEach((m, i) => {
     if (!comps.has(m.comp)) err(['markers', i, 'comp'], 'E_REF', `marker "${m.id}" refers to comp "${m.comp}", which does not exist.`, `use one of ${[...comps.keys()].join(', ')}.`);
+    if (m.scene && !m.len) err(['markers', i, 'scene'], 'E_SCENE', `marker "${m.id}" is a scene but has no length.`, `give it one (mgl edit <file> marker.set ${m.id} len=3s), or drop "scene".`);
   });
   // nesting cycles
   const nests = new Map<string, Set<string>>();

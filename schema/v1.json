@@ -2743,6 +2743,9 @@
           },
           "note": {
             "type": "string"
+          },
+          "scene": {
+            "type": "boolean"
           }
         },
         "required": [

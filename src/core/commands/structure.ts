@@ -272,18 +272,38 @@ defineCommand({
 });
 
 defineCommand({
-  op: 'marker.add', group: 'marker', doc: 'Add a marker (a named point or range) to a comp.',
-  schema: z.strictObject({ at: TimeArg, id: Id.optional(), comp: Id.optional(), len: TimeArg.optional(), note: z.string().optional() }),
+  op: 'marker.add', group: 'marker', doc: 'Add a marker (a named point or range) to a comp. scene=true makes a range a storyboard scene, labelled by its note (an idea scene when nothing is built in it yet).',
+  schema: z.strictObject({ at: TimeArg, id: Id.optional(), comp: Id.optional(), len: TimeArg.optional(), note: z.string().optional(), scene: z.boolean().optional() }),
   example: { at: '15s', id: 'drop', note: 'beat drop' },
   apply(ctx, p) {
     const comp = p.comp ?? ctx.project.project?.main ?? ctx.project.comps[0]!.id;
-    const id = p.id ?? ctx.newId('m');
+    const id = p.id ?? ctx.newId(p.scene ? 'scene' : 'm');
     const m: NonNullable<typeof ctx.project.markers>[number] = { id, comp, at: ctx.time(p.at, comp, 'at') };
     if (p.len !== undefined) m.len = ctx.time(p.len, comp, 'len');
     if (p.note) m.note = p.note;
+    if (p.scene) {
+      if (!m.len) fail('E_SCENE', 'a scene needs a length.', `mgl edit <file> marker.add at=${String(p.at)} len=3s scene=true note="..."`);
+      m.scene = true;
+    }
     (ctx.project.markers ??= []).push(m);
     ctx.out.id = id;
-    ctx.summary(`added marker "${id}".`);
+    ctx.summary(`added ${m.scene ? 'scene' : 'marker'} "${id}".`);
+  },
+});
+
+defineCommand({
+  op: 'marker.set', group: 'marker', doc: 'Change a marker: at, len, note, scene (null removes len, note or scene).',
+  schema: z.strictObject({ id: Id, at: TimeArg.optional(), len: TimeArg.nullable().optional(), note: z.string().nullable().optional(), scene: z.boolean().nullable().optional() }),
+  primary: 'id', example: { id: 'intro', note: 'hook: the problem in one line' },
+  apply(ctx, p) {
+    const m = (ctx.project.markers ?? []).find((x) => x.id === p.id);
+    if (!m) fail('E_REF', `marker "${p.id}" does not exist.`, 'list markers with: mgl show <file>');
+    if (p.at !== undefined) m.at = ctx.time(p.at, m.comp, 'at');
+    if (p.len === null) delete m.len; else if (p.len !== undefined) m.len = ctx.time(p.len, m.comp, 'len');
+    if (p.note === null) delete m.note; else if (p.note !== undefined) m.note = p.note;
+    if (p.scene === null || p.scene === false) delete m.scene; else if (p.scene) m.scene = true;
+    if (m.scene && !m.len) fail('E_SCENE', `marker "${m.id}" is a scene and needs a length.`, `mgl edit <file> marker.set ${m.id} len=3s`);
+    ctx.summary(`changed marker "${m.id}".`);
   },
 });
 

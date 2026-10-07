@@ -26,7 +26,7 @@ export interface EditResult {
   patch: Patch;
 }
 
-interface HistoryEntry { at: string; summary: string; commands: Command[]; patch: Patch }
+export interface HistoryEntry { at: string; summary: string; commands: Command[]; patch: Patch; /** when last undone or redone */ stepped?: string }
 interface HistoryFile { undo: HistoryEntry[]; redo: HistoryEntry[] }
 const HISTORY_LIMIT = 200;
 
@@ -208,6 +208,11 @@ export class Project {
     return { undo: h.undo.map((e) => e.summary).reverse(), redo: h.redo.map((e) => e.summary).reverse() };
   }
 
+  /** The recorded steps that can be undone, oldest first. */
+  historyEntries(): HistoryEntry[] { return this.readHistory().undo; }
+  /** Every recorded step on either stack (undo and redo are commands too: `stepped` says when they last ran). */
+  historyTrace(): HistoryEntry[] { const h = this.readHistory(); return [...h.undo, ...h.redo]; }
+
   async undo(steps = 1): Promise<EditResult> { return this.step('undo', steps); }
   async redo(steps = 1): Promise<EditResult> { return this.step('redo', steps); }
 
@@ -223,13 +228,14 @@ export class Project {
     if (!from.length) fail('E_HISTORY_EMPTY', `nothing to ${dir}.`, dir === 'undo' ? 'no recorded edits for this file (hand edits are not recorded).' : 'redo only works right after an undo.');
     let data = this.data;
     const summary: string[] = [];
-    const patches: Patch = [];
+    const patches: Patch = [], now = new Date().toISOString();
     for (let i = 0; i < steps && from.length; i++) {
       const e = from[from.length - 1]!;
       const patch = dir === 'undo' ? invertPatch(e.patch) : e.patch;
       data = applyPatch(data, patch, true);
       patches.push(...patch);
       summary.push(`${dir === 'undo' ? 'undid' : 'redid'}: ${e.summary}`);
+      e.stepped = now;
       to.push(from.pop()!);
     }
     const v = normaliseAndValidate(clone(data) as unknown as Record<string, unknown>);

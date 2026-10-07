@@ -65,7 +65,7 @@ exception is `E_INTERNAL` (exit 1). Below: each code with one example message an
 | `E_NO_SPEECH` | 1 | transcribe provider "…" found no words in …. | check that the clip has speech, or use captions.from-text voice=… text="..." with the script. |
 | `E_NO_SUBJECT` | 1 | comp "…" has no video clip to track. | add a video clip, or reframe without track=true. |
 | `E_NOT_AUDIO` | 1 | clip "…" has no audio. | set gain on a media or nested comp clip. |
-| `E_NOT_AVAILABLE` | 1 | look is not available in this build (src/qa is missing). | render stills instead: mgl render <file> frame.png --still 1s |
+| `E_NOT_AVAILABLE` | 1 | the storyboard is not available in this build (src/qa is missing). | read the outline instead: mgl show <file> |
 | `E_NOT_CAPTIONS` | 1 | clip "…" is not a captions clip. | use the id of a clip with "captions": true, or omit it to create one. |
 | `E_NOT_EMPTY` | 1 | comp "…" already has … clip(s); recipe.short builds a whole Short into an empty comp. | start a new project: mgl new shorts -o short.mgl.json --script script.txt (or pass comp=<an empty comp>). |
 | `E_NOT_KEYFRAMED` | 1 | … has no keyframes. | add one with: mgl edit <file> key.set <id> prop=<prop> at=<frame> value=<v> |
@@ -95,6 +95,7 @@ exception is `E_INTERNAL` (exit 1). Below: each code with one example message an
 | `E_RENDER_UNAVAILABLE` | 1 | the render pipeline could not be loaded: … | reinstall michelangelo (npm install michelangelo); renderEffect / renderGenerator work without it. |
 | `E_RENDER_VERIFY` | 1 | … was written but has no … stream. | render again; if it repeats, run mgl doctor to check the ffmpeg build. |
 | `E_SCALE` | 1 | scale … is out of range. | use a scale between 0.05 and 4 (0.5 = half size). |
+| `E_SCENE` | 1 | a scene needs a length. | mgl edit <file> marker.add at=… len=3s scene=true note="..." |
 | `E_SCHEMA` | 1 | the project file must be a JSON object. | start from "mgl new" and compare. |
 | `E_SPEED` | 1 | speed 0 would freeze the whole clip. | use clip.freeze to hold a frame for a while. |
 | `E_TIME` | 1 | … is not a number. | give frames as an integer or seconds as "2.5s". |

@@ -47,7 +47,33 @@ export interface LookOptions {
   fix?: boolean;
   /** with fix: find the fixes but do not write the project */
   dryRun?: boolean;
+  /** one scene (number or id): scene-<n>.png with its three moments and each visual lane alone, and its level-2 text */
+  scene?: number | string;
+  /** false: the plain contact sheet even without at / frames / cuts (default: the storyboard) */
+  storyboard?: boolean;
 }
+
+/** The storyboard summary in look and render results (scenes with their marks: idea, issue, changed). */
+export interface StoryboardSummary {
+  page?: string;
+  scenes: { n: number; id: string; label: string; at: number; len: number; marks: string[]; changes: string[]; issues: number; /** the first issue */ issue?: string; /** a scene marker's note (the label) */ note?: boolean }[];
+  notes: string[];
+  since?: string;
+  scene?: number;
+  detail?: string[];
+}
+
+export interface StoryboardOptions {
+  comp?: string;
+  /** where to write the image and the page (default: storyboard.png / storyboard.html in .mgl/<name>/look/) */
+  png?: string;
+  html?: string;
+  /** how fixes and commands name the project file */
+  displayFile?: string;
+}
+
+/** What p.storyboard() writes: the level-1 image, the page, the scenes. */
+export interface StoryboardResult { png: string; html: string; size: [number, number]; seconds: number; storyboard: StoryboardSummary }
 
 export interface CheckOptions {
   /** run the checks once per platform and merge the findings (a platform-specific finding names its platform) */
@@ -69,6 +95,8 @@ export interface LookResult {
   frames: number[];
   crops: { finding: number; path: string }[];
   sound?: { integrated: number; truePeak: number; lra: number; silences: { start: number; end: number }[]; bpm?: number };
+  /** the storyboard (default look and scene) */
+  storyboard?: StoryboardSummary;
   [k: string]: unknown;
 }
 
@@ -124,6 +152,8 @@ export type MglProject = Project & {
   look(opts?: LookOptions): Promise<LookResult>;
   render(out: string, opts?: RenderOpts): Promise<import('../render/pipeline.js').RenderResult>;
   check(opts?: CheckOptions): Promise<CheckReport>;
+  /** the storyboard image and page alone (what render writes next to a video); ● against the previous storyboard */
+  storyboard(opts?: StoryboardOptions): Promise<StoryboardResult>;
 };
 
 /** Error codes for a name a plugin might have defined (effect type, op, template, ...). */
@@ -171,6 +201,7 @@ async function attach(p: Project): Promise<MglProject> {
   self.look = (opts = {}) => lookProject(self, opts);
   self.render = (out, opts = {}) => renderProject(self, out, opts);
   self.check = (opts = {}) => checkProject(self, opts);
+  self.storyboard = (opts = {}) => storyboardProject(self, opts);
   return self;
 }
 
@@ -297,7 +328,23 @@ async function lookProject(p: MglProject, o: LookOptions): Promise<LookResult> {
   if (o.alpha) opts.alpha = true;
   if (o.safe) opts.safe = true;
   if (o.displayFile) opts.displayFile = o.displayFile;
+  if (o.scene !== undefined) opts.scene = o.scene;
+  if (o.storyboard === false) opts.storyboard = false;
+  opts.history = p.historyTrace();
+  opts.lineOf = (id: string) => p.line('clips', id);
   return qa.look(p.data, opts) as Promise<LookResult>;
+}
+
+async function storyboardProject(p: MglProject, o: StoryboardOptions): Promise<StoryboardResult> {
+  assertRenderable(p);
+  const qa = await qaModule();
+  if (!qa?.writeStoryboard) fail('E_NOT_AVAILABLE', 'the storyboard is not available in this build (src/qa is missing).', 'render stills instead: mgl render <file> frame.png --still 1s');
+  const { resolveComp } = await import('../render/pipeline.js');
+  const comp = resolveComp(p.data, o.comp);
+  return qa.writeStoryboard(p.data, {
+    baseDir: p.dir, file: p.file, comp: comp.id, registry: p.registry, history: p.historyTrace(), lineOf: (id: string) => p.line('clips', id),
+    ...(o.png ? { png: resolve(o.png) } : {}), ...(o.html ? { html: resolve(o.html) } : {}), ...(o.displayFile ? { displayFile: o.displayFile } : {}),
+  }) as Promise<StoryboardResult>;
 }
 
 /** A probe for QA (absolute paths): media sizes, durations and pixel formats for exact boxes, the clip-past-source rule and source alpha. */

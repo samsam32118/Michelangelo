@@ -766,3 +766,76 @@ def keyboard(name, loc, w=18.0, d=6.0, rot_z=0.0):
 def key_light(target, loc, energy=160, color=(0.75, 0.85, 1.0), size=3.0, name='CharLight'):
     """A soft light on the character so it reads in dark scenes."""
     return area_light(name, loc, target, energy, size, color)
+
+
+# ---------------------------------------------------------------- v8: people as traces, and a few acting beats
+# Like early Pixar, show people through what they leave on screen (a hand, a sleeve, a mug) rather than a full figure.
+
+
+def hand(name, loc, rot=(0, 0, 0), skin=(0.86, 0.62, 0.48), sleeve=(0.3, 0.33, 0.42), point=False):
+    """A stylized hand coming out of a hoodie sleeve, palm down, fingers along +Y.
+    Returns a dict: root, fingers (4 pivots, index first; rotate x to curl), thumb, sleeve. point=True curls all but the index."""
+    root = empty(name, loc)
+    root.rotation_euler = rot
+    sk = mat(name + 'Skin', skin, rough=0.5, sss=0.25)
+    fab = mat(name + 'Sleeve', sleeve, rough=0.9, sheen=1.0)
+    rbox(name + 'Palm', (0, 0, 0.45), (2.7, 3.0, 0.95), 0.42, sk, root, segs=4)
+    fingers = []
+    for i, (x, ln) in enumerate([(0.95, 2.0), (0.32, 2.2), (-0.32, 2.05), (-0.92, 1.6)]):
+        piv = empty(name + 'F%d' % i, (x, 1.35, 0.5), root)
+        sphere(name + 'Fing%d' % i, (0, ln / 2, 0), (0.3, ln / 2, 0.3), sk, piv, seg=24)
+        if point and i > 0:
+            piv.rotation_euler = (-1.6, 0, 0)
+        else:
+            piv.rotation_euler = (-0.25, 0, 0)
+        fingers.append(piv)
+    th = empty(name + 'Thumb', (1.35, -0.2, 0.4), root)
+    sphere(name + 'ThumbMesh', (0.45, 0.6, 0), (0.33, 0.9, 0.33), sk, th, seg=24)
+    th.rotation_euler = (0, 0, -0.6)
+    sl = empty(name + 'SleeveRoot', (0, -1.6, 0.55), root)
+    sphere(name + 'SleeveMesh', (0, -3.6, 0.2), (1.9, 3.9, 1.5), fab, sl)
+    bpy.ops.mesh.primitive_torus_add(major_radius=1.55, minor_radius=0.42, major_segments=40, minor_segments=12, location=(0, 0, 0), rotation=(math.pi / 2, 0, 0))
+    cuff = bpy.context.active_object
+    _finish(cuff, name + 'Cuff', sl)
+    cuff.location = (0, -0.1, 0.2)
+    cuff.scale = (1.15, 1, 0.95)
+    assign(cuff, fab)
+    return {'root': root, 'fingers': fingers, 'thumb': th, 'sleeve': sl}
+
+
+def blush(c, f, strength):
+    """Michelangelo's cheeks glow (0.7 is normal, ~4 is a happy blush)."""
+    node = bpy.data.materials[c.name + 'Blush'].node_tree.nodes['Principled BSDF'].inputs['Emission Strength']
+    node.default_value = strength
+    node.keyframe_insert('default_value', frame=f)
+
+
+def fix_beret(c, f, side='R'):
+    """The ritual before work: reach up, tug the beret straight, a little nod. Takes about 12 frames."""
+    c.arm(side, f, up=0.4)
+    c.arm(side, f + 4, up=2.6, fwd=-0.3)
+    key(c.beret, 'rotation_euler', f + 4, (0.25, -0.4, 0.15))
+    key(c.beret, 'rotation_euler', f + 8, (0.05, -0.12, -0.05))
+    key(c.beret, 'rotation_euler', f + 11, (0.12, -0.22, 0))
+    c.arm(side, f + 12, up=0.4)
+    key(c.head, 'rotation_euler', f + 8, (0.18, 0, 0))
+    key(c.head, 'rotation_euler', f + 12, (0.0, 0, 0))
+
+
+def tremble(c, start, end, amp=0.04):
+    """Scared shiver: tiny fast side-to-side on the torso."""
+    f, s = start, 1
+    while f <= end:
+        key(c.torso, 'location', f, (amp * s, 0, 0.55))
+        f += 1
+        s = -s
+    key(c.torso, 'location', end + 1, (0, 0, 0.55))
+
+
+def thimble(name, loc):
+    """A thimble of coffee: a thank-you sized for Michelangelo."""
+    root = empty(name, loc)
+    metal = mat(name + 'Metal', (0.8, 0.78, 0.74), rough=0.25, metal=1.0)
+    cylinder(name + 'Body', (0, 0, 0.55), 0.55, 1.1, metal, root, verts=40)
+    cylinder(name + 'Coffee', (0, 0, 1.08), 0.47, 0.04, mat(name + 'Coffee', (0.12, 0.06, 0.03), rough=0.1), root, verts=40)
+    return root

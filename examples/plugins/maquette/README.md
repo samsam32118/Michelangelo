@@ -46,7 +46,19 @@ The character's controls: `root` (position, scale), `torso` (lean, squash via `c
 `eyeL`/`eyeR` (`c.blink`, `c.look`, `c.eyes_shape` for wide, squint or happy eyes), `c.smile_` / `c.gasp` (mouth),
 `c.arm('L'|'R', f, up=, fwd=)`, `c.wave`, `antenna` and `beret` (give them a few frames of lag for follow-through).
 Props: `m.rbox`, `m.sphere`, `m.cylinder`, `m.text` (Michelangelo's fonts), `m.diamond`, `m.lightbulb`,
-`m.magnifier`, `m.paper`, and a creator's desk: `m.desk_set(night|dawn|morning)`, `m.monitor`, `m.phone` (lock screen with notification cards), `m.pencil_cup`, `m.mug`, `m.sticky`, `m.heart`, `m.sleeve`, `m.sleeper` (a person asleep at the desk; lift `head` to wake them), `m.keyboard`, `m.key_light` (a soft light so the character reads in dark scenes), `m.hand` (a stylized hand in a sleeve, curl or point its fingers: show people through traces, like early Pixar), `m.thimble`. Acting beats: `m.blush(c, f, k)` (cheeks glow), `m.fix_beret(c, f)` (the ritual before work), `m.tremble(c, a, b)` (a scared shiver). Acting extras: `m.eyes_power(c, f, k)` (eyes on or off), `m.wink(c, f)`. Animate anything with `m.key(ob, 'location', frame, value)` / `m.keys(ob, path, [...])`.
+`m.magnifier`, `m.paper`, and a creator's desk: `m.desk_set(night|dawn|morning)`, `m.monitor`, `m.phone` (lock screen with notification cards), `m.pencil_cup`, `m.mug`, `m.sticky`, `m.heart`, `m.sleeve`, `m.sleeper` (a person asleep at the desk; lift `head` to wake them), `m.keyboard`, `m.key_light` (a soft light so the character reads in dark scenes), `m.hand` (a stylized hand in a sleeve, curl or point its fingers: show people through traces, like early Pixar), `m.thimble`. Acting beats: `m.blush(c, f, k)` (cheeks glow), `m.fix_beret(c, f)` (the ritual before work), `m.tremble(c, a, b)` (a scared shiver). Acting extras: `m.eyes_power(c, f, k)` (eyes on or off), `m.wink(c, f)`. A bakery set (the croissant film): `m.croissant` (returns anchors for hands),
+`m.steam_wisp` (`m.steam_grow`, `m.steam_idle`), `m.video_monitor` (a monitor playing a croissant video: picture
+plate, shallow 3D diorama, caption, three swappable file names, timeline, stand; `m.monitor_caption`,
+`m.monitor_file`, `m.monitor_play`), the junk piled on it: `m.wordart`, `m.sprout_hands` (5 and 6 fingers),
+`m.fire_icon`, `m.fire_rain`, `m.badge_standin`, and the chisel: `m.shatter(layer, f)` (a layer breaks off like
+marble), `m.dust_burst`, `m.dust_drift`. Desk extras: `m.david_postcard` (public-domain David in low relief, museum
+quote), `m.label_tape` (label-maker strip round the cup), `m.marker`, `m.bezel_tally` (tally marks and hand
+lettering on a video_monitor's bezel), `m.phone_thread` (an upright phone with a generic chat thread;
+`m.thread_reveal`, `m.thread_banner`, `m.pray_icon`), `m.vertical_outline` (a 9:16 outline with a mask, generic app
+buttons and a tick), `m.robot_sign`, `m.size_cards` (9:16, 1:1, 16:9). Robot extras: `m.robot_fingers(c)` with
+`m.count_fingers`, `m.lose_count`, `m.knuckle_crack`. Helpers: `m.show(ob, f, on)` (keyed visibility), `m.pop_in`,
+`m.grab(ob, hand, f)` (pick something up), `m.hand_text` (jittered hand lettering), `m.grad_mat`, `m.marble_mat`,
+`m.key_alpha`. Animate anything with `m.key(ob, 'location', frame, value)` / `m.keys(ob, path, [...])`.
 
 ## Blender
 

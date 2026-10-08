@@ -102,14 +102,18 @@ defineProvider({ kind: 'transcribe', id, describe, transcribe({ file, lang? }) â
   the interface: media.md; example: `examples/plugins/open-media`.
 - **Checks** (API 1.5) also get `ctx.uiZones(platform?)`: the TikTok / Reels / Shorts interface panels in comp px.
 - Commands are named `<plugin>.<verb>`, have a zod schema, a doc sentence and an example, and change the
-  project only through `ctx` (so they are undoable and dry-runnable).
+  project only through `ctx` (so they are undoable and dry-runnable). Since API 1.6 a command can run other commands
+  with `await ctx.run({ op: 'clip.add', ... })`: validated like any command, part of the same undo step, returning
+  its `out` (its notes go to the caller, or to `ctx.run(cmd, { note })`). Throw errors with `fail(code, message, fix)`.
+  Example: `examples/plugins/storyboard` (a script laid out as clips, voice lines and markers, then re-timed).
 
 ## Testing helpers (`michelangelo/testing`)
 
 `renderEffect(def, params, opts)`, `effectFilters(def, params)` (source/audio stages: the filters and the
 escaped filtergraph, checked against the allowlist), `renderTransition(def, progress, opts)`,
 `renderGenerator(def, params, frame, { audio? })` (audio-reactive generators get `testLevels()` by default),
-`runCommandOn(project, cmd)`, `checkContext(project)`, `testProject()`, `renderProject(project, frame)`,
+`runCommandOn(project, cmd, { plugins, services })` (`services`, API 1.6: offline stand-ins for `readText`, `speak`,
+`probe`, ...), `checkContext(project)`, `testProject()`, `renderProject(project, frame)`,
 `pixel(surface, x, y)`, `meanColor`, `coverage`, `difference`, `distinctLevels`, `savePNG`, `loadPlugin(import.meta.url)`,
 plus `test` and `assert` (node:test).
 
@@ -124,7 +128,7 @@ plus `test` and `assert` (node:test).
   is refused.
 - Plugin code imports `michelangelo/plugin` and `michelangelo/testing`; they resolve to the Michelangelo that
   is running (global install, npx or a project dependency), so a plugin folder needs no `node_modules`.
-- The manifest's `api` range must include this Michelangelo's plugin API (1.5.0; `mgl --version` prints it), and the version must
+- The manifest's `api` range must include this Michelangelo's plugin API (1.6.0; `mgl --version` prints it), and the version must
   satisfy the project's range; otherwise the plugin is refused with the reason and a fix.
 - **Plugins are code that runs on your machine with no sandbox.** Read a plugin before trusting it.
 - `mgl plugin list [file]` shows what is loaded, versions and sources, and every plugin problem.

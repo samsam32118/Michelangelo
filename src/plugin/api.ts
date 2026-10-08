@@ -13,7 +13,9 @@ import type { ProjectFile } from '../core/schema/index.js';
 
 export { z };
 export { defineCommand } from '../core/commands/registry.js';
-export type { CommandDef, TemplateDef, TemplateOutput, CommandContext } from '../core/commands/registry.js';
+/** (API 1.6) Throw a Michelangelo error with a code and a fix line, as core commands do. */
+export { fail } from '../core/errors.js';
+export type { CommandDef, TemplateDef, TemplateOutput, CommandContext, Command } from '../core/commands/registry.js';
 export type { FilterSpec } from '../render/types.js';
 export { LICENCE_CLASSES, licenceClass, canonicalLicence, licenceName, licenceUrl, creditLine, type LicenceClass } from '../core/licence.js';
 /**
@@ -23,7 +25,7 @@ export { LICENCE_CLASSES, licenceClass, canonicalLicence, licenceName, licenceUr
 export { alignWords, snapToOnsets, voicedRuns, textWords, ALIGN_DEFAULTS } from '../core/align.js';
 export { CUE_TIMING, timeCues } from '../core/cue-timing.js';
 
-export const PLUGIN_API_VERSION = '1.5.0';
+export const PLUGIN_API_VERSION = '1.6.0';
 
 /** A CanvasRenderingContext2D-compatible drawing context (Skia today; a GPU renderer provides the same contract). */
 export type Canvas2D = SKRSContext2D;

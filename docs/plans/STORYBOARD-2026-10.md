@@ -1,6 +1,8 @@
 # Plan: the `storyboard` plugin: a script linked to the timeline (2026-10-08)
 
-Status: **proposed**, awaiting the owner. Nothing built yet.
+Status: **built** on branch `claude/storyboard-plugin` (2026-10-08). The owner's decisions on §10: approve
+`ctx.run` (API 1.6), a Markdown storyboard, keep it in `examples/plugins`, no stock shots in v1. The plan below is
+kept as approved. "As built" at the end says what changed while building it.
 
 Judged against DESIGN §17: an agent that cannot watch or listen should make better videos for less. Rules from
 CLAUDE.md hold: the schema is extended only additively (this plan needs **no** schema change), plugins use only
@@ -193,3 +195,39 @@ captions step is dropped (the agent runs `captions.from-speech` after it).
 Picking footage by content (that needs vision), Fountain/FDX import, multi-language versions of one storyboard,
 and changes to `recipe.short`. A later step could have the recipe write a storyboard, so recipe Shorts become
 syncable too.
+
+## As built (2026-10-08)
+
+- **Core, API 1.6.** `CommandContext.run(cmd, { note? })` runs a nested command. It is validated by the same code
+  as `runCommand` (`parseCommand`, split out of it), is part of the caller's undo step, and returns the nested
+  command's `out`. `fail` is exported from `michelangelo/plugin`. `runCommandOn` takes `services`, so plugin
+  tests can use stand-in services offline.
+- **Code removed by the same change.** `recipe.short`'s private `step()` and `optional()` sub-contexts, and
+  `audio.cut-silences`' hand-made "quiet" context around `clip.split`, now use `ctx.run`. The `E_RECIPE` error
+  is gone: a refused step now reports the real `E_ARG` of the command that refused it.
+- **One file, tested through commands.** Example plugins are a single `src/index.ts`, and their tests import only
+  `michelangelo/plugin` and `michelangelo/testing` (a test enforces this). So `parse.ts`/`timing.ts`/`build.ts`/
+  `sync.ts` became sections of one file, and the tests drive `storyboard.apply` and read its beat table.
+- **One command instead of two.** `storyboard.sync` is just `storyboard.apply` run again: the file and options are
+  remembered in the `storyboard` marker. Re-speaking only the changed lines comes free from `audio.speak`'s cache.
+- **Dropped:**
+  - `storyboard.retime`: edit `dur:` in the file and apply again.
+  - `snap=beats` and `keep=timing`.
+  - `tail`: a recording's own end ends the last beat.
+  - Pause-aware splitting of two shots: shots split evenly unless `cut-on:` names the words.
+  - `storyboard.detach beat=`: detaching is all or nothing, because a re-apply would collide with the ids of a
+    half-detached storyboard.
+  - The importer: importers are registered, but no CLI verb calls them yet.
+  - The "file changed since apply" warning: checks have no file access.
+- **Text cards** default to the `title` style at 80 % of the frame width, as `mgl new --from` does.
+- **Tests:** `examples/plugins/storyboard/test/storyboard.test.ts` covers:
+  - reading speed, shot holds, markers and growing the comp;
+  - speech per line: cut-on frames, re-speaking only the changed line, hand edits kept, the old voice asset
+    dropped, and the check before and after;
+  - a recording: lead-in silent beats, captions, and the silent-beat error;
+  - parse errors with line numbers;
+  - gap and readability findings, and detach.
+
+  `tests/unit/commands-run.test.ts` covers `ctx.run`: one undo step, and nested validation.
+- **Not done yet:** the eval task (`evals/storyboard-basic`) is written, but its fixtures and a with/without run
+  (step 8) are still to do.

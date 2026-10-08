@@ -45,7 +45,7 @@ Each option also has an environment variable: `--ref` is `MGL_REF`, `--dir` is `
 Check the install:
 
 ```sh
-mgl --version   # mgl 0.1.0 (plugin API 1.4.0, ...)
+mgl --version   # mgl 0.1.0 (plugin API 1.6.0, ...)
 mgl doctor      # node, ffmpeg (codecs and filters), fonts, providers: "ready: nothing missing"
 ```
 

@@ -1,0 +1,8 @@
+{
+  "id": "storyboard-basic",
+  "tags": ["plugins", "command", "script", "timing"],
+  "timeout_min": 20,
+  "expects_weak": false,
+  "fixtures": ["demo.mgl.json (1920x1080, empty main comp)", "media/vo.wav (a recording of the six lines in script.txt)", "media/a.mp4, media/b.mp4, media/c.jpg", "script.txt", "plugins/storyboard"],
+  "checks": ["every line of script.txt has a sb-<beat> marker and a shot whose first frame is within 2 frames of the line's first word onset minus 3 frames", "the 'Step 2' text is on screen during the line that mentions the second step and no other", "no gap between shots from frame 0 to the end of the voice", "mgl check reports no storyboard-sync errors", "out/explainer.mp4 exists and is as long as vo.wav (±0.2 s)"]
+}

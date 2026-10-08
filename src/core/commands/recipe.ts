@@ -9,7 +9,7 @@
  */
 import { z } from 'zod';
 import { MglError, fail } from '../errors.js';
-import { defineCommand, getCommand, listCommands, TimeArg, type Command, type CommandContext, type CommandDef } from './registry.js';
+import { defineCommand, listCommands, TimeArg, type Command, type CommandContext, type CommandDef } from './registry.js';
 import { Id, type Clip, type Comp, type ProjectFile } from '../schema/index.js';
 import { kindFromExtension } from './structure.js';
 import { emphasisWords, stripEmphasis } from '../captions.js';
@@ -83,18 +83,7 @@ export const LOOKS: Record<ShortStyle, Look> = {
 // ---------------------------------------------------------------------------
 
 /** Run another command on the same draft. Its summary is dropped; its notes are kept (minus routine ones). */
-async function step(ctx: CommandContext, notes: string[], cmd: Command): Promise<Record<string, unknown>> {
-  const def = getCommand(cmd.op);
-  const { op: _op, ...payload } = cmd;
-  const r = def.schema.safeParse(payload);
-  if (!r.success) {
-    const i = r.error.issues[0]!;
-    fail('E_RECIPE', `recipe.short: the ${cmd.op} step was refused (${i.path.join('.') || 'payload'}: ${i.message}).`, 'this is a bug in the recipe; build the short step by step meanwhile (mgl docs recipes).');
-  }
-  const sub: CommandContext = { ...ctx, out: {}, summary: () => {}, note: (m) => notes.push(m) };
-  await def.apply(sub, r.data as never);
-  return sub.out;
-}
+const step = (ctx: CommandContext, notes: string[], cmd: Command) => ctx.run(cmd, { note: (m) => notes.push(m) });
 
 /** The project's tables and settings, to undo an optional step that failed half way. */
 function snapshot(p: ProjectFile): ProjectFile { return structuredClone(p); }
@@ -123,8 +112,7 @@ async function optional(ctx: CommandContext, notes: string[], op: string, want: 
   if (!parsed.success) return `its fields did not fit (${parsed.error.issues[0]!.message})`;
   const before = snapshot(ctx.project);
   try {
-    const sub: CommandContext = { ...ctx, out: {}, summary: () => {}, note: (m) => notes.push(m) };
-    await def.apply(sub, parsed.data as never);
+    await step(ctx, notes, { op, ...(parsed.data as Record<string, unknown>) });
     return undefined;
   } catch (e) {
     restore(ctx.project, before);

@@ -258,13 +258,16 @@ export async function registryWith(plugins: PluginDef[] = []): Promise<PluginReg
   return r;
 }
 
-/** Run one command against a project, with the given plugins' commands and catalog available. */
-export async function runCommandOn(project: ProjectFile, cmd: { op: string; [k: string]: unknown }, opts: { plugins?: PluginDef[] } = {}) {
+/**
+ * Run one command against a project, with the given plugins' commands and catalog available. `services` (API 1.6) adds
+ * stand-ins for the SDK's services (readText, speak, probe, ...) so commands that use them can be tested offline.
+ */
+export async function runCommandOn(project: ProjectFile, cmd: { op: string; [k: string]: unknown }, opts: { plugins?: PluginDef[]; services?: Partial<import('../core/commands/registry.js').CommandServices> } = {}) {
   const core = await import('../core/commands/index.js');
   const known = new Set(core.listCommands().map((c) => c.op));
   for (const p of opts.plugins ?? []) for (const c of p.commands ?? []) if (!known.has(c.op)) { core.defineCommand(c); known.add(c.op); }
   const registry = await registryWith(opts.plugins);
-  return core.runCommand(project, cmd, { catalog: registry.catalog() });
+  return core.runCommand(project, cmd, { catalog: registry.catalog(), ...opts.services });
 }
 
 /**

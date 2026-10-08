@@ -1,7 +1,7 @@
 /** Audio commands: bus.add, bus.set, audio.duck, audio.normalize, audio.fade, audio.gain, audio.cut-silences. */
 import { z } from 'zod';
 import { fail, suggest } from '../errors.js';
-import { defineCommand, getCommand, TimeArg, type CommandContext } from './registry.js';
+import { defineCommand, TimeArg, type CommandContext } from './registry.js';
 import { Easing, Id, TABLES, type Bus } from '../schema/index.js';
 import { framesToSeconds, secondsToNearestFrame } from '../time.js';
 import { isKeyframes } from '../load.js';
@@ -146,9 +146,8 @@ defineCommand({
 });
 
 /** Remove comp range [a, b) from every clip of a link group and close the gap on their tracks. */
-function cutRange(ctx: CommandContext, group: Set<string>, a: number, b: number) {
-  const quiet = { ...ctx, out: {} as Record<string, unknown>, summary: () => {}, note: () => {} };
-  const split = getCommand('clip.split');
+async function cutRange(ctx: CommandContext, group: Set<string>, a: number, b: number) {
+  const split = async (id: string, at: number) => (await ctx.run({ op: 'clip.split', id, at, unlinked: true }, { note: () => {} })).id as string;
   const tracks = new Set<string>();
   for (const id of [...group]) {
     const g = ctx.clip(id);
@@ -156,16 +155,10 @@ function cutRange(ctx: CommandContext, group: Set<string>, a: number, b: number)
     if (clipEnd(g) <= a || g.at >= b) continue;
     let mid = g;
     if (a > g.at) {
-      quiet.out = {};
-      split.apply(quiet, { id: g.id, at: a, unlinked: true });
-      mid = ctx.clip(quiet.out.id as string);
+      mid = ctx.clip(await split(g.id, a));
       group.add(mid.id);
     }
-    if (b < clipEnd(mid)) {
-      quiet.out = {};
-      split.apply(quiet, { id: mid.id, at: b, unlinked: true });
-      group.add(quiet.out.id as string);
-    }
+    if (b < clipEnd(mid)) group.add(await split(mid.id, b));
     ctx.project.clips = ctx.project.clips!.filter((x) => x.id !== mid.id);
     ctx.project.cues = (ctx.project.cues ?? []).filter((q) => q.clip !== mid.id);
     group.delete(mid.id);
@@ -203,7 +196,7 @@ defineCommand({
     const merged = ranges.reduce<[number, number][]>((m, r) => { const last = m[m.length - 1]; if (last && r[0] <= last[1]) last[1] = Math.max(last[1], r[1]); else m.push([...r]); return m; }, []);
     const group = new Set(linked(ctx, c).map((g) => g.id));
     const nLinked = group.size - 1;
-    for (const [a, b] of [...merged].reverse()) cutRange(ctx, group, a, b);
+    for (const [a, b] of [...merged].reverse()) await cutRange(ctx, group, a, b);
     const total = merged.reduce((n, [a, b]) => n + b - a, 0);
     ctx.out.removed = merged;
     ctx.out.seconds = Number(framesToSeconds(total, rate).toFixed(3));

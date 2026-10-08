@@ -6,7 +6,7 @@ import { loadRegistry } from '../../src/plugin/loader.js';
 import { testProject } from '../../src/plugin/testing.js';
 import { REPO, tempProjectDir } from './plugin-fixtures.js';
 
-const EXAMPLES = ['glitch', 'clock-wipe', 'confetti', 'lower-third-pro', 'on-air', 'flite-voice', 'collage-kit', 'kokoro-voice', 'open-media'];
+const EXAMPLES = ['glitch', 'clock-wipe', 'confetti', 'lower-third-pro', 'on-air', 'flite-voice', 'collage-kit', 'kokoro-voice', 'open-media', 'storyboard'];
 let dir: string;
 const results = new Map<string, PluginTestResult>();
 
@@ -43,7 +43,8 @@ describe('example plugins', () => {
     const r = await loadRegistry(testProject({ plugins }), dir, { allowUntrusted: true });
     expect(r.problems).toEqual([]);
     expect(r.effects.has('glitch') && r.transitions.has('clock-wipe') && r.generators.has('confetti') && r.templates.has('lower-third-pro') && r.effects.has('telephone') && r.generators.has('level-meter')).toBe(true);
-    expect(r.commands.has('lower-third-pro.add') && r.commands.has('kokoro-voice.voices')).toBe(true);
+    expect(r.commands.has('lower-third-pro.add') && r.commands.has('kokoro-voice.voices') && r.commands.has('storyboard.apply')).toBe(true);
+    expect(r.checks.has('storyboard-sync')).toBe(true);
     expect(r.providers.get('stock')?.has('open-media')).toBe(true);
   });
 });

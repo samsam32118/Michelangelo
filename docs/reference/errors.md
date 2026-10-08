@@ -89,7 +89,6 @@ exception is `E_INTERNAL` (exit 1). Below: each code with one example message an
 | `E_PROVIDER` | 1 | speak provider "…" wrote audio with no length. | check the provider (mgl doctor lists it). |
 | `E_RANGE` | 1 | len … is too short. | give a positive length, e.g. len="30s". |
 | `E_RATE` | 1 | fps … is not a supported rate. | use an integer (24, 25, 30, 50, 60) or a rational string like "30000/1001". |
-| `E_RECIPE` | 1 | recipe.short: the … step was refused (…: …). | this is a bug in the recipe; build the short step by step meanwhile (mgl docs recipes). |
 | `E_REF` | 1 | comp "…" does not exist. | comps: … |
 | `E_RENDER` | 1 | … | render with segments: 1 to see the full error. |
 | `E_RENDER_UNAVAILABLE` | 1 | the render pipeline could not be loaded: … | reinstall michelangelo (npm install michelangelo); renderEffect / renderGenerator work without it. |

@@ -183,6 +183,11 @@ export interface CommandContext {
   summary(s: string): void;
   /** structured data returned with the result (e.g. created ids) */
   out: Record<string, unknown>;
+  /**
+   * (API 1.6) Run another command on the same draft, validated like any command: it is part of this command's undo
+   * step and dry run. Returns its `out`; its summary is dropped and its notes go to `note` (default: this context's).
+   */
+  run(cmd: Command, opts?: { note?: (msg: string) => void }): Promise<Record<string, unknown>>;
 }
 
 export interface CommandDef<S extends z.ZodObject = z.ZodObject> {
@@ -377,8 +382,16 @@ export function makeContext(project: ProjectFile, services: CommandServices): { 
       if (!taken.has(stem)) return stem;
       for (let n = 2; ; n++) if (!taken.has(`${stem}${n}`)) return `${stem}${n}`;
     },
+    run: (cmd, o) => runNested(ctx, cmd, o?.note ?? ctx.note),
   };
   return { ctx, notes, summaries };
+}
+
+async function runNested(parent: CommandContext, cmd: Command, note: (msg: string) => void): Promise<Record<string, unknown>> {
+  const { def, data } = parseCommand(cmd);
+  const sub: CommandContext = { ...parent, out: {}, summary: () => {}, note, run: (c, o) => runNested(sub, c, o?.note ?? note) };
+  await def.apply(sub, data as never);
+  return sub.out;
 }
 
 export interface RunResult {
@@ -389,8 +402,8 @@ export interface RunResult {
   out: Record<string, unknown>;
 }
 
-/** Validate a command object and apply it to a copy of `project`. */
-export async function runCommand(project: ProjectFile, cmd: Command, services: CommandServices = {}): Promise<RunResult> {
+/** Validate a command object: its definition and parsed payload, or an E_COMMAND / E_ARG error with a fix. */
+function parseCommand(cmd: Command): { def: CommandDef; data: unknown } {
   if (!cmd || typeof cmd !== 'object' || typeof cmd.op !== 'string') fail('E_COMMAND', 'a command is a JSON object with "op", e.g. {"op": "clip.split", "id": "shot1", "at": "2s"}.', 'add "op": "<command>" (list: mgl docs commands).');
   const def = getCommand(cmd.op);
   const { op: _op, ...payload } = cmd;
@@ -416,9 +429,15 @@ export async function runCommand(project: ProjectFile, cmd: Command, services: C
     }
     fail('E_ARG', `${def.op}: ${field ? `"${field}" ` : ''}${issue.message}.`, fix);
   }
+  return { def, data: parsed.data };
+}
+
+/** Validate a command object and apply it to a copy of `project`. */
+export async function runCommand(project: ProjectFile, cmd: Command, services: CommandServices = {}): Promise<RunResult> {
+  const { def, data } = parseCommand(cmd);
   const draft = clone(project);
   const { ctx, notes, summaries } = makeContext(draft, services);
-  await def.apply(ctx, parsed.data as never);
+  await def.apply(ctx, data as never);
   const patch = diffProjects(project, ctx.project);
   return { project: ctx.project, patch, notes, summaries, out: ctx.out };
 }

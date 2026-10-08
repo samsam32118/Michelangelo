@@ -1,0 +1,10 @@
+{
+  "name": "storyboard",
+  "version": "1.0.0",
+  "description": "A script linked to the timeline: a Markdown storyboard of scenes and beats (voice line, shots, text, sound) laid out and re-timed by storyboard.apply, with a storyboard-sync check.",
+  "type": "module",
+  "main": "src/index.ts",
+  "michelangelo": { "api": "^1.6.0", "kinds": ["command", "check"] },
+  "scripts": { "test": "node --test test/*.test.ts" },
+  "peerDependencies": { "michelangelo": ">=0.1.0" }
+}

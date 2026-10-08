@@ -533,3 +533,191 @@ def paper(name, loc, parent=None, lines=6):
         w = 0.44 if i % 3 != 2 else 0.28
         rbox(name + 'Line%d' % i, (-(0.44 - w) / 2, -0.015, 0.28 - i * 0.1), (w, 0.01, 0.035), 0.012, ink, root, segs=2)
     return root
+
+
+# ---------------------------------------------------------------- acting extras
+
+
+def eyes_power(c, f, strength, interp=None):
+    """Turn Michelangelo's eyes on or off (emission strength keyframe): 0 = dark, ~3 = awake."""
+    node = c.m_eye.node_tree.nodes['Principled BSDF'].inputs['Emission Strength']
+    node.default_value = strength
+    node.keyframe_insert('default_value', frame=f)
+
+
+def wink(c, f, side='R', dur=8):
+    e = c.eyeR if side == 'R' else c.eyeL
+    key(e, 'scale', f - 1, (1, 1, 1))
+    key(e, 'scale', f + 2, (1.15, 1, 0.08))
+    key(e, 'scale', f + dur, (1.15, 1, 0.08))
+    key(e, 'scale', f + dur + 3, (1, 1, 1))
+
+
+# ---------------------------------------------------------------- a creator's desk (the world Michelangelo lives in)
+# Scale: Michelangelo is about 8 cm tall here, so 1 unit is about 3.3 cm; it fits in a pencil cup.
+
+
+def heart(name, loc, size, m, parent=None, rot=(0, 0, 0)):
+    root = empty(name, loc, parent)
+    root.rotation_euler = rot
+    root.scale = (size, size, size)
+    sphere(name + 'L', (-0.28, 0, 0.18), (0.36, 0.36, 0.36), m, root, seg=24)
+    sphere(name + 'R', (0.28, 0, 0.18), (0.36, 0.36, 0.36), m, root, seg=24)
+    bpy.ops.mesh.primitive_cone_add(vertices=24, radius1=0.62, depth=0.75, location=(0, 0, 0), rotation=(math.pi, 0, 0))
+    cone = bpy.context.active_object
+    _finish(cone, name + 'Tip', root)
+    cone.location = (0, 0, -0.25)
+    cone.scale = (1, 0.58, 1)
+    assign(cone, m)
+    return root
+
+
+def phone(name, loc, clock='3:12', notes=(), rot_z=0.0, glow=1.0):
+    """A phone lying face up with a lock screen: clock and notification cards [(title, body, heart?), ...].
+    Returns the root and the list of card roots (animate their scale to make them arrive)."""
+    root = empty(name, loc)
+    root.rotation_euler = (-math.pi / 2, 0, rot_z)
+    rbox(name + 'Body', (0, 0, 0), (2.35, 0.24, 4.8), 0.35, mat(name + 'BodyM', (0.05, 0.05, 0.07), rough=0.25, coat=1.0), root)
+    rbox(name + 'Screen', (0, -0.125, 0), (2.18, 0.02, 4.6), 0.28, mat(name + 'ScreenM', (0.05, 0.07, 0.16), rough=0.15, emit=(0.06, 0.09, 0.22), strength=glow), root, segs=3)
+    white = mat(name + 'Txt', (1, 1, 1), emit=(1, 1, 1), strength=1.6 * glow)
+    text(name + 'Clock', clock, (0, -0.15, 1.45), 0.75, white, root, font='Montserrat-Bold.ttf', extrude=0.005)
+    cardm = mat(name + 'Card', (0.85, 0.87, 0.95), rough=0.4, emit=(0.8, 0.83, 0.95), strength=0.55 * glow)
+    ink = mat(name + 'Ink', (0.04, 0.04, 0.06), rough=0.6)
+    red = mat(name + 'Heart', (1.0, 0.15, 0.25), emit=(1.0, 0.1, 0.2), strength=1.0)
+    cards = []
+    for i, n in enumerate(notes):
+        title, body = n[0], n[1]
+        cr = empty(name + 'Note%d' % i, (0, -0.14, 0.55 - i * 0.78), root)
+        rbox(name + 'NoteBox%d' % i, (0, 0, 0), (1.98, 0.02, 0.66), 0.14, cardm, cr, segs=3)
+        text(name + 'NoteT%d' % i, title, (-0.86, -0.02, 0.12), 0.17, ink, cr, font='Montserrat-Black.ttf', extrude=0.004, align='LEFT')
+        text(name + 'NoteB%d' % i, body, (-0.86, -0.02, -0.14), 0.15, ink, cr, font='Montserrat-Bold.ttf', extrude=0.004, align='LEFT')
+        if len(n) > 2 and n[2]:
+            heart(name + 'NoteH%d' % i, (0.8, -0.03, -0.12), 0.16, red, cr)
+        cards.append(cr)
+    return root, cards
+
+
+def pencil_cup(name, loc, r=1.55, h=3.0, color=(0.95, 0.5, 0.35)):
+    """An open ceramic cup with a few pencils: Michelangelo's bed."""
+    root = empty(name, loc)
+    bpy.ops.mesh.primitive_cylinder_add(vertices=48, radius=r, depth=h, location=(0, 0, 0))
+    cup = bpy.context.active_object
+    bm = bmesh.new()
+    bm.from_mesh(cup.data)
+    top = [f for f in bm.faces if f.normal.z > 0.9]
+    bmesh.ops.delete(bm, geom=top, context='FACES')
+    bm.to_mesh(cup.data)
+    bm.free()
+    sol = cup.modifiers.new('solid', 'SOLIDIFY')
+    sol.thickness = 0.12
+    bv = cup.modifiers.new('bevel', 'BEVEL')
+    bv.width = 0.05
+    bv.segments = 3
+    _finish(cup, name + 'Cup', root)
+    cup.location = (0, 0, h / 2)
+    assign(cup, mat(name + 'Glaze', color, rough=0.2, coat=0.8))
+    wood = mat(name + 'Wood', (0.9, 0.7, 0.4), rough=0.6)
+    lead = mat(name + 'Lead', (0.1, 0.1, 0.1), rough=0.5)
+    paint = [(1.0, 0.8, 0.1), (0.2, 0.5, 0.95), (0.95, 0.3, 0.3)]
+    for i, (dx, dy, tilt) in enumerate([(-0.9, 0.7, 0.25), (0.95, 0.75, -0.3), (-0.2, 1.05, 0.1)]):
+        p = empty(name + 'Pencil%d' % i, (dx, dy, 0.2), root)
+        p.rotation_euler = (0.1, tilt, 0)
+        cylinder(name + 'PBody%d' % i, (0, 0, 2.6), 0.13, 5.2, mat(name + 'Paint%d' % i, paint[i], rough=0.4), p, verts=6)
+        bpy.ops.mesh.primitive_cone_add(vertices=6, radius1=0.13, depth=0.45, location=(0, 0, 0))
+        tip = bpy.context.active_object
+        _finish(tip, name + 'PTip%d' % i, p)
+        tip.location = (0, 0, 5.42)
+        assign(tip, wood)
+    return root
+
+
+def mug(name, loc, color=(0.92, 0.9, 0.86)):
+    root = empty(name, loc)
+    glaze = mat(name + 'Glaze', color, rough=0.25, coat=0.6)
+    cylinder(name + 'Body', (0, 0, 1.5), 1.35, 3.0, glaze, root, verts=48)
+    cylinder(name + 'Coffee', (0, 0, 2.85), 1.2, 0.05, mat(name + 'Coffee', (0.12, 0.06, 0.03), rough=0.1), root, verts=48)
+    bpy.ops.mesh.primitive_torus_add(major_radius=0.62, minor_radius=0.17, major_segments=32, minor_segments=12, location=(0, 0, 0), rotation=(math.pi / 2, 0, 0))
+    hdl = bpy.context.active_object
+    _finish(hdl, name + 'Handle', root)
+    hdl.location = (1.4, 0, 1.6)
+    assign(hdl, glaze)
+    return root
+
+
+def sleeve(name, loc, rot_z=0.0, color=(0.28, 0.3, 0.36)):
+    """A sleeping person's hoodie arm across the desk (sweater paw, no hand)."""
+    root = empty(name, loc)
+    root.rotation_euler = (0, 0, rot_z)
+    fab = mat(name + 'Fabric', color, rough=0.9, sheen=1.0)
+    sphere(name + 'Arm', (0, 0, 1.6), (9.0, 2.2, 1.7), fab, root)
+    bpy.ops.mesh.primitive_torus_add(major_radius=1.55, minor_radius=0.45, major_segments=40, minor_segments=12, location=(0, 0, 0), rotation=(0, math.pi / 2, 0))
+    cuff = bpy.context.active_object
+    _finish(cuff, name + 'Cuff', root)
+    cuff.location = (-8.3, 0, 1.55)
+    cuff.scale = (1, 1.25, 1.0)
+    assign(cuff, fab)
+    sphere(name + 'Paw', (-8.9, 0, 1.3), (1.0, 1.5, 1.05), fab, root)
+    return root
+
+
+def monitor(name, loc, size=(34, 19), label='EXPORTING  12%', glow=1.2):
+    """A big monitor behind the desk showing a timeline; returns (root, progress-fill object, label text)."""
+    root = empty(name, loc)
+    w, h = size
+    rbox(name + 'Bezel', (0, 0, 0), (w, 0.8, h), 0.5, mat(name + 'BezelM', (0.04, 0.04, 0.05), rough=0.3, coat=0.6), root)
+    rbox(name + 'Screen', (0, -0.42, 0), (w - 1.2, 0.05, h - 1.2), 0.3, mat(name + 'ScreenM', (0.05, 0.06, 0.1), rough=0.3, emit=(0.06, 0.08, 0.14), strength=glow), root, segs=2)
+    cols = [(0.95, 0.35, 0.25), (1.0, 0.75, 0.15), (0.3, 0.75, 0.7), (0.55, 0.45, 0.9), (0.35, 0.6, 1.0)]
+    k = 0
+    for row in range(5):
+        x = -w / 2 + 2.5
+        while True:
+            ln = 2.0 + ((row * 7 + k * 3) % 5) * 0.9
+            if x + ln > w / 2 - 1.5:
+                break
+            c = cols[(row + k) % len(cols)]
+            rbox(name + 'Clip%d' % k, (x + ln / 2, -0.47, -h / 2 + 3.0 + row * 1.6), (ln, 0.05, 1.1), 0.2,
+                 mat(name + 'ClipM%d' % k, c, rough=0.4, emit=c, strength=0.6 * glow), root, segs=2)
+            x += ln + 0.35
+            k += 1
+    rbox(name + 'BarBg', (0, -0.47, h / 2 - 4.2), (w * 0.6, 0.05, 0.9), 0.4, mat(name + 'BarBgM', (0.2, 0.2, 0.25), emit=(0.2, 0.2, 0.25), strength=0.4 * glow), root, segs=2)
+    fill_root = empty(name + 'FillRoot', (-w * 0.3, -0.5, h / 2 - 4.2), root)
+    fill = rbox(name + 'Fill', (w * 0.3, 0, 0), (w * 0.6, 0.05, 0.75), 0.35, mat(name + 'FillM', (1.0, 0.45, 0.2), emit=(1.0, 0.42, 0.18), strength=1.6 * glow), fill_root, segs=2)
+    lab = text(name + 'Label', label, (0, -0.5, h / 2 - 2.4), 1.0, mat(name + 'LabelM', (1, 1, 1), emit=(1, 1, 1), strength=1.4 * glow), root, font='Montserrat-Bold.ttf', extrude=0.01)
+    return root, fill_root, lab
+
+
+def sticky(name, loc, body, color=(1.0, 0.86, 0.3), rot=(math.pi / 2, 0, 0), size=3.2):
+    root = empty(name, loc)
+    root.rotation_euler = rot
+    rbox(name + 'Pad', (0, 0, 0), (size, 0.03, size), 0.05, mat(name + 'PadM', color, rough=0.8), root, segs=2)
+    lines = body.split('\n')
+    for i, ln in enumerate(lines):
+        text(name + 'L%d' % i, ln, (0, -0.03, (len(lines) - 1) * 0.32 - i * 0.64), 0.5, mat(name + 'InkM%d' % i, (0.1, 0.1, 0.15), rough=0.6), root, font='Montserrat-Black.ttf', extrude=0.005)
+    return root
+
+
+def desk_set(time='night', wall=True):
+    """The creator's desk at night (monitor glow, dark room), at dawn (blue window) or in the morning (warm sun).
+    Returns a dict of the lights so a shot can animate the time of day."""
+    sc = bpy.context.scene
+    top = mat('DeskTop', (0.42, 0.26, 0.15), rough=0.45, coat=0.3)
+    rbox('Desk', (0, 6, -0.6), (140, 60, 1.2), 0.3, top, segs=2)
+    if wall:
+        rbox('Wall', (0, 32, 30), (160, 1, 70), 0.2, mat('WallM', (0.55, 0.52, 0.6), rough=0.95), segs=1)
+    lights = {}
+    lights['moon'] = area_light('Moon', (-30, -18, 40), (0, 4, 0), 0, 30, (0.55, 0.65, 1.0))
+    lights['screen'] = area_light('ScreenLight', (0, 20, 12), (0, -4, 1), 0, 30, (0.6, 0.75, 1.0))
+    lights['sun'] = area_light('Sun', (-40, -10, 30), (0, 6, 0), 0, 25, (1.0, 0.8, 0.55))
+    lights['fill'] = area_light('FillDesk', (25, -30, 18), (0, 0, 2), 0, 30, (0.9, 0.9, 1.0))
+    w = sc.world.node_tree.nodes['Background']
+    if time == 'night':
+        lights['moon'].data.energy = 2500; lights['screen'].data.energy = 9000; lights['fill'].data.energy = 600
+        w.inputs[0].default_value = (0.02, 0.025, 0.06, 1); w.inputs[1].default_value = 0.4
+    elif time == 'dawn':
+        lights['moon'].data.energy = 3500; lights['screen'].data.energy = 6000; lights['fill'].data.energy = 1500; lights['sun'].data.energy = 3000
+        lights['sun'].data.color = (1.0, 0.6, 0.45)
+        w.inputs[0].default_value = (0.25, 0.25, 0.4, 1); w.inputs[1].default_value = 0.5
+    else:
+        lights['sun'].data.energy = 16000; lights['fill'].data.energy = 3000; lights['screen'].data.energy = 2500
+        w.inputs[0].default_value = (0.9, 0.85, 0.8, 1); w.inputs[1].default_value = 0.6
+    return lights

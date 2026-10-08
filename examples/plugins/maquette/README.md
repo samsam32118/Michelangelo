@@ -40,7 +40,7 @@ The character's controls: `root` (position, scale), `torso` (lean, squash via `c
 `eyeL`/`eyeR` (`c.blink`, `c.look`, `c.eyes_shape` for wide, squint or happy eyes), `c.smile_` / `c.gasp` (mouth),
 `c.arm('L'|'R', f, up=, fwd=)`, `c.wave`, `antenna` and `beret` (give them a few frames of lag for follow-through).
 Props: `m.rbox`, `m.sphere`, `m.cylinder`, `m.text` (Michelangelo's fonts), `m.diamond`, `m.lightbulb`,
-`m.magnifier`, `m.paper`. Animate anything with `m.key(ob, 'location', frame, value)` / `m.keys(ob, path, [...])`.
+`m.magnifier`, `m.paper`, and a creator's desk: `m.desk_set(night|dawn|morning)`, `m.monitor`, `m.phone` (lock screen with notification cards), `m.pencil_cup`, `m.mug`, `m.sticky`, `m.heart`, `m.sleeve`. Acting extras: `m.eyes_power(c, f, k)` (eyes on or off), `m.wink(c, f)`. Animate anything with `m.key(ob, 'location', frame, value)` / `m.keys(ob, path, [...])`.
 
 ## Blender
 

@@ -3,7 +3,7 @@ import { definePlugin, defineCommand, z, type CommandContext } from 'michelangel
 /**
  * maquette: animated 3D shots for Michelangelo, rendered headless with Blender (Cycles, CPU or GPU).
  *
- * A shot is a small Python file with `build(m)` (m = blender/maquette.py: scene, lights, materials, props, and Chip,
+ * A shot is a small Python file with `build(m)` (m = blender/maquette.py: scene, lights, materials, props, and Michelangelo,
  * the studio's robot) or an OpenUSD text stage (.usda) with a camera. `maquette.shot` renders it, encodes it
  * (ProRes 4444 with alpha when the shot is transparent, else H.264), writes it to media/generated/ (cached by a hash of
  * the shot and the settings) and adds it as an asset + clip. `maquette.still` renders a few frames as PNGs into the
@@ -37,7 +37,7 @@ export async function shotHash(parts: string[]): Promise<string> {
   return h.digest('hex').slice(0, 10);
 }
 
-/** The kit's Python files (so a change to Chip or the renderer re-renders every shot). */
+/** The kit's Python files (so a change to the character or the renderer re-renders every shot). */
 async function kitSource(): Promise<{ dir: string; text: string }> {
   const { readFile } = await import('node:fs/promises');
   const { fileURLToPath } = await import('node:url');
@@ -140,7 +140,7 @@ async function readShot(ctx: CommandContext, shot: string): Promise<{ source: st
 
 const shotCmd = defineCommand({
   op: 'maquette.shot', group: 'media',
-  doc: 'Render an animated 3D shot (a .py file with build(m) using the maquette kit and its robot Chip, or an OpenUSD .usda stage) headless with Blender, write it to media/generated/maquette-<shot>-<hash>.mov|mp4 (ProRes 4444 with alpha for transparent shots; reused while the shot and settings are unchanged) and add it as a clip. usd=true also writes the stage as OpenUSD (.usdc). Rendering takes minutes: preview with maquette.still first.',
+  doc: 'Render an animated 3D shot (a .py file with build(m) using the maquette kit and its robot Michelangelo, or an OpenUSD .usda stage) headless with Blender, write it to media/generated/maquette-<shot>-<hash>.mov|mp4 (ProRes 4444 with alpha for transparent shots; reused while the shot and settings are unchanged) and add it as a clip. usd=true also writes the stage as OpenUSD (.usdc). Rendering takes minutes: preview with maquette.still first.',
   schema: z.strictObject({
     shot: z.string().min(1), track: Id, at: Time.optional(), len: Time.optional(), id: Id.optional(),
     res: z.string().regex(/^\d{2,5}x\d{2,5}$/).optional(), samples: z.number().int().min(1).max(4096).optional(),

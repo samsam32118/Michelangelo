@@ -1,7 +1,7 @@
 # maquette
 
 Animated **3D shots** for Michelangelo, rendered headless with **Blender** (Cycles), from a small Python shot file or
-an **OpenUSD** stage. It ships a procedural character, **Chip**: a hovering robot editor with a screen face, amber
+an **OpenUSD** stage. It ships a procedural character, **Michelangelo**, the editor's mascot: a hovering robot with a screen face, amber
 eyes, a coral antenna and a red beret. No downloaded models: every shot is code, so it is reproducible and
 licence-clean.
 
@@ -31,12 +31,12 @@ def build(m):
     m.scene_setup(48)                       # frames (24 fps), 720x900, Cycles, denoised; transparent=True for overlays
     m.backdrop((0.86, 0.72, 0.92))          # a seamless studio sweep
     m.studio_lights()                       # warm key, cool fill and rim
-    c = m.Chip(loc=(0, 0, 0.35))
+    c = m.Michelangelo(loc=(0, 0, 0.35))
     c.hover(1, 48); c.wave(4, cycles=3); c.blink(36); c.smile_(4, 1.2)
     m.camera((0.9, -6.2, 1.9), (0, 0, 1.45), lens=55, dof=6.2)
 ```
 
-Chip's controls: `root` (position, scale), `torso` (lean, squash via `c.squash(f, k)`), `head` (tilt, nod, turn),
+The character's controls: `root` (position, scale), `torso` (lean, squash via `c.squash(f, k)`), `head` (tilt, nod, turn),
 `eyeL`/`eyeR` (`c.blink`, `c.look`, `c.eyes_shape` for wide, squint or happy eyes), `c.smile_` / `c.gasp` (mouth),
 `c.arm('L'|'R', f, up=, fwd=)`, `c.wave`, `antenna` and `beret` (give them a few frames of lag for follow-through).
 Props: `m.rbox`, `m.sphere`, `m.cylinder`, `m.text` (Michelangelo's fonts), `m.diamond`, `m.lightbulb`,
@@ -51,7 +51,7 @@ Props: `m.rbox`, `m.sphere`, `m.cylinder`, `m.text` (Michelangelo's fonts), `m.d
 ## Files
 
 - `src/index.ts`: the two commands (Node built-ins load lazily).
-- `blender/maquette.py`: scene, lights, materials, props, animation helpers, Chip.
+- `blender/maquette.py`: scene, lights, materials, props, animation helpers, the Michelangelo character.
 - `blender/render_shot.py`: renders one shot (frames, stills, OpenUSD export).
 - `shots/wave.py`: a 2-second example.
 - `test/maquette.test.ts`: names, cache hash, Blender command line, refusing non-shots.

@@ -146,7 +146,7 @@ Every verb takes `--json` and exits with one of three codes:
   - Ten examples in [examples/plugins](examples/plugins). Two are text-to-speech voices: `kokoro-voice` (natural,
     Kokoro-82M on the CPU) and `flite-voice` (zero downloads); `collage-kit` is a paper-collage kit of effects,
     generators and templates; `maquette` renders animated 3D shots headless with Blender (from Python or OpenUSD)
-    and ships Chip, a robot character.
+    and ships Michelangelo's robot mascot as a 3D character.
 
 ## Documentation
 

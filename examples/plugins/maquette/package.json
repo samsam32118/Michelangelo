@@ -1,7 +1,7 @@
 {
   "name": "maquette",
   "version": "0.1.0",
-  "description": "Animated 3D shots for Michelangelo, rendered headless with Blender (Cycles) from a Python shot file or an OpenUSD stage. Ships Chip, a robot editor character.",
+  "description": "Animated 3D shots for Michelangelo, rendered headless with Blender (Cycles) from a Python shot file or an OpenUSD stage. Ships Michelangelo, the editor's robot mascot, as a 3D character.",
   "type": "module",
   "main": "src/index.ts",
   "michelangelo": { "api": "^1.5.0", "kinds": ["command"] },

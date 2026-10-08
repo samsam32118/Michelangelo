@@ -327,7 +327,7 @@ def wiggle(ob, path, start, end, amp, period, index, base=0.0, phase=0.0):
         f += max(1, int(period / 4))
 
 
-# ---------------------------------------------------------------- the character: Chip
+# ---------------------------------------------------------------- the character: Michelangelo
 
 
 TEAL = (0.02, 0.42, 0.40)
@@ -336,8 +336,8 @@ CORAL = (0.95, 0.30, 0.20)
 AMBER = (1.0, 0.5, 0.06)
 
 
-class Chip:
-    """Chip: a small hovering robot editor with a big screen face, amber eyes and a coral beret.
+class Michelangelo:
+    """Michelangelo: the mascot of the Michelangelo video editor, a small hovering robot with a big screen face, amber eyes and a coral beret.
 
     Controls (all on empties, keyframe them):
       root      position / overall scale (squash & stretch: scale z vs x,y)
@@ -351,7 +351,7 @@ class Chip:
       mouth     smile (scale), surprise (use mouthO)
     """
 
-    def __init__(self, name='Chip', loc=(0, 0, 0), scale=1.0, beret=True, glow=3.0):
+    def __init__(self, name='Michelangelo', loc=(0, 0, 0), scale=1.0, beret=True, glow=3.0):
         self.name = name
         m_body = mat(name + 'Body', TEAL, rough=0.32, coat=0.6, sss=0.05)
         m_dark = mat(name + 'Joint', TEAL_DARK, rough=0.4, coat=0.3)
@@ -405,7 +405,7 @@ class Chip:
         cylinder(name + 'AntennaStick', (0, 0, 0.14), 0.025, 0.28, m_dark, self.antenna)
         sphere(name + 'AntennaTip', (0, 0, 0.32), (0.075, 0.075, 0.075), m_coral, self.antenna, seg=24)
 
-        # the beret: Chip's signature
+        # the beret: Michelangelo's signature
         self.beret = empty(name + 'BeretPivot', (-0.12, 0.02, 1.0), self.head)
         if beret:
             sphere(name + 'Beret', (0, 0, 0.04), (0.62, 0.58, 0.15), m_beret, self.beret)

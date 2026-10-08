@@ -18,6 +18,7 @@ import time
 import bpy
 
 HERE = os.path.dirname(os.path.abspath(__file__))
+sys.dont_write_bytecode = True  # keep the plugin folder unchanged (its trust hash covers every file)
 sys.path.insert(0, HERE)
 import maquette  # noqa: E402
 

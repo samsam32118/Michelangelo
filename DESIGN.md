@@ -492,7 +492,8 @@ export default definePlugin({
 Core effects and transitions live in `src/builtin/<name>/` and import only `michelangelo/plugin`
 (enforced by a lint rule and a test that scans imports). Example third-party plugins in
 `examples/plugins/`: **glitch** (layer effect, RGB split + slices), **clock-wipe** (transition),
-**confetti** (generator with seeded particles), and **lower-third-pro** (template + command).
+**confetti** (generator with seeded particles), **lower-third-pro** (template + command), and **maquette**
+(commands that render animated 3D shots headless with Blender, from a Python shot file or an OpenUSD stage).
 
 ---
 

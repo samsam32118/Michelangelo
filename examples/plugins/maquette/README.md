@@ -1,0 +1,57 @@
+# maquette
+
+Animated **3D shots** for Michelangelo, rendered headless with **Blender** (Cycles), from a small Python shot file or
+an **OpenUSD** stage. It ships a procedural character, **Chip**: a hovering robot editor with a screen face, amber
+eyes, a coral antenna and a red beret. No downloaded models: every shot is code, so it is reproducible and
+licence-clean.
+
+```sh
+cp -r <michelangelo repo>/examples/plugins/maquette plugins/maquette
+mgl plugin test plugins/maquette
+mgl plugin trust plugins/maquette                       # after reading src/index.ts and blender/*.py
+mgl edit video.mgl.json project.set plugins='{"maquette": "^0.1.0"}'
+mgl edit video.mgl.json maquette.still shots/wave.py frames=[1,24,40]     # quick PNGs in .mgl/<name>/
+mgl edit video.mgl.json maquette.shot shots/wave.py track=V2 at=1s         # full render, added as a clip
+mgl edit video.mgl.json maquette.shot shots/pop.py track=V3 usd=true       # also writes the stage as OpenUSD
+```
+
+- `maquette.shot` renders, encodes and adds the clip. A **transparent** shot (`scene_setup(..., transparent=True)`)
+  becomes ProRes 4444 with alpha (`.mov`), ready to sit over a talking head; an opaque one becomes H.264 (`.mp4`).
+  Files go to `media/generated/maquette-<shot>-<hash>.*` and are **reused** until the shot, its settings or the kit
+  change (the hash covers all three). `len=` trims, `fit=` sets the fit, `res=` and `samples=` override the shot.
+- `maquette.still` renders a few frames at 360x450 into the work folder: look at them before a full render. An agent
+  cannot watch the shot; it can read stills.
+- Shots: a `.py` file with `build(m)` (m is `blender/maquette.py`), or an OpenUSD text stage `.usda` with a camera
+  (convert binary stages with `usdcat in.usdc -o shot.usda`). `usd=true` exports what was rendered as `.usdc`.
+
+## Writing a shot
+
+```python
+def build(m):
+    m.scene_setup(48)                       # frames (24 fps), 720x900, Cycles, denoised; transparent=True for overlays
+    m.backdrop((0.86, 0.72, 0.92))          # a seamless studio sweep
+    m.studio_lights()                       # warm key, cool fill and rim
+    c = m.Chip(loc=(0, 0, 0.35))
+    c.hover(1, 48); c.wave(4, cycles=3); c.blink(36); c.smile_(4, 1.2)
+    m.camera((0.9, -6.2, 1.9), (0, 0, 1.45), lens=55, dof=6.2)
+```
+
+Chip's controls: `root` (position, scale), `torso` (lean, squash via `c.squash(f, k)`), `head` (tilt, nod, turn),
+`eyeL`/`eyeR` (`c.blink`, `c.look`, `c.eyes_shape` for wide, squint or happy eyes), `c.smile_` / `c.gasp` (mouth),
+`c.arm('L'|'R', f, up=, fwd=)`, `c.wave`, `antenna` and `beret` (give them a few frames of lag for follow-through).
+Props: `m.rbox`, `m.sphere`, `m.cylinder`, `m.text` (Michelangelo's fonts), `m.diamond`, `m.lightbulb`,
+`m.magnifier`, `m.paper`. Animate anything with `m.key(ob, 'location', frame, value)` / `m.keys(ob, path, [...])`.
+
+## Blender
+
+`$MAQUETTE_BLENDER` (a Blender binary, run with `-b`), else `$MAQUETTE_PYTHON` (a Python with `bpy`:
+`pip install bpy`, Python 3.13 for bpy 5.x), else `python3`. EEVEE needs a GPU, so the kit renders with Cycles: on a
+4-core CPU a 720x900 frame takes 6–10 s, about a minute per second of animation. ffmpeg: `$MGL_FFMPEG` or `ffmpeg`.
+
+## Files
+
+- `src/index.ts`: the two commands (Node built-ins load lazily).
+- `blender/maquette.py`: scene, lights, materials, props, animation helpers, Chip.
+- `blender/render_shot.py`: renders one shot (frames, stills, OpenUSD export).
+- `shots/wave.py`: a 2-second example.
+- `test/maquette.test.ts`: names, cache hash, Blender command line, refusing non-shots.

@@ -143,9 +143,10 @@ Every verb takes `--json` and exits with one of three codes:
 - **Plugins.**
   - Effects, transitions, generators, templates, commands, checks, importers, exporters, styles, motion presets, and speech and transcription providers.
   - Public, semver-versioned API (`michelangelo/plugin`, 1.4.0). Run `mgl plugin new` for a scaffold.
-  - Eight examples in [examples/plugins](examples/plugins). Two are text-to-speech voices: `kokoro-voice` (natural,
+  - Ten examples in [examples/plugins](examples/plugins). Two are text-to-speech voices: `kokoro-voice` (natural,
     Kokoro-82M on the CPU) and `flite-voice` (zero downloads); `collage-kit` is a paper-collage kit of effects,
-    generators and templates.
+    generators and templates; `maquette` renders animated 3D shots headless with Blender (from Python or OpenUSD)
+    and ships Chip, a robot character.
 
 ## Documentation
 

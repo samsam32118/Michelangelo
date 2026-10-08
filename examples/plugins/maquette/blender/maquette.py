@@ -721,3 +721,48 @@ def desk_set(time='night', wall=True):
         lights['sun'].data.energy = 16000; lights['fill'].data.energy = 3000; lights['screen'].data.energy = 2500
         w.inputs[0].default_value = (0.9, 0.85, 0.8, 1); w.inputs[1].default_value = 0.6
     return lights
+
+
+def sleeper(name, loc, rot_z=0.0, hoodie=(0.3, 0.33, 0.42), hair=(0.22, 0.12, 0.06), skin=(0.85, 0.6, 0.45)):
+    """A person asleep face-down on folded arms, seen from behind: hoodie back and hood, arms, hair and an ear.
+    Returns a dict with root, back (breathe with its scale) and head (lift it to wake them)."""
+    root = empty(name, loc)
+    root.rotation_euler = (0, 0, rot_z)
+    fab = mat(name + 'Hoodie', hoodie, rough=0.9, sheen=1.0)
+    hr = mat(name + 'Hair', hair, rough=0.6, sheen=0.5)
+    sk = mat(name + 'Skin', skin, rough=0.5, sss=0.3)
+    back = empty(name + 'Back', (0, -6.0, 0), root)
+    sphere(name + 'BackMesh', (0, 0, 2.6), (6.0, 3.4, 3.8), fab, back)
+    for side in (-1, 1):
+        arm = sphere(name + 'Arm%d' % side, (side * 2.6, 0.8, 1.25), (5.2, 1.6, 1.25), fab, root)
+        arm.rotation_euler = (0, 0, side * 0.32)
+        sphere(name + 'Paw%d' % side, (side * -2.2, 3.2, 1.2), (1.3, 1.5, 1.1), fab, root)
+    head = empty(name + 'HeadPivot', (0, -1.4, 2.4), root)
+    sphere(name + 'Hood', (0, -2.2, 1.3), (3.6, 2.0, 2.2), fab, head)
+    sphere(name + 'Head', (0, 0.9, 1.7), (2.7, 2.9, 2.6), hr, head)
+    sphere(name + 'Ear', (2.55, 0.8, 1.5), (0.45, 0.75, 0.95), sk, head, seg=24)
+    sphere(name + 'Neck', (0, -1.0, 0.9), (1.4, 1.2, 1.2), sk, head, seg=24)
+    return {'root': root, 'back': back, 'head': head}
+
+
+def keyboard(name, loc, w=18.0, d=6.0, rot_z=0.0):
+    """A big keyboard (Michelangelo can stand on the keys). Returns (root, list of key objects by row)."""
+    root = empty(name, loc)
+    root.rotation_euler = (0, 0, rot_z)
+    rbox(name + 'Base', (0, 0, 0.3), (w, d, 0.6), 0.25, mat(name + 'BaseM', (0.12, 0.12, 0.14), rough=0.4), root, segs=2)
+    keym = mat(name + 'KeyM', (0.86, 0.86, 0.88), rough=0.5)
+    rows = []
+    cols = int(w // 1.45)
+    for r in range(4):
+        row = []
+        for c in range(cols):
+            x = -w / 2 + 0.95 + c * 1.45
+            y = -d / 2 + 1.0 + r * 1.35
+            row.append(rbox(name + 'K%d_%d' % (r, c), (x, y, 0.75), (1.2, 1.1, 0.35), 0.12, keym, root, segs=2))
+        rows.append(row)
+    return root, rows
+
+
+def key_light(target, loc, energy=160, color=(0.75, 0.85, 1.0), size=3.0, name='CharLight'):
+    """A soft light on the character so it reads in dark scenes."""
+    return area_light(name, loc, target, energy, size, color)

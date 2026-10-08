@@ -36,3 +36,10 @@ test('maquette.shot refuses files that are not shots, before starting Blender', 
   const p = testProject();
   await assert.rejects(runCommandOn(p, { op: 'maquette.shot', shot: 'clip.mp4', track: 'V1' }), /not a shot file/);
 });
+
+test('maquette.shot renders a cheap draft unless quality=final is asked for', () => {
+  const shot = plugin.commands!.find((c) => c.op === 'maquette.shot')!;
+  assert.ok(shot.schema.safeParse({ shot: 's.py', track: 'V1', quality: 'final' }).success);
+  assert.ok(!shot.schema.safeParse({ shot: 's.py', track: 'V1', quality: 'best' }).success);
+  assert.match(shot.doc, /quality=draft \(the default\)/);
+});

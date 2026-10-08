@@ -2,7 +2,10 @@
 Render one maquette shot headless.
 
   python render_shot.py --shot shots/hook.py --out out/hook/ [--res 720x900] [--samples 24] [--range 1-48]
-                        [--still 12[,30,...]] [--usd out/hook.usdc] [--fonts /path/to/fonts]
+                        [--still 12[,30,...]] [--usd out/hook.usdc] [--fonts /path/to/fonts] [--draft]
+
+--draft is the cheap pass for storyboards and animatics: 360x450, 2 samples (denoised), no motion blur, and for
+animations every second frame (the frames keep their numbers; the encoder holds each one for two frames).
 
 A shot is a .py file with build(m) (m = the maquette module), or an OpenUSD stage (.usd/.usda/.usdc) with a camera.
 Writes PNG frames out/0001.png ... (RGBA when the shot is transparent) and prints one JSON line:
@@ -34,6 +37,7 @@ def main():
     ap.add_argument('--still', default=None, help='a frame or a comma list of frames')
     ap.add_argument('--usd', default=None)
     ap.add_argument('--fonts', default=None)
+    ap.add_argument('--draft', action='store_true')
     a = ap.parse_args(argv)
     maquette.FONT_DIR = a.fonts
 
@@ -60,6 +64,12 @@ def main():
         sys.exit(1)
 
     sc = bpy.context.scene
+    if a.draft:
+        sc.render.resolution_x, sc.render.resolution_y = 360, 450
+        sc.cycles.samples = 2
+        sc.cycles.use_denoising = True
+        sc.render.use_motion_blur = False
+        sc.frame_step = 1 if a.still is not None else 2
     if a.res:
         w, h = (int(v) for v in a.res.lower().split('x'))
         sc.render.resolution_x, sc.render.resolution_y = w, h
@@ -87,6 +97,7 @@ def main():
         sc.render.filepath = os.path.join(os.path.abspath(a.out), '')
         bpy.ops.render.render(animation=True)
         n = sc.frame_end - sc.frame_start + 1
+        sc.frame_step = 1
     print(json.dumps({'frames': n, 'fps': sc.render.fps, 'transparent': bool(sc.render.film_transparent),
                       'width': sc.render.resolution_x, 'height': sc.render.resolution_y, 'seconds': round(time.time() - t0, 1)}))
 

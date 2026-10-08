@@ -19,7 +19,8 @@ const Time = z.union([z.number().int().min(0), z.string().min(1)]);
 const Id = z.string().regex(/^[A-Za-z][A-Za-z0-9_-]*$/);
 
 interface RenderInfo { frames: number; fps: number; transparent: boolean; width: number; height: number; seconds?: number }
-interface Meta extends RenderInfo { shot: string; hash: string; usd?: string }
+interface Meta extends RenderInfo { shot: string; hash: string; usd?: string; quality?: Quality }
+type Quality = 'draft' | 'final';
 
 type Files = { writeFile?(rel: string, data: Uint8Array): Promise<void>; fileExists?(rel: string): Promise<boolean> };
 
@@ -88,7 +89,7 @@ export function blenderCommand(script: string, args: string[]): [string, string[
 const BLENDER_FIX = 'install Blender and set MAQUETTE_BLENDER=/path/to/blender, or `pip install bpy` (Blender as a Python module, Python 3.13 for bpy 5.x) and set MAQUETTE_PYTHON to that python';
 
 /** Render a shot source into PNG frames in a temp folder; returns the folder and what Blender reported. */
-async function renderFrames(source: string, ext: string, opts: { res?: string; samples?: number; still?: number[]; usd?: boolean }): Promise<{ dir: string; info: RenderInfo; usd?: string }> {
+async function renderFrames(source: string, ext: string, opts: { res?: string; samples?: number; still?: number[]; usd?: boolean; draft?: boolean }): Promise<{ dir: string; info: RenderInfo; usd?: string }> {
   const { mkdtemp, writeFile } = await import('node:fs/promises');
   const { tmpdir } = await import('node:os');
   const { join } = await import('node:path');
@@ -97,6 +98,7 @@ async function renderFrames(source: string, ext: string, opts: { res?: string; s
   const shot = join(dir, 'shot' + ext);
   await writeFile(shot, source);
   const args = ['--shot', shot, '--out', join(dir, 'frames')];
+  if (opts.draft) args.push('--draft');
   if (opts.res) args.push('--res', opts.res);
   if (opts.samples) args.push('--samples', String(opts.samples));
   if (opts.still?.length) args.push('--still', opts.still.join(','));
@@ -117,12 +119,13 @@ async function renderFrames(source: string, ext: string, opts: { res?: string; s
   return { dir, info, ...(usd ? { usd } : {}) };
 }
 
-async function encode(frames: string, info: RenderInfo, out: string): Promise<void> {
+/** Encode the PNG frames; a draft has every second frame, each held for two frames. */
+async function encode(frames: string, info: RenderInfo, out: string, draft = false): Promise<void> {
   const ffmpeg = process.env.MGL_FFMPEG || 'ffmpeg';
   const codec = info.transparent
     ? ['-c:v', 'prores_ks', '-profile:v', '4444', '-pix_fmt', 'yuva444p10le', '-vendor', 'apl0']
     : ['-c:v', 'libx264', '-preset', 'slow', '-crf', '14', '-pix_fmt', 'yuv420p', '-movflags', '+faststart'];
-  await run(ffmpeg, ['-hide_banner', '-nostdin', '-loglevel', 'error', '-y', '-framerate', String(info.fps), '-start_number', '1', '-i', `${frames}/%04d.png`, ...codec, out], 'ffmpeg');
+  await run(ffmpeg, ['-hide_banner', '-nostdin', '-loglevel', 'error', '-y', ...(draft ? ['-framerate', String(info.fps / 2), '-pattern_type', 'glob', '-i', `${frames}/*.png`, '-r', String(info.fps)] : ['-framerate', String(info.fps), '-start_number', '1', '-i', `${frames}/%04d.png`]), ...codec, out], 'ffmpeg');
 }
 
 /** The shot's extension, or an error naming what a shot is. */
@@ -140,11 +143,12 @@ async function readShot(ctx: CommandContext, shot: string): Promise<{ source: st
 
 const shotCmd = defineCommand({
   op: 'maquette.shot', group: 'media',
-  doc: 'Render an animated 3D shot (a .py file with build(m) using the maquette kit and its robot Michelangelo, or an OpenUSD .usda stage) headless with Blender, write it to media/generated/maquette-<shot>-<hash>.mov|mp4 (ProRes 4444 with alpha for transparent shots; reused while the shot and settings are unchanged) and add it as a clip. usd=true also writes the stage as OpenUSD (.usdc). Rendering takes minutes: preview with maquette.still first.',
+  doc: 'Render an animated 3D shot (a .py file with build(m) using the maquette kit and its robot Michelangelo, or an OpenUSD .usda stage) headless with Blender, write it to media/generated/maquette-<shot>-<hash>.mov|mp4 (ProRes 4444 with alpha for transparent shots; reused while the shot and settings are unchanged) and add it as a clip. usd=true also writes the stage as OpenUSD (.usdc). quality=draft (the default) is the cheap pass for storyboards and animatics: 360x450, 2 samples, every second frame held, about 12x cheaper than quality=final (the shot\'s own settings, minutes per second of animation). Render final only after a person has approved the draft.',
   schema: z.strictObject({
     shot: z.string().min(1), track: Id, at: Time.optional(), len: Time.optional(), id: Id.optional(),
     res: z.string().regex(/^\d{2,5}x\d{2,5}$/).optional(), samples: z.number().int().min(1).max(4096).optional(),
     fit: z.enum(['cover', 'contain', 'fill', 'none']).optional(), usd: z.boolean().optional(),
+    quality: z.enum(['draft', 'final']).optional(),
   }),
   primary: 'shot',
   example: { shot: 'shots/hook.py', track: 'V2', at: '0.8s' },
@@ -156,8 +160,10 @@ const shotCmd = defineCommand({
     const comp = ctx.compOfTrack(p.track);
     const { source, ext } = await readShot(ctx, p.shot);
     const kit = await kitSource();
-    const hash = await shotHash([VERSION, source, kit.text, p.res ?? '', String(p.samples ?? ''), p.usd ? 'usd' : '']);
-    const base = `media/generated/maquette-${stem(p.shot)}-${hash}`;
+    const quality: Quality = p.quality ?? 'draft';
+    const draft = quality === 'draft';
+    const hash = await shotHash([VERSION, source, kit.text, p.res ?? '', String(p.samples ?? ''), p.usd ? 'usd' : '', ...(draft ? ['draft'] : [])]);
+    const base = `media/generated/maquette-${stem(p.shot)}-${draft ? 'draft-' : ''}${hash}`;
     let meta: Meta | undefined;
     try { meta = JSON.parse(await ctx.services.readText!(`${base}.json`)) as Meta; } catch { meta = undefined; }
     const src = meta ? `${base}.${meta.transparent ? 'mov' : 'mp4'}` : '';
@@ -166,13 +172,13 @@ const shotCmd = defineCommand({
     if (!reused) {
       const { readFile, rm } = await import('node:fs/promises');
       const { join } = await import('node:path');
-      const r = await renderFrames(source, ext, { ...(p.res ? { res: p.res } : {}), ...(p.samples ? { samples: p.samples } : {}), usd: !!p.usd });
+      const r = await renderFrames(source, ext, { ...(p.res ? { res: p.res } : {}), ...(p.samples ? { samples: p.samples } : {}), usd: !!p.usd, draft });
       try {
         rel = `${base}.${r.info.transparent ? 'mov' : 'mp4'}`;
         const video = join(r.dir, r.info.transparent ? 'shot.mov' : 'shot.mp4');
-        await encode(join(r.dir, 'frames'), r.info, video);
+        await encode(join(r.dir, 'frames'), r.info, video, draft);
         await files.writeFile(rel, new Uint8Array(await readFile(video)));
-        meta = { ...r.info, shot: p.shot, hash };
+        meta = { ...r.info, shot: p.shot, hash, quality };
         if (r.usd) { meta.usd = `${base}.usdc`; await files.writeFile(meta.usd, new Uint8Array(await readFile(r.usd))); }
         await files.writeFile(`${base}.json`, new TextEncoder().encode(JSON.stringify(meta, null, 1) + '\n'));
       } finally {
@@ -193,13 +199,14 @@ const shotCmd = defineCommand({
     ctx.out.id = clip.id; ctx.out.asset = asset.id; ctx.out.src = rel; ctx.out.frames = m.frames; ctx.out.transparent = m.transparent;
     if (m.usd) ctx.out.usd = m.usd;
     ctx.out.rendered = !reused;
-    ctx.summary(`added 3D shot "${clip.id}" on ${p.track} at ${at}–${at + len} (${(m.frames / m.fps).toFixed(2)}s, ${m.width}x${m.height}${m.transparent ? ' with alpha' : ''}); ${reused ? 'reused' : `rendered${m.seconds ? ` in ${m.seconds}s` : ''}`} ${rel}${m.usd ? ` and ${m.usd}` : ''}.`);
+    ctx.out.quality = quality;
+    ctx.summary(`added 3D shot "${clip.id}" on ${p.track} at ${at}–${at + len} (${(m.frames / m.fps).toFixed(2)}s, ${m.width}x${m.height}${m.transparent ? ' with alpha' : ''}); ${reused ? 'reused' : `rendered${m.seconds ? ` in ${m.seconds}s` : ''}`} ${rel}${m.usd ? ` and ${m.usd}` : ''}.${draft ? ' This is the draft (360x450, 12 fps, 2 samples), for the storyboard and animatic: once a person has watched it and the story works, re-run with quality=final.' : ''}`);
   },
 });
 
 const stillCmd = defineCommand({
   op: 'maquette.still', group: 'media',
-  doc: 'Render a few frames of a 3D shot as PNGs into the work folder (.mgl/<project>/maquette-<shot>-<frame>.png), small and fast, to check framing and acting before maquette.shot renders it all. Changes nothing in the project.',
+  doc: 'Render a few frames of a 3D shot as PNGs into the work folder (.mgl/<project>/maquette-<shot>-<frame>.png), at draft quality (360x450, 2 samples, a few seconds each): the storyboard panels to check framing and acting before any animation is rendered. Changes nothing in the project.',
   schema: z.strictObject({ shot: z.string().min(1), frames: z.array(z.number().int().min(1)).min(1).max(12).optional(), res: z.string().regex(/^\d{2,5}x\d{2,5}$/).optional(), samples: z.number().int().min(1).max(4096).optional() }),
   primary: 'shot',
   example: { shot: 'shots/hook.py', frames: [1, 24, 48] },
@@ -210,7 +217,7 @@ const stillCmd = defineCommand({
     const frames = p.frames ?? [1];
     const { readFile, rm } = await import('node:fs/promises');
     const { join } = await import('node:path');
-    const r = await renderFrames(source, ext, { res: p.res ?? '360x450', samples: p.samples ?? 6, still: frames });
+    const r = await renderFrames(source, ext, { draft: true, ...(p.res ? { res: p.res } : {}), ...(p.samples ? { samples: p.samples } : {}), still: frames });
     const paths: string[] = [];
     try {
       for (const f of frames) {

@@ -11,16 +11,22 @@ mgl plugin test plugins/maquette
 mgl plugin trust plugins/maquette                       # after reading src/index.ts and blender/*.py
 mgl edit video.mgl.json project.set plugins='{"maquette": "^0.1.0"}'
 mgl edit video.mgl.json maquette.still shots/wave.py frames=[1,24,40]     # quick PNGs in .mgl/<name>/
-mgl edit video.mgl.json maquette.shot shots/wave.py track=V2 at=1s         # full render, added as a clip
+mgl edit video.mgl.json maquette.shot shots/wave.py track=V2 at=1s         # draft (cheap), added as a clip
+mgl edit video.mgl.json maquette.shot shots/wave.py track=V2 at=1s quality=final id=wave-final   # after approval
 mgl edit video.mgl.json maquette.shot shots/pop.py track=V3 usd=true       # also writes the stage as OpenUSD
 ```
 
+- **Cheap first, expensive last.** Everything renders as a **draft** by default: 360x450, 2 samples (denoised), no
+  motion blur, every second frame held (12 fps), about 1–2 s a frame, roughly 12x cheaper than the final. Use drafts
+  for the storyboard (`maquette.still`, a few seconds a panel) and the animatic (`maquette.shot`, then `mgl look` and a
+  draft render). Only when a person has watched the animatic and the story works, re-run each shot with
+  `quality=final` (the shot's own resolution and samples, 24 fps, motion blur).
 - `maquette.shot` renders, encodes and adds the clip. A **transparent** shot (`scene_setup(..., transparent=True)`)
   becomes ProRes 4444 with alpha (`.mov`), ready to sit over a talking head; an opaque one becomes H.264 (`.mp4`).
   Files go to `media/generated/maquette-<shot>-<hash>.*` and are **reused** until the shot, its settings or the kit
   change (the hash covers all three). `len=` trims, `fit=` sets the fit, `res=` and `samples=` override the shot.
-- `maquette.still` renders a few frames at 360x450 into the work folder: look at them before a full render. An agent
-  cannot watch the shot; it can read stills.
+- `maquette.still` renders a few draft frames into the work folder: the storyboard panels. An agent cannot watch the
+  shot; it can read stills.
 - Shots: a `.py` file with `build(m)` (m is `blender/maquette.py`), or an OpenUSD text stage `.usda` with a camera
   (convert binary stages with `usdcat in.usdc -o shot.usda`). `usd=true` exports what was rendered as `.usdc`.
 

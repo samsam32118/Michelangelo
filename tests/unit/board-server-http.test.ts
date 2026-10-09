@@ -6,7 +6,7 @@ import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { emptyProject, formatProject } from '../../src/sdk/index.js';
 import { BoardSession } from '../../src/board/model/index.js';
-import { findServer, startBoardServer, type BoardServer } from '../../src/board/server/index.js';
+import { findServer, startBoardServer, type BoardServer } from '../../src/board/server/http.js';
 
 let dir: string, srv: BoardServer;
 const boardPath = () => join(dir, 'v.board.json');
@@ -156,9 +156,35 @@ describe('board server', () => {
     const mod = await call('GET', '/app/shared/types.js');
     expect(mod.status).toBe(200);
     expect(mod.body.toString()).toContain('BOARD_FORMAT');
+    const shapes = await call('GET', '/app/shared/shapes.js');
+    expect(shapes.status).toBe(200);
+    expect(shapes.body.toString()).toMatch(/from "\.\/[a-z-]+\.js"/);
     const page = await call('GET', '/');
     expect(page.status).toBe(200);
     expect(page.headers['content-type']).toMatch(/text\/html/);
+  });
+
+  it('refuses foreign Host names (DNS rebinding) and cross-site writes', async () => {
+    const raw = (method: string, path: string, headers: Record<string, string>, body?: string) => new Promise<{ status: number; json: any }>((done, failed) => {
+      const req = request(srv.url + path, { method, headers }, (res) => { let b = ''; res.on('data', (c) => { b += c; }); res.on('end', () => done({ status: res.statusCode ?? 0, json: JSON.parse(b || 'null') })); });
+      req.on('error', failed);
+      req.end(body);
+    });
+    const evil = await raw('GET', '/api/state', { host: 'evil.example:80' });
+    expect(evil.status).toBe(403);
+    expect(evil.json.error.code).toBe('E_HOST');
+    const host = new URL(srv.url).host;
+    const op = JSON.stringify({ ops: [{ op: 'say', text: 'x' }], by: 'ai' });
+    const cross = await raw('POST', '/api/ops', { host, origin: 'http://evil.example', 'content-type': 'text/plain' }, op);
+    expect(cross.status).toBe(403);
+    expect(cross.json.error.code).toBe('E_ORIGIN');
+    expect((await raw('POST', '/api/ops', { host, origin: 'null' }, op)).status).toBe(403);
+    const same = await raw('POST', '/api/ops', { host, origin: srv.url, 'content-type': 'application/json' }, op);
+    expect(same.status).toBe(200);
+    expect((await raw('GET', '/api/state', { host: `localhost:${srv.port}` })).status).toBe(200);
+  });
+  it('refuses a busy port that was asked for', async () => {
+    await expect(startBoardServer({ file: join(dir, 'v.mgl.json'), port: srv.port, quiet: true })).rejects.toMatchObject({ code: 'E_PORT' });
   });
 
   it('removes server.json on close and findServer then finds nothing', async () => {

@@ -1,12 +1,11 @@
-/** The ladder and the Skia snapshot: stills cached by content, spend rows, a draft render, a non-blank snapshot. */
+/** The ladder: stills cached by content, spend rows recorded on misses only, a draft render with its estimate. */
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { loadImage, createCanvas } from '@napi-rs/canvas';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { emptyProject, formatProject } from '../../src/sdk/index.js';
 import { BoardSession } from '../../src/board/model/index.js';
-import { parseRange, renderLevel, renderStill, snapshotBoard, timecode } from '../../src/board/server/index.js';
+import { parseRange, renderLevel, renderStill, timecode } from '../../src/board/server/render.js';
 
 let dir: string;
 const project = () => join(dir, 'v.mgl.json');
@@ -65,30 +64,5 @@ describe('stills', () => {
     expect(parseRange('30-90')).toEqual([30, 90]);
     expect(() => parseRange('2s')).toThrow(/range/);
     expect(timecode(75, 30)).toBe('0:02.50');
-  });
-});
-
-describe('snapshot', () => {
-  it('draws a PNG that is not blank, long edge within 1568', async () => {
-    const out = join(dir, 'snap.png');
-    const r = await snapshotBoard(board(), { out });
-    expect(r.path).toBe(out);
-    expect(Math.max(r.width, r.height)).toBeLessThanOrEqual(1568);
-    const img = await loadImage(out);
-    const cv = createCanvas(img.width, img.height);
-    const ctx = cv.getContext('2d');
-    ctx.drawImage(img, 0, 0);
-    const px = ctx.getImageData(0, 0, img.width, img.height).data;
-    let ink = 0;
-    for (let i = 0; i < px.length; i += 4) if (px[i]! < 240 || px[i + 1]! < 240 || px[i + 2]! < 240) ink++;
-    expect(ink / (px.length / 4)).toBeGreaterThan(0.01);
-    expect(r.warnings ?? []).toEqual([]);
-  });
-
-  it('snapshots a frame or ids, and names a bad id', async () => {
-    const f = await snapshotBoard(board(), { frame: 'f1', out: join(dir, 'f.png') });
-    expect(f.width / f.height).toBeCloseTo(980 / 680, 1);
-    await expect(snapshotBoard(board(), { frame: 'n1' })).rejects.toMatchObject({ code: 'E_BOARD_ID' });
-    await expect(snapshotBoard(board(), { ids: ['zz'] })).rejects.toMatchObject({ code: 'E_BOARD_ID' });
   });
 });

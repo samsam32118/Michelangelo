@@ -13,7 +13,7 @@ import type { BoardFile, Outline, Shape, StillShape, Who } from '../shared/types
 import { drawBoard, shapeBounds } from '../shared/shapes.js';
 import { BoardSession, clipsAt, loadBoard, projectOutline, resolveBoardPath } from '../model/index.js';
 import { boardCacheDir, IMAGE_EXT, linkedProject, safeJoin } from './paths.js';
-import { recordSpend, renderStill, stillWidth } from './render.js';
+import { recordSpend, renderStill, stillWidth, timecode, variantProject } from './render.js';
 
 export const SNAPSHOT_MAX = 1568;
 const PAD = 40;
@@ -25,13 +25,6 @@ const union = (bs: Box[]): Box | undefined => {
   const x0 = Math.min(...bs.map((b) => b.x)), y0 = Math.min(...bs.map((b) => b.y));
   return { x: x0, y: y0, w: Math.max(...bs.map((b) => b.x + b.w)) - x0, h: Math.max(...bs.map((b) => b.y + b.h)) - y0 };
 };
-
-/** m:ss.ff of a frame at fps */
-export function timecode(frame: number, fps: number): string {
-  const s = frame / (fps || 30);
-  const m = Math.floor(s / 60);
-  return `${m}:${(s - m * 60).toFixed(2).padStart(5, '0')}`;
-}
 
 /** frame of a still's time in the outline's comp (undefined if it does not parse) */
 export function stillFrame(o: Outline, sh: StillShape): { comp: string; frame: number; fps: number } | undefined {
@@ -50,7 +43,11 @@ export async function snapshotBoard(file: string, o: SnapshotOptions = {}): Prom
   const shapes: Shape[] = board.shapes ?? [];
   const byId = new Map(shapes.map((s) => [s.id, s] as const));
   const lookup = (id: string): Shape | undefined => byId.get(id);
-  const bounds = (s: Shape): Box => shapeBounds(s, lookup);
+  const warnings: string[] = [];
+  const projectPath = linkedProject(boardPath, board.project, given);
+  let outline: Outline | null = null;
+  if (projectPath) { try { outline = await projectOutline(projectPath); } catch (e) { warnings.push(`project: ${(e as Error).message}`); } }
+  const bounds = (s: Shape): Box => shapeBounds(s, lookup, outline);
   const pick = (id: string): Shape => byId.get(id) ?? fail('E_BOARD_ID', `"${id}" is not a shape on the board.`, `use a shape id (${shapes.map((s) => s.id).slice(0, 6).join(', ') || 'the board is empty'}).`);
   let region: Box | undefined;
   if (o.frame) {
@@ -66,21 +63,17 @@ export async function snapshotBoard(file: string, o: SnapshotOptions = {}): Prom
   const inRegion = (s: Shape) => { const b = bounds(s); return b.x < r.x + r.w && b.x + b.w > r.x && b.y < r.y + r.h && b.y + b.h > r.y; };
 
   // images: stills through the still cache, image shapes from files under the board's folder
-  const warnings: string[] = [];
   const images = new Map<string, unknown>();
   const captions = new Map<string, string>();
-  const projectPath = linkedProject(boardPath, board.project, given);
-  let outline: Outline | null = null;
-  if (projectPath) { try { outline = await projectOutline(projectPath); } catch (e) { warnings.push(`project: ${(e as Error).message}`); } }
   let missMs = 0;
   const missed: string[] = [];
   for (const s of shapes.filter(inRegion)) {
     try {
       if (s.type === 'still' && projectPath && outline) {
         const at = stillFrame(outline, s);
-        if (at) captions.set(s.id, `${timecode(at.frame, at.fps)}  ${clipsAt(outline, at.comp, at.frame).join(', ')}`.trim());
+        if (at) captions.set(s.id, `${timecode(at.frame, at.fps)}  ${s.project ? `${s.project} ` : clipsAt(outline, at.comp, at.frame).join(', ')}`.trim());
         const compW = outline.comps.find((c) => c.id === at?.comp)?.size[0] ?? 1080;
-        const st = await renderStill(projectPath, { t: s.t, ...(s.comp ? { comp: s.comp } : {}), width: stillWidth(s.fidelity, compW), cacheDir: join(boardCacheDir(boardPath), 'stills') });
+        const st = await renderStill(s.project ? variantProject(boardPath, s.project) : projectPath, { t: s.t, ...(s.comp ? { comp: s.comp } : {}), width: stillWidth(s.fidelity, compW), cacheDir: join(boardCacheDir(boardPath), 'stills') });
         if (!st.cached) { missMs += st.ms; missed.push(s.id); }
         images.set(s.id, await loadImage(st.path));
       } else if (s.type === 'image') {
@@ -106,6 +99,7 @@ export async function snapshotBoard(file: string, o: SnapshotOptions = {}): Prom
     image: (id) => images.get(id),
     bounds: (id) => { const s = byId.get(id); return s ? bounds(s) : undefined; },
     stillCaption: (id) => captions.get(id),
+    outline,
   };
   drawBoard(ctx as unknown as Ctx2D, shapes.filter(inRegion), env);
   const out = resolve(o.out ?? join(boardCacheDir(boardPath), 'snapshot.png'));

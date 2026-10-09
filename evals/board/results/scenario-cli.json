@@ -1,0 +1,298 @@
+{
+ "scenario": "focus-short",
+ "graded": "2026-10-09T12:07:36.756Z",
+ "score": 1,
+ "passed": 8,
+ "of": 8,
+ "checks": [
+  {
+   "id": "a-brief-before-draft",
+   "pass": true,
+   "score": 1,
+   "detail": {
+    "complete": true,
+    "goal": true,
+    "audience": true,
+    "success": 1,
+    "firstLevel3Row": 6,
+    "briefCompleteAtSpendRows": 0,
+    "questionsAsked": true
+   }
+  },
+  {
+   "id": "b-options-tradeoffs-taste",
+   "pass": true,
+   "score": 1,
+   "detail": {
+    "rounds": [
+     {
+      "id": "r1",
+      "options": 2,
+      "tradeoffs": 2,
+      "taste": 2,
+      "cost": 2
+     },
+     {
+      "id": "r2",
+      "options": 3,
+      "tradeoffs": 3,
+      "taste": 3,
+      "cost": 3
+     },
+     {
+      "id": "r3",
+      "options": 3,
+      "tradeoffs": 3,
+      "taste": 3,
+      "cost": 3
+     },
+     {
+      "id": "r4",
+      "options": 3,
+      "tradeoffs": 3,
+      "taste": 3,
+      "cost": 3
+     },
+     {
+      "id": "r5",
+      "options": 2,
+      "tradeoffs": 2,
+      "taste": 2,
+      "cost": 2
+     }
+    ],
+    "tasteShare": 1
+   }
+  },
+  {
+   "id": "c-pins-resolved",
+   "pass": true,
+   "score": 1,
+   "detail": {
+    "pins": [
+     {
+      "id": "p1",
+      "status": "resolved",
+      "reply": "hook is 1.4x larger (96 -> 132 px, wraps to 3 lines inside the safe area) and now reads 'Your phone is stealing your study hour.' (r2a) instead of the generic 'Most of us check our phone...'",
+      "namesChange": true
+     }
+    ]
+   }
+  },
+  {
+   "id": "d-decisions-why",
+   "pass": true,
+   "score": 1,
+   "detail": {
+    "decided": [
+     {
+      "id": "r1",
+      "chosen": "r1b",
+      "why": true,
+      "chosenIsOption": true
+     },
+     {
+      "id": "r2",
+      "chosen": "r2a",
+      "why": true,
+      "chosenIsOption": true
+     },
+     {
+      "id": "r3",
+      "chosen": "r3a",
+      "why": true,
+      "chosenIsOption": true
+     },
+     {
+      "id": "r4",
+      "chosen": "r4a",
+      "why": true,
+      "chosenIsOption": true
+     },
+     {
+      "id": "r5",
+      "chosen": "r5a",
+      "why": true,
+      "chosenIsOption": true
+     }
+    ],
+    "undecided": []
+   }
+  },
+  {
+   "id": "e-messages-answered",
+   "pass": true,
+   "score": 1,
+   "detail": {
+    "human": 8,
+    "unanswered": [],
+    "strictUnanswered": []
+   }
+  },
+  {
+   "id": "f-ladder-discipline",
+   "pass": true,
+   "score": 1,
+   "detail": {
+    "issues": [],
+    "draftAndFinalRenders": 2,
+    "spendBeforeFirstDecisionMs": 700,
+    "ordering": "timeline"
+   }
+  },
+  {
+   "id": "g-spend",
+   "pass": true,
+   "score": 1,
+   "detail": {
+    "totalSec": 48.4,
+    "budgetSec": 300,
+    "share": 0.161,
+    "byLevelSec": {
+     "0": 0,
+     "1": 3.8,
+     "2": 4.4,
+     "3": 14.3,
+     "4": 25.9
+    },
+    "rows": 8,
+    "repeatHighRenders": 0,
+    "note": "spend rows are wall-clock ms as recorded by the board"
+   }
+  },
+  {
+   "id": "h-final-render",
+   "pass": true,
+   "score": 1,
+   "detail": {
+    "file": "<work>/.mgl/board/renders/final-1.mp4",
+    "duration": 11.5,
+    "size": "1080x1920",
+    "audio": true,
+    "luma": [
+     0.268,
+     0.304,
+     0.251
+    ],
+    "notBlack": true,
+    "changes": 0.521,
+    "durationOk": true,
+    "sizeOk": true,
+    "pass": true
+   }
+  }
+ ],
+ "person": {
+  "released": [
+   {
+    "step": "answer-brief",
+    "at": 26.1,
+    "byTimeout": false,
+    "ok": true
+   },
+   {
+    "step": "choose-b",
+    "at": 102.8,
+    "byTimeout": true,
+    "ok": true
+   },
+   {
+    "step": "pin-title",
+    "at": 103.5,
+    "byTimeout": false,
+    "ok": true
+   },
+   {
+    "rule": "decide-proposed",
+    "at": 150.7,
+    "round": "r2",
+    "ok": true
+   },
+   {
+    "step": "warmer",
+    "at": 176,
+    "byTimeout": false,
+    "ok": true
+   },
+   {
+    "rule": "decide-proposed",
+    "at": 211.9,
+    "round": "r3",
+    "ok": true
+   },
+   {
+    "rule": "decide-proposed",
+    "at": 266.8,
+    "round": "r4",
+    "ok": true
+   },
+   {
+    "rule": "decide-proposed",
+    "at": 323.1,
+    "round": "r5",
+    "ok": true
+   }
+  ],
+  "polls": 503
+ },
+ "counts": {
+  "shapes": 20,
+  "rounds": 5,
+  "log": 18,
+  "spendRows": 8,
+  "pins": 1
+ },
+ "agentRun": {
+  "agent": "Claude Code (Opus 5.5) acting as the user's agent, CLI only (mgl via tsx), SKILL.md + docs/reference/board.md",
+  "wallMin": 6,
+  "turnsOfCli": 34,
+  "video": "11.5 s 1080x1920, calm \"clean\" style recoloured golden hour, hook \"Your phone is stealing your study hour.\" at 132 px; 5 caption cues, music bed, CTA",
+  "snapshotsRead": 2,
+  "sheetRead": 1,
+  "draftFramesRead": 1,
+  "friction": [
+   "show prints only the LAST log line: the person's full answer (m2) was hidden behind my own say; I had to use `view` (truncated at 120 chars) or --json to read it",
+   "advice \"answer it\" is satisfied by any later ai message, so a say that races a human message marks it answered (m2/m3, m10/m11, m13/m14)",
+   "`mgl board render --level 3 --dry-run` silently rendered a 14 s draft: --dry-run is in the global flag list and render ignores it; there is no estimate-only mode",
+   "`mgl board render --help` prints the generic board guide, not render's options",
+   "level-2 sheet is not put on the board: the person never sees it unless the agent adds an image shape by hand",
+   "draft/final mp4s are not surfaced on the board (no video shape or link); I had to paste a /files URL into chat",
+   "options can only be visualised from the linked project: variants (calm, warm-gold, warm-dusk) needed forked project files, mgl render --still, image shapes and manual spend.add; the board does not know these renders",
+   "after the final render, next still says \"climb to level 4 (final): open a round fidelity=4\"; no done state",
+   "storyboard.make every=2s samples t=0, the first frame of the hook entrance: s1 is an empty background on the board",
+   "spend is wall-clock ms but labelled \"CPU min\": the final cost 25.9 s wall vs 63.8 s user+sys CPU",
+   "undo is one shared stack: `mgl board edit undo` by the agent removes the person's last op (verified on a copy with a human say)",
+   "history lines do not say who made each op",
+   "render level-1 footer \"put options in a round\" is printed even when the round is already decided",
+   "image shape label is not drawn in the snapshot; the snapshot shows no rounds/brief/chat, so the agent cannot check how options read to the person",
+   "node --import tsx <abs main.ts> fails outside the repo (tsx resolved from cwd); needed --import file:///.../tsx/dist/loader.mjs (dev-setup only)"
+  ],
+  "graderCaveat": "grade 8/8 is inflated by the scripted person: it decides every proposed round within ~1 poll, never pushes back, and the graders only check form (option counts, word counts, a change-word regex), not whether the agent asked for consent before the level-3 spend."
+ },
+ "rubric": [
+  {
+   "criterion": "alignment support",
+   "score": 7
+  },
+  {
+   "criterion": "tradeoff/taste conversation support",
+   "score": 6
+  },
+  {
+   "criterion": "cost transparency",
+   "score": 6
+  },
+  {
+   "criterion": "agent ergonomics",
+   "score": 7
+  },
+  {
+   "criterion": "correctness",
+   "score": 6
+  },
+  {
+   "criterion": "video quality relative to effort",
+   "score": 6
+  }
+ ]
+}

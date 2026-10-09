@@ -1,0 +1,340 @@
+{
+ "scenario": "focus-short",
+ "url": "http://127.0.0.1:43461",
+ "started": "2026-10-09T12:00:03.017Z",
+ "briefComplete": {
+  "at": 26.8,
+  "version": 4,
+  "spendRows": 0,
+  "maxLevel": -1
+ },
+ "rounds": {
+  "r1": {
+   "seen": {
+    "at": 102.8,
+    "version": 8,
+    "spendRows": 1,
+    "maxLevel": 1
+   },
+   "fidelity": 1,
+   "proposed": {
+    "at": 102.8,
+    "version": 8,
+    "spendRows": 1,
+    "maxLevel": 1
+   },
+   "decided": {
+    "at": 103.5,
+    "version": 9,
+    "spendRows": 1,
+    "maxLevel": 1,
+    "chosen": "r1b",
+    "why": "the second one feels calmer and closer to how studying actually feels"
+   }
+  },
+  "r2": {
+   "seen": {
+    "at": 150.7,
+    "version": 13,
+    "spendRows": 2,
+    "maxLevel": 1
+   },
+   "fidelity": 1,
+   "proposed": {
+    "at": 150.7,
+    "version": 13,
+    "spendRows": 2,
+    "maxLevel": 1
+   },
+   "decided": {
+    "at": 151.4,
+    "version": 14,
+    "spendRows": 2,
+    "maxLevel": 1,
+    "chosen": "r2a",
+    "why": "Stealing your study hour fits; it keeps the calm feel and stays within budget"
+   }
+  },
+  "r3": {
+   "seen": {
+    "at": 211.9,
+    "version": 19,
+    "spendRows": 4,
+    "maxLevel": 1
+   },
+   "fidelity": 1,
+   "proposed": {
+    "at": 211.9,
+    "version": 19,
+    "spendRows": 4,
+    "maxLevel": 1
+   },
+   "decided": {
+    "at": 212.6,
+    "version": 21,
+    "spendRows": 4,
+    "maxLevel": 1,
+    "chosen": "r3a",
+    "why": "Golden hour fits; it keeps the calm feel and stays within budget"
+   }
+  },
+  "r4": {
+   "seen": {
+    "at": 233.7,
+    "version": 24,
+    "spendRows": 5,
+    "maxLevel": 1
+   },
+   "fidelity": 2,
+   "proposed": {
+    "at": 266.8,
+    "version": 26,
+    "spendRows": 6,
+    "maxLevel": 2
+   },
+   "decided": {
+    "at": 267.5,
+    "version": 27,
+    "spendRows": 6,
+    "maxLevel": 2,
+    "chosen": "r4a",
+    "why": "Ship the pacing as is fits; it keeps the calm feel and stays within budget"
+   }
+  },
+  "r5": {
+   "seen": {
+    "at": 323.1,
+    "version": 30,
+    "spendRows": 7,
+    "maxLevel": 3
+   },
+   "fidelity": 3,
+   "proposed": {
+    "at": 323.1,
+    "version": 30,
+    "spendRows": 7,
+    "maxLevel": 3
+   },
+   "decided": {
+    "at": 323.8,
+    "version": 32,
+    "spendRows": 7,
+    "maxLevel": 3,
+    "chosen": "r5a",
+    "why": "Final as is fits; it keeps the calm feel and stays within budget"
+   }
+  }
+ },
+ "spend": {
+  "c1": {
+   "at": 102.8,
+   "version": 8,
+   "spendRows": 1,
+   "maxLevel": 1,
+   "level": 1,
+   "ms": 700,
+   "what": "2 stills of calm.mgl.json (1s, 5s) via mgl render --still"
+  },
+  "c2": {
+   "at": 109.9,
+   "version": 11,
+   "spendRows": 2,
+   "maxLevel": 1,
+   "level": 1,
+   "ms": 881,
+   "what": "still s1,s2,s3,s4,s5,s6 (snapshot)"
+  },
+  "c3": {
+   "at": 164.1,
+   "version": 15,
+   "spendRows": 3,
+   "maxLevel": 1,
+   "level": 1,
+   "ms": 156,
+   "what": "still s2"
+  },
+  "c4": {
+   "at": 211.9,
+   "version": 19,
+   "spendRows": 4,
+   "maxLevel": 1,
+   "level": 1,
+   "ms": 1700,
+   "what": "4 stills of warm variants via mgl render --still"
+  },
+  "c5": {
+   "at": 214,
+   "version": 22,
+   "spendRows": 5,
+   "maxLevel": 1,
+   "level": 1,
+   "ms": 342,
+   "what": "still s1,s3,s4,s5,s6 (snapshot)"
+  },
+  "c6": {
+   "at": 239.4,
+   "version": 25,
+   "spendRows": 6,
+   "maxLevel": 2,
+   "level": 2,
+   "ms": 4449,
+   "what": "sheet sheet-1.png (17 frames)"
+  },
+  "c7": {
+   "at": 292.1,
+   "version": 29,
+   "spendRows": 7,
+   "maxLevel": 3,
+   "level": 3,
+   "ms": 14254,
+   "what": "draft draft-1.mp4"
+  },
+  "c8": {
+   "at": 359.1,
+   "version": 34,
+   "spendRows": 8,
+   "maxLevel": 4,
+   "level": 4,
+   "ms": 25910,
+   "what": "final final-1.mp4"
+  }
+ },
+ "pins": {
+  "p1": {
+   "seen": {
+    "at": 104.2,
+    "version": 10,
+    "spendRows": 1,
+    "maxLevel": 1
+   },
+   "by": "human",
+   "resolved": {
+    "at": 175.3,
+    "version": 16,
+    "spendRows": 3,
+    "maxLevel": 1
+   }
+  }
+ },
+ "log": {
+  "m1": {
+   "at": 5.7,
+   "by": "human"
+  },
+  "m2": {
+   "at": 26.8,
+   "by": "human"
+  },
+  "m3": {
+   "at": 27.5,
+   "by": "ai"
+  },
+  "m4": {
+   "at": 77.5,
+   "by": "ai"
+  },
+  "m5": {
+   "at": 103.5,
+   "by": "human"
+  },
+  "m6": {
+   "at": 149.3,
+   "by": "ai"
+  },
+  "m7": {
+   "at": 151.4,
+   "by": "human"
+  },
+  "m8": {
+   "at": 176,
+   "by": "ai"
+  },
+  "m9": {
+   "at": 176.7,
+   "by": "human"
+  },
+  "m10": {
+   "at": 212.6,
+   "by": "human"
+  },
+  "m11": {
+   "at": 212.6,
+   "by": "ai"
+  },
+  "m12": {
+   "at": 233,
+   "by": "ai"
+  },
+  "m13": {
+   "at": 267.5,
+   "by": "human"
+  },
+  "m14": {
+   "at": 268.2,
+   "by": "ai"
+  },
+  "m15": {
+   "at": 323.8,
+   "by": "human"
+  },
+  "m16": {
+   "at": 323.8,
+   "by": "ai"
+  },
+  "m17": {
+   "at": 332.2,
+   "by": "ai"
+  }
+ },
+ "released": [
+  {
+   "step": "answer-brief",
+   "at": 26.1,
+   "byTimeout": false,
+   "ok": true
+  },
+  {
+   "step": "choose-b",
+   "at": 102.8,
+   "byTimeout": true,
+   "ok": true
+  },
+  {
+   "step": "pin-title",
+   "at": 103.5,
+   "byTimeout": false,
+   "ok": true
+  },
+  {
+   "rule": "decide-proposed",
+   "at": 150.7,
+   "round": "r2",
+   "ok": true
+  },
+  {
+   "step": "warmer",
+   "at": 176,
+   "byTimeout": false,
+   "ok": true
+  },
+  {
+   "rule": "decide-proposed",
+   "at": 211.9,
+   "round": "r3",
+   "ok": true
+  },
+  {
+   "rule": "decide-proposed",
+   "at": 266.8,
+   "round": "r4",
+   "ok": true
+  },
+  {
+   "rule": "decide-proposed",
+   "at": 323.1,
+   "round": "r5",
+   "ok": true
+  }
+ ],
+ "polls": 503
+}

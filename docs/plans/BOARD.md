@@ -5,7 +5,7 @@ were taken without asking.
 
 ## 1. Why
 
-Rendering video costs CPU minutes, and an agent can't watch video. Today an agent guesses what the person wants,
+Rendering video costs minutes of rendering, and an agent can't watch video. Today an agent guesses what the person wants,
 renders a full video, and learns it guessed wrong. The board is an infinite canvas, served by `mgl board` and
 opened in the person's own browser, where a person and an agent:
 
@@ -21,7 +21,7 @@ opened in the person's own browser, where a person and an agent:
 4. **point at things**. The person pins a comment on a still at a time. The agent reads it with the clip ids
    visible at that time, and resolves it with a reply that says what changed.
 
-The outcome we judge it by: videos that match what the person meant, with taste, for less CPU and fewer wasted
+The outcome we judge it by: videos that match what the person meant, with taste, for less render time and fewer wasted
 renders (DESIGN §17).
 
 The board is a **clean-room** build inspired by infinite-canvas whiteboards such as tldraw. Only the concepts are
@@ -37,7 +37,9 @@ the borrowed ideas.
   `snapshot` (the snapshot is drawn by Skia, so the agent can look at the board as a PNG). **(R)**: this reading
   of "no browser" (the package never runs one) is recorded in DESIGN §18.
 - **No new runtime dependencies.** The page is hand-written TypeScript compiled to ESM with no bare imports and
-  served as-is: no bundler, no framework.
+  served as-is: no framework. The one build-time tool is esbuild (a pinned devDependency): `npm run build` also
+  bundles the page into one classic script, `dist/board/board.bundle.js`, which `mgl board export` inlines (§8.1).
+  The package ships the bundle, not esbuild.
 - **One API, three doors.** One set of board ops (§5), reached by `mgl board edit` (CLI), `POST /api/ops`
   (HTTP, which the page uses), and `mgl.op(...)` in the browser console. Ops are validated and undoable in the
   same way as project commands.
@@ -72,8 +74,12 @@ the borrowed ideas.
 
 - Tables (`shapes`, `rounds`, `log`, `spend`) hold one entity per line. `brief` is a single line. Order in
   `shapes` is the z-order (later = on top).
-- The `project` path is relative to the board file. A board without a project is allowed: sketching before any
-  media exists.
+- `project` is the linked project file, as a path relative to the board file. It is written when the board is
+  created through its project (`mgl board show video.mgl.json` writes `"project": "video.mgl.json"`), and stills,
+  the timeline strip, pin contexts and `/api/still` render from it. No op changes it: edit the file by hand to
+  re-link the board (a running server picks the change up). Without it, a `video.mgl.json` next to
+  `video.board.json` is used. A board without a project is allowed: sketching before any media exists. A still or
+  round option may name a sibling project of its own (`project`, a variant; see the reference's "Variants").
 - Ids follow the project's rules (`[a-z0-9][a-z0-9_-]*`, readable, generated short: `n3`, `s4`, `r2`).
 - Unknown keys are errors with did-you-mean, the same as in the project file.
 
@@ -106,7 +112,9 @@ are added by registering one more module.
 
 The brief has these fields, all optional strings or lists of strings: `goal`, `audience`, `platform`, `length`,
 `tone[]`, `references[]` (shape ids or paths), `mustHave[]`, `avoid[]`, `success[]`, `questions[]` (open
-questions the agent is asking the person), and `budget: {cpuMin?, maxLevel?}`.
+questions the agent is asking the person), and `budget: {cpuMin?, maxLevel?}`. **`cpuMin` is wall-clock minutes of
+rendering** (the sum of the `ms` of the `spend` rows), not CPU time: a 4-core draft uses more CPU time than it takes.
+The key keeps its first name for compatibility.
 
 ### 3.3 Rounds
 
@@ -126,13 +134,17 @@ making it real at the next level), and `taste` (why it is good, not just correct
 | 4 | final | the final render | ≈ 1–3× real time |
 
 Every render the board makes (a still, a sheet, a draft, a final) appends a `spend` row with the measured
-milliseconds. Before levels 3 and 4, `mgl board render` prints the estimate first, using the same estimator as
+wall-clock milliseconds; the budget (`budget.cpuMin`) is compared with their sum, in minutes. Before levels 3 and 4, `mgl board render` prints the estimate first, using the same estimator as
 `mgl render`.
 
 ## 5. Ops
 
 Ops are plain JSON objects (`{"op": "shape.add", ...}`), validated with zod, applied atomically in a batch, and
-undoable (`.mgl/board-history.jsonl`, using the same scheme as the project history).
+undoable (`.mgl/board-history.jsonl`, using the same scheme as the project history). The history is shared by both
+parties and every step records who made it (`by`). **Undo is by party**: `undo` (CLI, `mgl.undo()`, `POST /api/undo`
+with `by`) takes back the caller's own latest step; when the newest step is the other party's, it is refused
+(`E_UNDO_OTHER`) unless forced (`--force`, `mgl.undo(true)`, `"force": true`). `mgl board edit <file> history` lists
+the steps with who made them. Spend rows are a ledger, not undo steps.
 
 | op | fields |
 |---|---|
@@ -170,6 +182,7 @@ to `ai` (`--by human` overrides).
 | `mgl board say <file> "text"` | a `say` op; it also appears as a toast on the page |
 | `mgl board snapshot <file> [-o board.png] [--frame id] [--ids a,b]` | draws the board (or a frame) with Skia, with stills rendered, long edge ≤ 1568 px |
 | `mgl board export <file> [-o board.html]` | a self-contained, offline page with the board and its stills embedded, for browser panes that cannot reach the server and for Artifacts (§8.1) |
+| `mgl board help <sub>`, `mgl board <sub> --help` | one subcommand's usage, flags and an example |
 | `mgl board render <file> --level 1..4 [--ids s1,s2] [--range a-b]` | climbs the ladder: renders stills, a sheet (look), a draft or the final; records spend; prints the estimate first for 3–4 |
 
 `<file>` may be the project file or the board file. `mgl board show video.mgl.json` uses `video.board.json`
@@ -179,7 +192,7 @@ and creates it (with an empty brief) if it does not exist.
 
 | route | |
 |---|---|
-| `GET /` | the page |
+| `GET /` | the page, with a strict `Content-Security-Policy` (§8.1) |
 | `GET /app/<path>.js` | page modules (compiled from `src/board/client` and `src/board/shared`) |
 | `GET /api/state` | `{board, version, project: Outline \| null, view}` |
 | `POST /api/ops` | `{ops, by}` → `{ok, version, changed[]}` or `{ok: false, error: {code, message, fix}}` (status 400) |
@@ -276,23 +289,34 @@ and take screenshots only sometimes. The page must work for all of them:
   text as well as printing it. `document.title` shows the board name and the count of open items ("Board ·
   focus-short · 2 open pins"), which helps an agent find the right tab.
 - **No external requests.** There are no CDNs and no web fonts, and only system font stacks are used. The page
-  works offline and under a strict CSP: no `eval`, no `new Function`, no inline event-handler attributes.
+  works offline and under a strict CSP: no `eval`, no `new Function`, no inline scripts or event-handler
+  attributes. The server sends one with the page: `default-src 'none'; script-src 'self'; style-src 'self'
+  'unsafe-inline'; img-src 'self' data: blob:; media-src 'self'; connect-src 'self'; font-src 'self'; base-uri 'none';
+  form-action 'none'; object-src 'none'; frame-ancestors 'self' http(s)://127.0.0.1:* http(s)://localhost:*` plus
+  the `--allow-host` names.
 - **Small panes.** The layout works from 360 px wide. Below 900 px the side panel becomes a bottom sheet,
   and the tool bar wraps. Touch and pen input go through pointer events.
 - **Defensive platform use.** `localStorage` is wrapped in try/catch. If `EventSource` fails or is blocked by
   a proxy, the page falls back to polling `GET /api/state?since=<version>` every 1 s. There are no popups and
-  no `alert()` or `confirm()` (they block automation). The page works inside an iframe.
+  no `alert()` or `confirm()` (they block automation). The page works inside an iframe of a loopback page (any
+  port) or an allow-listed name; other sites cannot frame it (`frame-ancestors`), which keeps clickjacking out.
 - **Remote panes cannot reach the agent's localhost.** A browser pane on the person's computer cannot open a
   server that a cloud session started. So there are two more ways in:
   1. `mgl board serve --host 0.0.0.0 --allow-host <name>` for tunnels and port forwarding. Requests whose
      `Host` header is not loopback or allow-listed are refused (this also prevents DNS rebinding), and
      mutating requests from an unexpected `Origin` are refused.
-  2. `mgl board export <file> [-o board.html]` writes **one self-contained HTML file**: all JS and CSS
-     inline, stills embedded as data URIs (≤ 8 MB total), and the board state embedded. It can be published
-     as an Artifact or opened from disk. With no server, the page runs **detached**: edits are applied
-     locally and queued, `mgl.pending()` returns the queued ops, and a "Copy changes" button copies them as
-     JSONL. The person pastes them back, or the agent reads them through the browser, and the agent applies
-     them with `mgl board edit <file> --batch changes.jsonl --by human`.
+  2. `mgl board export <file> [-o board.html]` writes **one self-contained HTML file**: the CSS and the whole
+     page as **one classic inline script** (the IIFE bundle `dist/board/board.bundle.js`, built by
+     `scripts/build-board-bundle.mjs`; from a source checkout it is bundled on the fly), stills embedded as
+     data URIs (≤ 8 MB total), and the board state embedded. No module scripts, no import map, no data: or
+     blob: scripts: an Artifact's CSP (`script-src 'unsafe-inline'`, `img-src data: blob:`, nothing else)
+     runs it, in a sandboxed frame without storage or clipboard. It can be published as an Artifact or opened
+     from disk; it makes no requests. With no server, the page runs **detached**: edits are applied locally
+     and queued, `mgl.pending()` returns the queued ops, and a "Copy changes" button shows them as JSONL in a
+     box (and copies them where the clipboard is allowed). The outline (#mgl-outline) lists the same JSONL,
+     so an agent that reads the page as text gets it. The person pastes them back, or the agent reads them
+     through the browser, and the agent applies them with
+     `mgl board edit <file> --batch changes.jsonl --by human`.
 
 ## 9. Code layout (ownership: `src/board/`, plus `src/cli/board.ts`)
 
@@ -313,6 +337,11 @@ src/cli/board.ts    the `board` verb
 - **Browser end to end** (`evals/board/e2e.mjs`, not a package dependency: it uses a Playwright found on the
   machine and the preinstalled Chromium). It drives the page with the mouse and keyboard as a person would,
   and through `window.mgl` as an agent would, and checks that both doors and the CLI agree.
+- **Agent browsers** (`evals/board/agent-browsers.mjs`, same rules): the page as `get_page_text` and an
+  accessibility tree read it, form filling by label, Choose by role, 360/375 px panes, polling without
+  `EventSource`, no external requests, dialogs or console errors, framing, the CSP, the exported page from `file://`
+  with the network cut and under an Artifact-like CSP in a sandboxed frame (its queued ops applied with
+  `mgl board edit --batch --by human`), and `--host 0.0.0.0 --allow-host`.
 - **Collaboration scenarios** (`evals/board/scenarios/`): a brief plus a scripted person (their answers and
   pins live in the fixture and are released as the agent asks). Graders score alignment (brief complete
   before level 3, every round with ≥ 2 options with tradeoffs, every pin resolved with a reply, decisions

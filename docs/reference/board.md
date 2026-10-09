@@ -1,6 +1,6 @@
 # The board: deciding a video together before rendering it
 
-Rendering costs CPU minutes, and an agent cannot watch video. The board is an infinite canvas next to the project
+Rendering costs minutes, and an agent cannot watch video. The board is an infinite canvas next to the project
 (`video.board.json` beside `video.mgl.json`) where the person and the agent agree on what the video should be, and
 spend renders only on what they have agreed. It works without a browser (`mgl board show`, `edit`, `snapshot`);
 `mgl board serve` adds a page for the person, opened in their own browser. Design: `docs/plans/BOARD.md`.
@@ -22,9 +22,10 @@ spend renders only on what they have agreed. It works without a browser (`mgl bo
    budget, renders nothing and records no spend. Tell the person the cost, then render.
 7. **Answer by id.** `show` lists every message of the person no agent message has answered. A reply typed within a
    second of their message is not counted as an answer; name what you answer: `say "..." re=m4` (or `re=m2,m4`).
-8. **One shared history, two parties.** `undo` takes back your own latest step; a step the person made is refused
-   (`E_UNDO_OTHER`) unless `--force`. `edit history` shows who made each step, and `show` lists what the person
-   changed since your last op.
+8. **One shared history, two parties (undo by party).** Every step records who made it. `undo` takes back your own
+   latest step; when the newest step is the person's, it is refused (`E_UNDO_OTHER`) unless `--force` (the page's
+   undo works the same way for the person). `edit history` shows who made each step, and `show` lists what the
+   person changed since your last op.
 
 `mgl board show` ends with **next:** lines (ask / warn / do / wait) computed from the board: follow them.
 
@@ -38,10 +39,15 @@ spend renders only on what they have agreed. It works without a browser (`mgl bo
 | 3 | draft | a half-size draft render of a range or the whole video | ≈ 0.3–2.5× real time |
 | 4 | final | the final render | ≈ 1–3× real time |
 
+The board's `project` field links it to its project (a path relative to the board file, written when the board is
+created through `video.mgl.json`; edit it by hand to re-link). Stills, the timeline strip and pin contexts render from
+it; a board without one is for sketching.
+
 Stills are cached by project content (the project file and the size and time of every media file it references),
 comp, frame and width, so asking again is free until something they show changes. Spend rows are a ledger: they
-are not undo steps, and undo keeps them. Spend is measured wall-clock render time, so the budget
-(`budget.cpuMin`) reads as **render minutes**: on a 4-core machine a draft uses more CPU time than it takes.
+are not undo steps, and undo keeps them. Spend is measured **wall-clock** render time (`ms` per row), so the budget
+key `budget.cpuMin` (named so for compatibility) means **wall-clock minutes of rendering**, not CPU minutes: on a
+4-core machine a draft uses more CPU time than it takes.
 
 Every rung that was paid for shows on the board: `render --level 2` adds the contact sheet as an image (labelled
 with its QA summary and the round), and levels 3 and 4 add a poster still labelled with
@@ -68,7 +74,7 @@ file. Every subcommand takes `--json`; `mgl board` alone prints the guide.
 | `mgl board snapshot <file> [-o b.png] [--frame id] [--ids a,b]` | the board as a PNG drawn by Skia, long edge ≤ 1568 px |
 | `mgl board export <file> [-o b.html]` | one offline HTML file, stills embedded; edits there are queued as JSONL |
 | `mgl board render <file> --level 1..4 [--ids s1,s2] [--range a-b] [--dry-run] [--force]` | climbs the ladder; prints the estimate first for 3–4; records spend; `--dry-run` prices it only. Refused without `--force`: 3–4 before goal and success, a level above `budget.maxLevel`, an estimate over the budget left |
-| `mgl board help <sub>` | one subcommand's flags and an example |
+| `mgl board help <sub>` (or `mgl board <sub> --help`) | one subcommand's flags and an example |
 
 Ops (`k=v` like `mgl edit`; dotted keys nest, `ids`/`shapes`/`tags` split on commas, `null` removes a key):
 `shape.add <type>`, `shape.set <id>`, `shape.remove <id>`, `shape.move ids= dx= dy=`, `shape.order ids= to=`,
@@ -135,7 +141,7 @@ mgl board focus video.mgl.json s1
 
 | route | |
 |---|---|
-| `GET /` | the page; `GET /app/{client,shared}/<name>.js` its modules |
+| `GET /` | the page (with a strict `Content-Security-Policy`); `GET /app/{client,shared}/<name>.js` its modules |
 | `GET /api/state` | `{board, version, project, view, advice}` |
 | `POST /api/ops` | `{ops, by}` (`by` defaults to `ai`; the page sends `human`) → `{ok, version, changed, created}`, or `{ok: false, error: {code, message, fix}}` (400; the browser console also logs that 400 as a network line) |
 | `POST /api/undo`, `/api/redo` | `{n, by?, force?}`; with `by`, undo refuses the other party's step (`E_UNDO_OTHER`) |
@@ -151,7 +157,8 @@ come from the page's own origin, and a request another site's page makes (`Sec-F
 `same-site`, even a GET such as an `<img>`) is refused, except navigating to `/`. `--host 0.0.0.0` has no
 authentication: use it only on a network you trust; the URL printed (and in `server.json`) stays
 `http://127.0.0.1:<port>`, and from another machine you use this machine's name or your tunnel's, allowed with
-`--allow-host`. A stopped server (Ctrl-C, `kill`) exits 0.
+`--allow-host`. The page carries a strict CSP (scripts and requests from the server only, no eval) and may be framed
+only by loopback pages (any port) and `--allow-host` names. A stopped server (Ctrl-C, `kill`) exits 0.
 
 The page: tools `V` select, `H` hand, `N` note, `T` text, `R` rect, `O` ellipse, `A` arrow, `D` draw, `F` frame,
 `S` still at the playhead, `P` pin; a right panel (Brief, Rounds with **Choose**, Chat, Next), the ladder and spend
@@ -179,6 +186,31 @@ await mgl.op({op: 'shape.set', id: 'n1', props: {color: 'green'}})
 Pages read by text (`get_page_text`, accessibility trees) get the whole board from a hidden
 `#mgl-outline` section: every shape, the brief, rounds and next advice. Controls carry `data-mgl` names
 (`tool-note`, `brief-goal`, `choose-r1b`).
+
+## Using the board from Claude Code and Codex
+
+Which way in depends on whether the person's browser can reach the machine `mgl` runs on.
+
+- **Local session** (the agent runs on the person's computer): `mgl board serve <file> --port 0 --json > serve.json &`,
+  give the person the URL (or open it in your browser pane), and drive it: `mgl board focus <file> s3` moves their
+  view to what you are talking about, `mgl board view` tells you what they are looking at, and every CLI edit shows
+  on the page at once.
+- **Cloud session** (the Claude app's browser pane, or any browser on the person's computer, cannot reach a server
+  the session started): `mgl board export <file> -o board.html` and publish the file as an Artifact, or send it.
+  It is one offline page (one inline script, stills embedded, no requests), and it runs under an Artifact's CSP. The
+  person's edits there queue: they press **Copy changes** and paste the JSONL to you, or you read it from the page.
+  Save it as `changes.jsonl` and apply it as theirs: `mgl board edit <file> --batch changes.jsonl --by human`. Then
+  export again to show the result.
+- **Console door.** In any page with JavaScript access, `mgl.help()` returns the API as text; `await mgl.state()`
+  gives the whole board; on an exported page `await mgl.pending()` returns the queued ops (`[{op, by}]`).
+- **Reading the page as text.** `get_page_text`, `read_page` or `document.body.innerText` include the hidden
+  `#mgl-outline` section: every shape (type, id, text, who, frame; stills with time and visible clips), open pins
+  with their time, the brief, rounds with options and tradeoffs, the **next** advice, and, on an exported page, the
+  queued changes as JSONL. `document.title` names the board and its open items (`Board · video · 1 open pin · 1 to
+  choose`). Controls have labels (`getByLabel('Goal')`, `getByRole('button', {name: /choose/i})`) and `data-mgl`
+  names.
+- The page needs no `EventSource` (it polls when there is none), shows no dialogs, works from 360 px wide, and
+  works in an iframe of a loopback page. `evals/board/agent-browsers.mjs` checks all of this in Chromium.
 
 ## For Codex and other agents
 

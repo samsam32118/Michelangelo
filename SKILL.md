@@ -205,10 +205,36 @@ Also `create(file, {preset})`, `p.dryRun(cmd)`, `p.undo()`, `p.look()`,
 `p.render(out, { quality: 'draft' })` (renders unsaved `{ save: false }` edits too), `p.check()`,
 `p.services.analyzeLevels` / `measureText`. Guide: `mgl docs sdk`.
 
+## Working with a person on the board
+
+When a person is making the video with you, agree on it on the board before rendering (renders cost minutes;
+you cannot watch video). Guide: `mgl board`; reference: `mgl docs board`.
+
+1. **Brief first.** Ask for the goal, audience and what success looks like (also tone, must-haves, things to
+   avoid, a render-minute budget): `mgl board edit v.mgl.json brief.set goal="..." audience="..." success="..." budget.cpuMin=5`.
+   Put what you need to know in `brief.questions`. No draft or final render before goal and success exist.
+2. **Rounds with 2–3 options.** `round.open "pick the opening" fidelity=1`, then per option `round.option r1
+   title=... tradeoffs=... cost=... taste=... shapes=s1`: say what each costs, risks and gives up, and why it has
+   taste, not only why it is correct. Make cheap material first (notes, `storyboard.make every=2s` stills;
+   a variant as a sibling project: `still.add 1s project=calm.mgl.json`).
+3. **Wait for the person.** A proposed round is theirs to decide; record it: `round.decide r1 chosen=r1b why=...`.
+4. **Climb one rung after a decision**: 0 sketch → 1 stills → 2 sheet (`mgl board render <file> --level 2`) →
+   3 draft → 4 final. Price each climb first (`render --level 3 --dry-run`), tell them the cost and what it will
+   show, and render only after they agree.
+5. **Pins**: fix, then `pin.resolve p1 reply="what changed"`.
+6. **Show the spend** against the budget when you report (`mgl board show`).
+7. **Answer every unanswered message** `show` lists: `say "..." re=m4`. `undo` only takes back your own steps.
+
+Run `mgl board show <file>` at the start of every turn and do what its **next:** lines say (ask / warn / do /
+wait). Look at the board with `mgl board snapshot <file>` (open the PNG). Give the person the page: start
+`mgl board serve <file> --port 0 --json > serve.json &` in the background, read `url` from serve.json and send it;
+your edits then appear live; `mgl board view` shows what they look at. If their browser cannot reach you,
+`mgl board export <file>` writes an offline HTML file; apply their copied changes with `--batch changes.jsonl --by human`.
+
 ## More
 
 **Recipes** (multicam sync, screencast zoom + redaction, podcast audiogram, chapters, multi-platform delivery,
 split screen, credits, loops with alpha, review copies): `mgl docs recipes`.
-`mgl docs <topic>`: recipes, format, commands, editing (trim/split/ripple/slip/slide/roll/speed/freeze/punch-in),
+`mgl docs <topic>`: recipes, board, format, commands, editing (trim/split/ripple/slip/slide/roll/speed/freeze/punch-in),
 text-and-captions, audio, effects, templates, rendering, look-and-qa, plugins, sdk, errors.
 `mgl doctor` reports ffmpeg, fonts, cores, disk and gaps with fixes.

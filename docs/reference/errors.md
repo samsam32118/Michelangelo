@@ -13,6 +13,9 @@ exception is `E_INTERNAL` (exit 1). Below: each code with one example message an
 | `E_USAGE` | 1 | a verb or its arguments are wrong | the usage line printed with the error (mgl help) |
 | `E_ALPHA` | 1 | ProRes … cannot carry an alpha channel. | use prores=4444 (or 4444xq) with alpha, or drop alpha. |
 | `E_ARG` | 1 | … takes a number of steps, got "…". | mgl edit … 2 |
+| `E_BOARD_ID` | 1 | "…" is not a still on the board. | use the id of a still shape (…). |
+| `E_BRIEF` | 1 | a … render needs the brief's … first (they say what a good result is). | agree them with the person: mgl board edit … brief.set goal="..." success="..." (or --force) |
+| `E_BUDGET` | 1 | level … (…) is above the brief's budget.maxLevel … (…). | agree it with the person first (brief.set budget.maxLevel=…), or --force. |
 | `E_BUS_CYCLE` | 1 | bus "…" routes or ducks in a cycle. | check the buses table: "to" and "duck.by" must not loop back. |
 | `E_BUSY` | 1 | a render of … is already running (pid …, …%). | wait for it (mgl render --status) or stop it with kill …. |
 | `E_CAPTIONS` | 1 | "…" is not a caption timestamp. | use hh:mm:ss,mmm (SRT) or hh:mm:ss.mmm / mm:ss.mmm (VTT). |
@@ -20,6 +23,7 @@ exception is `E_INTERNAL` (exit 1). Below: each code with one example message an
 | `E_CLIP_SOURCE` | 1 | clip "…" has … sources (…); a clip shows exactly one thing. | keep one of them; put the others in separate clips. |
 | `E_COMMAND` | 1 | … is empty. | give one command per line, or a JSON array of commands. |
 | `E_CYCLE` | 1 | style "…" would inherit from itself (via "…"). | choose another base. |
+| `E_DETACHED` | 1 | … | detached pages apply simple ops only; run mgl board serve for the rest. |
 | `E_DOWNLOAD` | 2 | could not download …: …. | check network access (HTTPS_PROXY/NO_PROXY are honoured, extra CAs via NODE_EXTRA_CA_CERTS), or install ffmpeg ≥ 6 yourself and set MGL_FFMPEG. |
 | `E_DUPLICATE_ID` | 1 | clip "…" already exists. | choose another id, or omit it. |
 | `E_EMPTY` | 1 | comp "…" is empty (length 0). | add clips, or give the comp a "length". |
@@ -32,11 +36,13 @@ exception is `E_INTERNAL` (exit 1). Below: each code with one example message an
 | `E_FX_STAGE` | 1 | …: effect "…" has no audio stage (it works on pictures only), so it would do nothing to this sound. | …. |
 | `E_HISTORY_CONFLICT` | 1 | … "…" was changed since that step (by hand or by another command), so it can't be undone/redone safely. | make the change with a new command instead (mgl edit <file> ...), or revert your hand edit of that line first. |
 | `E_HISTORY_EMPTY` | 1 | nothing to …. | no recorded edits for this file (hand edits are not recorded). |
+| `E_HISTORY_STALE` | 1 | cannot …: … changed on disk since "…" (a hand edit or another tool). | … it with an op instead (e.g. shape.remove / shape.set), or restore the file by hand; history only steps over its own writes. |
 | `E_IN_USE` | 1 | asset "…" is used by … clip(s): …. | remove those clips first, or pass clips=true to remove them too. |
 | `E_JSON` | 1 | …: line … is not valid JSON (…). | one command per line, e.g. {"op": "clip.split", "id": "shot1", "at": "2s"}; quote keys and strings with double quotes. |
 | `E_KEYFRAMED` | 1 | clip "…" gain is animated by keyframes; a constant would discard them. | clear them first: mgl edit <file> key.clear … prop=gain value=… (or pass at= to set a keyframe). |
 | `E_KEYFRAMES` | 1 | clip "…" …: keyframe times must increase (frame … after …). | sort the keyframes by frame and remove duplicates. |
 | `E_LAST_COMP` | 1 | a project needs at least one comp. | add another comp first. |
+| `E_LEVEL` | 1 | level … is not a render level. | use --level 1 (stills), 2 (sheet), 3 (draft) or 4 (final); level 0 is the board itself. |
 | `E_LICENCE` | 1 | … (…) is refused: …. | pick another result (media.search shows only usable ones by default). |
 | `E_LOCKED` | 1 | clip "…" is locked. | unlock it: mgl edit <file> clip.set … locked=false |
 | `E_LOCKED_FILE` | 1 | the project is locked by another process (…). | wait for the other command to finish, or delete the lock file if no other command runs. |
@@ -48,6 +54,7 @@ exception is `E_INTERNAL` (exit 1). Below: each code with one example message an
 | `E_MISSING` | 1 | … is required. | add "…" to the entity. |
 | `E_MOTION_PRESET` | 1 | motion preset "…" returned invalid keys: …. | fix the preset (keys(len) must return [frame, value, easing?] lists with integer frames rising from 0 to len), or use another preset. |
 | `E_NATIVE` | 2 | … could not be started: …. | check the path and permissions of the program (mgl doctor). |
+| `E_NETWORK` | 1 | the board server did not answer (…). | is mgl board serve still running? |
 | `E_NO_AUDIO` | 1 | … has no audio stream. | analyse a file with sound, or render the project audio first. |
 | `E_NO_BEATS` | 1 | found … beat(s) in clip "…" (…–…)…. | lower every= or min=, or lengthen the clip. |
 | `E_NO_CATALOG` | 1 | no template catalog is available here. | run through the SDK or CLI (they load the built-in plugins), or pass services.catalog. |
@@ -59,10 +66,13 @@ exception is `E_INTERNAL` (exit 1). Below: each code with one example message an
 | `E_NO_MASK` | 1 | clip "…" has no mask …. | masks are 0..…. |
 | `E_NO_MOTION` | 1 | clip "…" has no …motion from motion.apply. | its motion: … |
 | `E_NO_NEIGHBOUR` | 1 | "…" has no clip right after it on …; roll moves a cut between two adjacent clips. | use clip.trim to change one clip. |
+| `E_NO_PROJECT` | 1 | storyboard.make needs a linked project (the board has none, or it did not load). | set "project" in the board file to the .mgl.json path, or use the project file: mgl board edit video.mgl.json storyboard.make every=3s |
 | `E_NO_PROVIDER` | 1 | audio.speak needs a text-to-speech provider, and this project has none. | …. Offline fallback without speech: record or add a voice file (asset.add + clip.add on a dialogue track), then captions.from-text voice=<clip> text="...". |
 | `E_NO_RENDER` | 1 | no detached render of … was found (…). | start one with: mgl render … out.mp4 --detach |
+| `E_NO_SERVER` | 1 | no board server is running for …, so there is no page to look at. | start one: mgl board serve <file> (in the background) |
 | `E_NO_SERVICE` | 1 | audio.speak writes a WAV, and no file service is available here. | run it through the CLI (mgl edit) or the SDK (open(file)). |
 | `E_NO_SPEECH` | 1 | transcribe provider "…" found no words in …. | check that the clip has speech, or use captions.from-text voice=… text="..." with the script. |
+| `E_NO_STILLS` | 1 | the board has no stills to render. | add one: mgl board edit <file> still.add t=2s (or storyboard.make every=3s). |
 | `E_NO_SUBJECT` | 1 | comp "…" has no video clip to track. | add a video clip, or reframe without track=true. |
 | `E_NOT_AUDIO` | 1 | clip "…" has no audio. | set gain on a media or nested comp clip. |
 | `E_NOT_AVAILABLE` | 1 | look is not available in this build (src/qa is missing). | render stills instead: mgl render <file> frame.png --still 1s |
@@ -84,7 +94,9 @@ exception is `E_INTERNAL` (exit 1). Below: each code with one example message an
 | `E_PLUGIN_SYMLINK` | 1 | … is a broken symlink. | remove it or point it at a file inside the plugin folder, then trust the plugin again. |
 | `E_PLUGIN_UNTRUSTED` | 1 | untrusted plugin "…" (…): plugins run as code on this machine, so they load only once trusted…. | mgl plugin trust … |
 | `E_PLUGIN_VERSION` | 1 | project.plugins.… is "…", which is not a semver range. | use a range like "^…". |
+| `E_PORT` | 1 | port … is in use. | use another port: mgl board serve <file> --port … (or --port 0 for any free port). |
 | `E_PRESET` | 1 | "…" is not a preset. | use one of: …. |
+| `E_PROJECT` | 1 | … | fix the project file (mgl check <project>). |
 | `E_PROP` | 1 | "…" is not an effect parameter path. | write fx.<index or type>.<param>, e.g. fx.blur.radius or fx.0.radius |
 | `E_PROVIDER` | 1 | speak provider "…" wrote audio with no length. | check the provider (mgl doctor lists it). |
 | `E_RANGE` | 1 | len … is too short. | give a positive length, e.g. len="30s". |
@@ -94,12 +106,17 @@ exception is `E_INTERNAL` (exit 1). Below: each code with one example message an
 | `E_RENDER` | 1 | … | render with segments: 1 to see the full error. |
 | `E_RENDER_UNAVAILABLE` | 1 | the render pipeline could not be loaded: … | reinstall michelangelo (npm install michelangelo); renderEffect / renderGenerator work without it. |
 | `E_RENDER_VERIFY` | 1 | … was written but has no … stream. | render again; if it repeats, run mgl doctor to check the ffmpeg build. |
+| `E_ROUND_CLOSED` | 1 | round.option: round "…" is …. | reopen it (round.set … status=open) or open a new round (round.open "..."). |
 | `E_SCALE` | 1 | scale … is out of range. | use a scale between 0.05 and 4 (0.5 = half size). |
 | `E_SCHEMA` | 1 | the project file must be a JSON object. | start from "mgl new" and compare. |
+| `E_SERVER` | 1 | the board server at … did not answer (…). | restart it: mgl board serve <file> (in the background). |
 | `E_SPEED` | 1 | speed 0 would freeze the whole clip. | use clip.freeze to hold a frame for a while. |
 | `E_TIME` | 1 | … is not a number. | give frames as an integer or seconds as "2.5s". |
+| `E_TIME_RANGE` | 1 | …: t … is outside comp "…" (0 to …). | use a time from 0 to …. |
+| `E_TOO_MANY` | 1 | storyboard.make would make … stills (at most 60). | use a longer interval, e.g. every=…. |
 | `E_TRACK_KIND` | 1 | track "…" is a visual track. | use an audio track, or a new id (it is created on the dialogue bus). |
 | `E_TRUST_STORE` | 1 | the trust store … is not valid JSON. | fix or delete …, then re-run "mgl plugin trust <path>" for each plugin. |
+| `E_UNDO_OTHER` | 1 | the step to undo was made by the …: "…". | leave the person's edit, or ask them first; to take it back anyway: mgl board edit <file> undo --force (or change it with an op). |
 | `E_UNKNOWN_ANIMATION` | 1 | text animation "…" does not exist. | did you mean "…"? (presets: …) |
 | `E_UNKNOWN_EFFECT` | 1 | …: effect "…" does not exist. | did you mean "…"? |
 | `E_UNKNOWN_GENERATOR` | 1 | clip "…": generator "…" does not exist. | did you mean "…"? |
@@ -110,6 +127,7 @@ exception is `E_INTERNAL` (exit 1). Below: each code with one example message an
 | `E_UNKNOWN_TOPIC` | 1 | no docs for "…". | did you mean "…"? (topics: …) |
 | `E_UNKNOWN_TRANSITION` | 1 | clip "…": transition "…" does not exist. | did you mean "…"? |
 | `E_VALUE` | 1 | … takes a number, not …. | e.g. value=1 |
+| `E_VARIANT` | 1 | variant "…" is not a .mgl.json inside the board's folder. | make the variant next to the board: mgl new shorts ... -o calm.mgl.json, then still.add 1s project=calm.mgl.json |
 | `E_VERSION` | 1 | "michelangelo" must be … (the file format version), found …. | set "michelangelo": … on the first line. |
 | `E_WORDS` | 1 | the text has … word(s) but … word time(s) were given. | give one start offset (frames from the cue start) per word, or omit words to estimate them. |
 | `W_BUS_ON_VISUAL` | warning | track "…" has a bus but is not an audio track; embedded audio of its clips goes to that bus. | nothing to do if that is intended. |

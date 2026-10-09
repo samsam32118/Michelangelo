@@ -1,0 +1,164 @@
+- main "Board":
+  - strong: video
+  - status: live
+  - toolbar "Tools":
+    - button "Select (V)" [pressed]: V
+    - button "Hand (H)": H
+    - button "Note (N)": "N"
+    - button "Text (T)": T
+    - button "Rectangle (R)": R
+    - button "Ellipse (O)": O
+    - button "Arrow (A)": A
+    - button "Draw (D)": D
+    - button "Frame (F)": F
+    - button "Still at playhead (S)": S
+    - button "Pin feedback (P)": P
+  - toolbar "View and history":
+    - button "Undo"
+    - button "Redo"
+    - button "Zoom out"
+    - button "Zoom to 100%": 42%
+    - button "Zoom in"
+    - button "Zoom to fit"
+    - button "Show the text outline"
+    - button "Switch light / dark"
+    - button "Keyboard shortcuts"
+    - button "Show or hide the panel" [expanded]
+- complementary "Brief, rounds, chat and next steps":
+  - list "Fidelity ladder":
+    - listitem "Level 0 sketch. Typical cost free": sketch
+    - listitem "Level 1 frames, current round. Typical cost 0.05–0.5 s per still": frames
+    - listitem "Level 2 sheet. Typical cost 2–10 s": sheet
+    - listitem "Level 3 draft. Typical cost ≈0.3–2.5× real time": draft
+    - listitem "Level 4 final. Typical cost ≈1–3× real time": final
+  - text: Spent 1.65 s of 5 render min
+  - meter "Budget used"
+  - tablist "Panel":
+    - tab "Brief" [selected]
+    - tab "Rounds"
+    - tab "Chat"
+    - tab "Next"
+  - tabpanel "Brief":
+    - form "Brief":
+      - text: Goal
+      - textbox "Goal":
+        - /placeholder: What should the video make people do or feel?
+        - text: Short that makes people try the 2-minute focus trick
+      - text: Audience
+      - textbox "Audience":
+        - /placeholder: Who is it for?
+        - text: students 16-24
+      - text: Platform
+      - textbox "Platform":
+        - /placeholder: shorts, reels, youtube, site…
+      - text: Length
+      - textbox "Length":
+        - /placeholder: 30s
+      - text: Tone
+      - textbox "Tone":
+        - /placeholder: "calm\nwarm"
+        - text: calm warm
+      - text: Must have
+      - textbox "Must have":
+        - /placeholder: the trick in the first 3 s
+      - text: Avoid
+      - textbox "Avoid":
+        - /placeholder: stock-photo look
+      - text: Success looks like
+      - textbox "Success looks like":
+        - /placeholder: a viewer could do the trick after one watch
+        - text: a viewer can do the trick after one watch
+      - text: References
+      - textbox "References":
+        - /placeholder: shape ids or paths
+      - text: Open questions
+      - textbox "Open questions":
+        - /placeholder: questions the agent is asking you
+        - text: calm or punchy music?
+      - text: Budget (render min)
+      - spinbutton "Budget (render min)": "5"
+      - text: Highest level
+      - combobox "Highest level":
+        - option "any" [selected]
+        - option "0 · sketch"
+        - option "1 · frames"
+        - option "2 · sheet"
+        - option "3 · draft"
+        - option "4 · final"
+      - paragraph: "Lists: one item per line. Changes save when you leave a field."
+- contentinfo "Timeline":
+  - text: main 1080×1920 0:00.00 / 0:09.97 · f0 4.08 s / 5 min
+  - button "Still here"
+  - button "Collapse timeline" [expanded]
+  - text: V1
+  - button "gen gradient"
+  - button "gen noise"
+  - button "gen gradient"
+  - button "gen gradient"
+  - button "gen noise"
+  - text: V2
+  - button "shape ellipse"
+  - text: V3
+  - button "gen particles"
+  - text: T1
+  - button "captions"
+  - text: T2
+  - button "Put your phone in a drawer"
+  - text: V4
+  - button "shape rect"
+  - text: V5
+  - button "shape rect"
+  - text: V6
+  - button "shape rect"
+  - text: V7
+  - button "Follow for more"
+  - text: A1 A2
+  - button "music-upbeat"
+  - text: SFX
+  - button "snd-whoosh"
+  - button "snd-whoosh2"
+  - button "snd-whoosh3"
+  - button "snd-whoosh"
+  - text: SFX2
+  - button "snd-swoosh"
+  - slider "Playhead"
+- region "Board outline":
+  - heading "Board video (version 6, 10 shapes)" [level=2]
+  - heading "Shapes" [level=3]
+  - list:
+    - listitem: frame f1 · "Storyboard" · by ai
+    - listitem: "still s1 · at 0:00.50 clips: bg1, glow, particles, hook, progress-track, progress-fill · thumb · in f1 · by ai"
+    - listitem: "still s2 · at 0:02.50 clips: bg2, glow, particles, captions, progress-track, progress-fill · thumb · in f1 · by ai"
+    - listitem: "still s3 · at 0:04.50 clips: bg3, glow, particles, captions, progress-track, progress-fill · thumb · in f1 · by ai"
+    - listitem: "still s4 · at 0:06.50 clips: bg3, glow, particles, captions, progress-track, progress-fill · thumb · in f1 · by ai"
+    - listitem: "still s5 · at 0:08.50 clips: bg5, glow, particles, progress-track, progress-fill, cta-button, cta-label · thumb · in f1 · by ai"
+    - listitem: "note n-hook · \"Hook: phone goes into the drawer\" · by ai"
+    - listitem: rect cta · "CTA card" · by ai
+    - listitem: arrow a-hook · "becomes" · from n-hook to s1 · by ai
+    - listitem: "pin p1 · \"title too small here\" · on s1 at 0:00.50 (clips: bg1, glow, particles, hook, progress-track, progress-fill) · open · by human"
+  - heading "Open pins" [level=3]
+  - list:
+    - listitem: "p1 on s1 at 0:00.50 (clips: bg1, glow, particles, hook, progress-track, progress-fill): \"title too small here\" by human"
+  - heading "Brief" [level=3]
+  - list:
+    - listitem: "goal: Short that makes people try the 2-minute focus trick"
+    - listitem: "audience: students 16-24"
+    - listitem: "tone: calm; warm"
+    - listitem: "success: a viewer can do the trick after one watch"
+    - listitem: "questions: calm or punchy music?"
+    - listitem: "budget: {\"cpuMin\":5}"
+  - heading "Rounds" [level=3]
+  - list:
+    - listitem:
+      - text: r1 "pick the opening" level 1 (frames) proposed
+      - list:
+        - listitem: "r1a: Bold hook; tradeoffs: loud and fast; may feel generic; cost: 0 s; taste: type-led and confident"
+        - listitem: "r1b: Quiet open; tradeoffs: matches the calm tone; a weaker hook; cost: 0 s; taste: lets the habit speak"
+  - heading "Next" [level=3]
+  - list:
+    - listitem: "ask: open question for the person: \"calm or punchy music?\""
+    - listitem: "do: pin p1 on s1 @ 0.5s [clips: bg1, glow, particles, hook, progress-track, progress-fill]: \"title too small here\" (by human): fix it, then pin.resolve p1 reply=\"what changed\""
+    - listitem: "wait: round r1 \"pick the opening\" is proposed (r1a, r1b): wait for the person's choice; do not climb the ladder"
+  - heading "Recent messages" [level=3]
+  - list:
+    - listitem: "ai: Two openings in round r1: bold or quiet?"

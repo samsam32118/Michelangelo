@@ -1,0 +1,341 @@
+{
+  "startedAt": "2026-10-09T13:40:10.826Z",
+  "checks": [
+    {
+      "area": "text",
+      "name": "innerText (get_page_text) has every shape id and its text",
+      "ok": true,
+      "ms": 5,
+      "detail": {
+        "shapes": 10,
+        "chars": 2703
+      }
+    },
+    {
+      "area": "text",
+      "name": "innerText has the brief, every round and option with tradeoffs, cost and taste",
+      "ok": true,
+      "ms": 3
+    },
+    {
+      "area": "text",
+      "name": "innerText has each open pin with its time (and clips) and the next advice",
+      "ok": true,
+      "ms": 434,
+      "detail": {
+        "pin": "p1 on s1 at 0:00.50 (clips: bg1, glow, particles, hook, progress-track, progress-fill): \"title too small here\" by human",
+        "advice": 3
+      }
+    },
+    {
+      "area": "text",
+      "name": "document.title names the board and its open items",
+      "ok": true,
+      "ms": 15,
+      "detail": "Board · video · 1 open pin · 1 to choose"
+    },
+    {
+      "area": "a11y",
+      "name": "aria snapshot exposes the tool buttons, tabs, brief fields and the outline",
+      "ok": true,
+      "ms": 81,
+      "detail": {
+        "lines": 164
+      }
+    },
+    {
+      "area": "a11y",
+      "name": "getByLabel(\"Audience\").fill lands in the board file, by human",
+      "ok": true,
+      "ms": 115
+    },
+    {
+      "area": "a11y",
+      "name": "getByRole(\"button\", {name: /choose/i}) decides the round (by human)",
+      "ok": true,
+      "ms": 190,
+      "detail": {
+        "chosen": "r1b",
+        "title": "Board · video · 1 open pin"
+      }
+    },
+    {
+      "area": "small",
+      "name": "360x640: no horizontal page overflow",
+      "ok": true,
+      "ms": 21,
+      "detail": {
+        "doc": 360,
+        "body": 360,
+        "w": 360,
+        "x": 0
+      }
+    },
+    {
+      "area": "small",
+      "name": "360x640: the panel is a bottom sheet with usable tabs and fields",
+      "ok": true,
+      "ms": 159,
+      "detail": {
+        "top": 396.8125,
+        "bottom": 640,
+        "left": 0,
+        "width": 360,
+        "h": 243.1875,
+        "stageH": 270.421875,
+        "vh": 640,
+        "vw": 360
+      }
+    },
+    {
+      "area": "small",
+      "name": "360x640: every tool is reachable, uncovered, and selects",
+      "ok": true,
+      "ms": 1110
+    },
+    {
+      "area": "small",
+      "name": "360x640: top bar controls fit beside each other",
+      "ok": true,
+      "ms": 2,
+      "detail": {
+        "statusRight": 130.953125,
+        "zoomLeft": 204,
+        "zoomRight": 348,
+        "vw": 360
+      }
+    },
+    {
+      "area": "small",
+      "name": "375x700: no horizontal page overflow",
+      "ok": true,
+      "ms": 14,
+      "detail": {
+        "doc": 375,
+        "body": 375,
+        "w": 375,
+        "x": 0
+      }
+    },
+    {
+      "area": "small",
+      "name": "375x700: the panel is a bottom sheet with usable tabs and fields",
+      "ok": true,
+      "ms": 166,
+      "detail": {
+        "top": 434,
+        "bottom": 700,
+        "left": 0,
+        "width": 375,
+        "h": 266,
+        "stageH": 307.609375,
+        "vh": 700,
+        "vw": 375
+      }
+    },
+    {
+      "area": "small",
+      "name": "375x700: every tool is reachable, uncovered, and selects",
+      "ok": true,
+      "ms": 942
+    },
+    {
+      "area": "small",
+      "name": "375x700: top bar controls fit beside each other",
+      "ok": true,
+      "ms": 2,
+      "detail": {
+        "statusRight": 130.953125,
+        "zoomLeft": 219,
+        "zoomRight": 363,
+        "vw": 375
+      }
+    },
+    {
+      "area": "poll",
+      "name": "EventSource deleted: the page polls and shows a CLI edit within 2 s",
+      "ok": true,
+      "ms": 1204,
+      "detail": {
+        "cliMs": 791,
+        "pageMsAfterCli": 218,
+        "conn": "polling"
+      }
+    },
+    {
+      "area": "csp",
+      "name": "the page is served with a strict Content-Security-Policy",
+      "ok": true,
+      "ms": 5,
+      "detail": "default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self'; connect-src 'self'; font-src 'self'; manifest-src 'self'; base-uri 'none'; form-action 'none'; object-src 'none'; frame-ancestors 'self' http://127.0.0.1:* https://127.0.0.1:* http://localhost:* https://localhost:*"
+    },
+    {
+      "area": "csp",
+      "name": "no CSP violations on the served page (it ran a full session above)",
+      "ok": true,
+      "ms": 20
+    },
+    {
+      "area": "frame",
+      "name": "works inside an iframe of a loopback page on another port (127.0.0.1)",
+      "ok": true,
+      "ms": 600
+    },
+    {
+      "area": "frame",
+      "name": "works inside an iframe of a loopback page under another name (localhost)",
+      "ok": true,
+      "ms": 491
+    },
+    {
+      "area": "frame",
+      "name": "a page of another site cannot frame the board (frame-ancestors)",
+      "ok": true,
+      "ms": 1573
+    },
+    {
+      "area": "export",
+      "name": "one classic inline script, no import map, no data:/blob: scripts, no external URLs",
+      "ok": true,
+      "ms": 2,
+      "detail": {
+        "kb": 525,
+        "stills": 5
+      }
+    },
+    {
+      "area": "export",
+      "name": "file:// offline: renders shapes, the outline mirror and the embedded stills",
+      "ok": true,
+      "ms": 919,
+      "detail": {
+        "diff": 1
+      }
+    },
+    {
+      "area": "export",
+      "name": "file:// offline: detached human edits queue (Undo drops one); mgl.pending() returns them; \"Copy changes\" shows them",
+      "ok": true,
+      "ms": 643,
+      "detail": {
+        "pending": [
+          "brief.set",
+          "shape.add"
+        ]
+      }
+    },
+    {
+      "area": "export",
+      "name": "file:// offline: no requests, no CSP violations, no dialogs",
+      "ok": true,
+      "ms": 1
+    },
+    {
+      "area": "export",
+      "name": "Artifact-like CSP, sandboxed frame: renders shapes, the outline mirror and the embedded stills",
+      "ok": true,
+      "ms": 915,
+      "detail": {
+        "diff": 1
+      }
+    },
+    {
+      "area": "export",
+      "name": "Artifact-like CSP, sandboxed frame: detached human edits queue (Undo drops one); mgl.pending() returns them; \"Copy changes\" shows them",
+      "ok": true,
+      "ms": 683,
+      "detail": {
+        "pending": [
+          "brief.set",
+          "shape.add"
+        ]
+      }
+    },
+    {
+      "area": "export",
+      "name": "Artifact-like CSP, sandboxed frame: no requests, no CSP violations, no dialogs",
+      "ok": true,
+      "ms": 2
+    },
+    {
+      "area": "export",
+      "name": "the pending ops apply to the real board with mgl board edit --batch --by human",
+      "ok": true,
+      "ms": 674,
+      "detail": {
+        "ops": 4
+      }
+    },
+    {
+      "area": "host",
+      "name": "Host myhost.test:PORT is answered; other Host names are refused",
+      "ok": true,
+      "ms": 21,
+      "detail": {
+        "allowed": 200,
+        "refused": 403
+      }
+    },
+    {
+      "area": "host",
+      "name": "the page works at http://myhost.test:PORT (live, edits land)",
+      "ok": true,
+      "ms": 1187
+    },
+    {
+      "area": "host",
+      "name": "show / view / say find their own server",
+      "ok": true,
+      "ms": 2246,
+      "detail": {
+        "url": "http://127.0.0.1:45295"
+      }
+    },
+    {
+      "area": "net",
+      "name": "no request left the page's own origin (served, framed, exported)",
+      "ok": true,
+      "ms": 1
+    },
+    {
+      "area": "net",
+      "name": "no dialogs (alert / confirm / prompt) on any page",
+      "ok": true,
+      "ms": 0
+    },
+    {
+      "area": "net",
+      "name": "no console errors or page errors on any page",
+      "ok": true,
+      "ms": 0
+    }
+  ],
+  "consoleErrors": [],
+  "external": [],
+  "dialogs": [],
+  "cspViolations": [],
+  "screenshots": [
+    "/home/user/Michelangelo/evals/board/results/agent-desktop.png",
+    "/home/user/Michelangelo/evals/board/results/agent-small-360x640.png",
+    "/home/user/Michelangelo/evals/board/results/agent-small-360x640-rounds.png",
+    "/home/user/Michelangelo/evals/board/results/agent-small-375x700.png",
+    "/home/user/Michelangelo/evals/board/results/agent-small-375x700-rounds.png",
+    "/home/user/Michelangelo/evals/board/results/agent-framed.png",
+    "/home/user/Michelangelo/evals/board/results/agent-export-file.png",
+    "/home/user/Michelangelo/evals/board/results/agent-export-artifact.png"
+  ],
+  "url": "http://127.0.0.1:40509",
+  "expectedErrors": [
+    {
+      "who": "evil-frame",
+      "step": "expected-frame-refusal",
+      "text": "Refused to frame 'http://127.0.0.1:40509/' because an ancestor violates the following Content Security Policy directive: \"frame-ancestors 'self' http://127.0.0.1:* https://127.0.0.1:* http://localhost:* https://localhost:*\".\n"
+    }
+  ],
+  "finishedAt": "2026-10-09T13:40:37.783Z",
+  "summary": {
+    "passed": 35,
+    "failed": 0,
+    "total": 35
+  }
+}

@@ -33,7 +33,7 @@ Design rules that follow (each one traced to a measured limit or a FrameCraft le
   an exact-string edit of one line is unique. A 60-clip edit stays under 150 lines.
 - **R2 The file is the truth; hand edits are safe.** No derived data in the file, everything re-validated
   on load, errors name the line and the fix.
-- **R3 Few verbs, short output.** 9 CLI verbs, ≤ 40 lines of text, `--json` everywhere, exit codes 0/1/2.
+- **R3 Few verbs, short output.** 10 CLI verbs (the 10th, `board`, in §18), ≤ 40 lines of text, `--json` everywhere, exit codes 0/1/2.
 - **R4 Block and estimate.** Commands block. Anything that may exceed 2 minutes prints `est. N s` on its
   first line so the agent can choose to background it.
 - **R5 Pictures and text, never video.** `look` makes contact sheets and zoomed crops ≤ 1568 px; sound is
@@ -265,7 +265,7 @@ Plugins add commands under their own prefix (`glitch.randomize`).
 
 ### 6.1 CLI
 
-Binary `michelangelo` with short alias `mgl` (Ask, §13). Nine verbs:
+Binary `michelangelo` with short alias `mgl` (Ask, §13). Ten verbs (`board`: §18):
 
 | Verb | Does |
 |---|---|
@@ -278,6 +278,7 @@ Binary `michelangelo` with short alias `mgl` (Ask, §13). Nine verbs:
 | `docs [topic\|op]` | offline docs: the skill, a topic reference, or one command's schema and example |
 | `plugin new\|test\|list <...>` | scaffold, test and list plugins |
 | `doctor` | node, ffmpeg (which one, version, encoders/decoders that matter), fonts, cores, memory, disk, proxy, plugins |
+| `board show\|edit\|serve\|view\|focus\|say\|snapshot\|export\|render <file>` | the shared canvas where the person and the agent agree on the video before rendering (§18) |
 
 Arguments: `k=v` pairs parsed against the command schema (`edit p.json clip.split title at=2.5s`; the
 first bare word fills the command's primary field, usually `id`). `--json` on every verb prints one JSON
@@ -621,7 +622,8 @@ FrameCraft's 6.4×. Results are committed to `bench/results/`.
   src/qa/        checks, contact sheet, look
   src/builtin/   core effects, transitions, generators, templates (public plugin API only)
   src/plugin/    plugin API (michelangelo/plugin), loader, scaffolder, testing helpers
-  src/cli/       the 9 verbs
+  src/cli/       the 10 verbs
+  src/board/     the board (§18): shared/ (Node + browser), model/, server/, client/ (the page)
   src/sdk/       open/create
   docs/          SKILL.md, reference/*.md (every code block executed by tests)
   schema/        v1.json (generated)
@@ -737,3 +739,28 @@ high-quality deliverable, wall time, and the ratio with/without.
 A feature or fix ranks by its expected reduction in cost per high-quality deliverable, estimated from transcripts:
 turns and tokens it saves (one call instead of twenty), failures it removes, quality it adds (vision score), and
 minutes it saves (render speed). docs/FRAMECRAFT-GAP.md and REMAINING.md are ordered this way.
+
+## 18. Board (2026-10-09)
+
+Binding design: `docs/plans/BOARD.md`; guide: `docs/reference/board.md`; skill: SKILL.md → "Working with a person
+on the board". The board (`video.board.json` next to `video.mgl.json`, one entity per line, like the project) is an
+infinite canvas where the person and the agent agree on a video before spending renders: a **brief** (goal,
+audience, success, budget), **rounds** of 2–3 options with tradeoffs, cost and taste, decided by the person, **pins**
+on stills resolved with replies, and a **fidelity ladder** (0 sketch, 1 stills, 2 contact sheet, 3 draft, 4 final)
+climbed one rung per decision, with every render recorded as `spend` against the budget. `advise()` turns the board
+into **next** lines (ask / warn / do / wait) for `mgl board show` and the page.
+
+- **One API, three doors:** `mgl board edit` (CLI), `POST /api/ops` (the page), `window.mgl` in the page console (an
+  agent driving a browser). Ops are validated, atomic and undoable (`.mgl/board-history.jsonl`); spend rows are a
+  ledger and never undo steps.
+- **Same draw code twice:** shapes draw against a Canvas 2D subset (`src/board/shared/canvas.ts`); the page draws
+  them in the browser, `mgl board snapshot` with Skia, so an agent sees the board as a PNG.
+- **(R) "No browser" means the package never launches or bundles a browser.** `mgl board serve` is a `node:http`
+  server; the page (hand-written TypeScript compiled to ESM, no framework, no bundler, no external requests) is
+  optional and is served to the person's own browser. Everything an agent needs works from the CLI.
+  `mgl board export` writes one offline HTML file (modules inlined through an import map) for browsers that cannot
+  reach the server; edits there are queued and applied back with `--batch`.
+- **Safety:** loopback by default; foreign `Host` headers (DNS rebinding) and cross-origin writes are refused;
+  `--host` and `--allow-host` widen it, with a warning (no authentication).
+- **Clean room:** the concepts (infinite canvas, frames, arrows bound to shapes, a tool bar, an editor API in the
+  console) come from whiteboards such as tldraw; no tldraw code was read, copied or depended on (LESSONS.md).

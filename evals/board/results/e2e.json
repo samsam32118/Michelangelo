@@ -1,0 +1,603 @@
+{
+  "startedAt": "2026-10-09T13:14:01.600Z",
+  "checks": [
+    {
+      "area": "human",
+      "name": "title names the board",
+      "ok": true,
+      "ms": 3,
+      "detail": "Board · video"
+    },
+    {
+      "area": "human",
+      "name": "N + click creates a note, typing fills it (by human, on disk)",
+      "ok": true,
+      "ms": 204,
+      "detail": {
+        "id": "n1",
+        "x": 100,
+        "y": 100,
+        "diskMs": 1
+      }
+    },
+    {
+      "area": "human",
+      "name": "double-click edits the note text",
+      "ok": true,
+      "ms": 206,
+      "detail": {
+        "diskMs": 0
+      }
+    },
+    {
+      "area": "human",
+      "name": "drag moves the note (shape.move on disk)",
+      "ok": true,
+      "ms": 255,
+      "detail": {
+        "moved": [
+          150,
+          80
+        ]
+      }
+    },
+    {
+      "area": "human",
+      "name": "after a drop, the page state never shows the shape at a double offset (optimistic batch re-applied over the SSE state)",
+      "ok": true,
+      "ms": 2344
+    },
+    {
+      "area": "human",
+      "name": "R + click creates a rect",
+      "ok": true,
+      "ms": 58,
+      "detail": {
+        "id": "g1"
+      }
+    },
+    {
+      "area": "human",
+      "name": "A + drag from note to rect makes a bound arrow",
+      "ok": true,
+      "ms": 294,
+      "detail": {
+        "id": "a1",
+        "from": "n1",
+        "to": "g1"
+      }
+    },
+    {
+      "area": "human",
+      "name": "bound arrow follows when the rect moves (arrow keys nudge, Shift = 10 px)",
+      "ok": true,
+      "ms": 473,
+      "detail": {
+        "nudged": [
+          1,
+          20
+        ]
+      }
+    },
+    {
+      "area": "human",
+      "name": "resize handle (SE corner) resizes the rect",
+      "ok": true,
+      "ms": 261,
+      "detail": {
+        "from": [
+          200,
+          120
+        ],
+        "to": [
+          260,
+          150
+        ]
+      }
+    },
+    {
+      "area": "human",
+      "name": "Ctrl/Cmd-D duplicates; Delete removes the copy",
+      "ok": true,
+      "ms": 72,
+      "detail": {
+        "copy": "g2"
+      }
+    },
+    {
+      "area": "human",
+      "name": "? opens the shortcut sheet, Esc closes it",
+      "ok": true,
+      "ms": 38
+    },
+    {
+      "area": "human",
+      "name": "marquee drag selects note, rect and arrow (selection reaches /api/view)",
+      "ok": true,
+      "ms": 263,
+      "detail": {
+        "selection": [
+          "n1",
+          "g1",
+          "a1"
+        ],
+        "viewSelection": [
+          "n1",
+          "g1",
+          "a1"
+        ]
+      }
+    },
+    {
+      "area": "human",
+      "name": "Delete removes the selection; Ctrl/Cmd-Z brings it back",
+      "ok": true,
+      "ms": 71,
+      "detail": {
+        "restoredMs": 0,
+        "shapes": 3
+      }
+    },
+    {
+      "area": "human",
+      "name": "Ctrl/Cmd-Shift-Z redoes, Ctrl/Cmd-Z undoes again",
+      "ok": true,
+      "ms": 34
+    },
+    {
+      "area": "video",
+      "name": "timeline strip lists the project clips",
+      "ok": true,
+      "ms": 35,
+      "detail": {
+        "clips": 19,
+        "title": "main 1080×1920"
+      }
+    },
+    {
+      "area": "video",
+      "name": "timeline tracks are tall enough to read (row >= 12 px, clip labels not clipped)",
+      "ok": true,
+      "ms": 11,
+      "detail": {
+        "tracks": 13,
+        "minRowPx": 22,
+        "bodyPx": 112,
+        "minClipPx": 18,
+        "clippedLabels": 1,
+        "clips": 19,
+        "scrollable": false
+      }
+    },
+    {
+      "area": "video",
+      "name": "dragging the playhead shows a still preview and moves the time",
+      "ok": true,
+      "ms": 1466,
+      "detail": {
+        "time": "0:04.00 / 0:09.97 · f120",
+        "playheadFrames": 120,
+        "previewVisibleWhileDragging": true
+      }
+    },
+    {
+      "area": "human",
+      "name": "S + click places a still at the playhead time; its PNG loads",
+      "ok": true,
+      "ms": 54,
+      "detail": {
+        "id": "s1",
+        "t": "4s",
+        "playheadFrames": 120,
+        "costMs": "1"
+      }
+    },
+    {
+      "area": "human",
+      "name": "P + click on the still drops a pin with typed feedback",
+      "ok": true,
+      "ms": 519,
+      "detail": {
+        "id": "p1",
+        "v": 0.125,
+        "title": "Board · video · 1 open pin"
+      }
+    },
+    {
+      "area": "human",
+      "name": "Brief tab: typing the goal field saves brief.goal (by human in history)",
+      "ok": true,
+      "ms": 120,
+      "detail": {
+        "diskMs": 42
+      }
+    },
+    {
+      "area": "human",
+      "name": "wheel zooms at the cursor (board point under it stays put)",
+      "ok": true,
+      "ms": 275,
+      "detail": {
+        "zoom": [
+          1,
+          1.246
+        ]
+      }
+    },
+    {
+      "area": "human",
+      "name": "Ctrl/Cmd-0 fits the board",
+      "ok": true,
+      "ms": 522,
+      "detail": {
+        "camera": {
+          "x": -21.007519184991395,
+          "y": -40.75563938874356,
+          "zoom": 1.2460767305873808
+        }
+      }
+    },
+    {
+      "area": "human",
+      "name": "observer saw every human edit (shape counts agree with disk)",
+      "ok": true,
+      "ms": 14,
+      "detail": {
+        "shapes": 5,
+        "lagMs": 13
+      }
+    },
+    {
+      "area": "ai",
+      "name": "mgl.help() returns the API text",
+      "ok": true,
+      "ms": 6,
+      "detail": {
+        "chars": 3662,
+        "lines": 84
+      }
+    },
+    {
+      "area": "ai",
+      "name": "mgl.note -> on disk by ai, observer sees it via SSE < 1 s",
+      "ok": true,
+      "ms": 88,
+      "detail": {
+        "id": "n2",
+        "observerMs": 68,
+        "outlineMs": 7
+      }
+    },
+    {
+      "area": "ai",
+      "name": "mgl.storyboard({every: '3s'}) -> frame of stills on both pages",
+      "ok": true,
+      "ms": 43,
+      "detail": {
+        "stills": 4,
+        "observerMs": 7
+      }
+    },
+    {
+      "area": "ai",
+      "name": "mgl.arrow binds two shapes",
+      "ok": true,
+      "ms": 27
+    },
+    {
+      "area": "ai",
+      "name": "mgl.round + 2x mgl.option with tradeoffs; observer Rounds tab shows Choose buttons",
+      "ok": true,
+      "ms": 192,
+      "detail": {
+        "round": "r1",
+        "status": "proposed",
+        "options": [
+          "r1a",
+          "r1b"
+        ],
+        "observerMs": 13
+      }
+    },
+    {
+      "area": "ai",
+      "name": "mgl.focus moves the page camera to the shapes",
+      "ok": true,
+      "ms": 527,
+      "detail": {
+        "camera": {
+          "zoom": 1.199234068627451,
+          "x": -58.62606340852773,
+          "y": 176.63260353064402
+        }
+      }
+    },
+    {
+      "area": "ai",
+      "name": "mgl.say -> log by ai, toast on the observer < 1 s",
+      "ok": true,
+      "ms": 132,
+      "detail": {
+        "toastMs": 101,
+        "total": 132
+      }
+    },
+    {
+      "area": "ai",
+      "name": "mgl.pin / mgl.resolve, mgl.find, mgl.get, mgl.select, mgl.selection, mgl.timeline, mgl.view",
+      "ok": true,
+      "ms": 96,
+      "detail": {
+        "stills": 5,
+        "clips": 19,
+        "viewKeys": [
+          "human",
+          "page"
+        ]
+      }
+    },
+    {
+      "area": "ai",
+      "name": "mgl.undo / mgl.redo from the console",
+      "ok": true,
+      "ms": 278
+    },
+    {
+      "area": "ai",
+      "name": "mgl.snapshot returns a PNG data URL",
+      "ok": true,
+      "ms": 93,
+      "detail": {
+        "bytes": 257698
+      }
+    },
+    {
+      "area": "ai",
+      "name": "bad op returns {ok:false, error:{code, message, fix}} (no throw)",
+      "ok": true,
+      "ms": 55,
+      "detail": {
+        "code": "E_UNKNOWN_KEY",
+        "message": "shape.add: \"colour\" is not a property of a note.",
+        "fix": "did you mean \"color\"?",
+        "didYouMean": [
+          "color"
+        ]
+      }
+    },
+    {
+      "area": "sync",
+      "name": "CLI `mgl board edit` (terminal) reaches both pages < 1 s",
+      "ok": true,
+      "ms": 1319,
+      "detail": {
+        "cliMs": 1302,
+        "observerMs": 7,
+        "humanMs": 10,
+        "out": "applied 1 op (shape.add) via http://127.0.0.1:44755"
+      }
+    },
+    {
+      "area": "sync",
+      "name": "CLI `mgl board say` toasts on both pages; `mgl board focus` moves the observer camera",
+      "ok": true,
+      "ms": 2300,
+      "detail": {
+        "focusMs": 33
+      }
+    },
+    {
+      "area": "sync",
+      "name": "a hand edit of the board file reaches the pages (watcher)",
+      "ok": true,
+      "ms": 279,
+      "detail": {
+        "ms": 272
+      }
+    },
+    {
+      "area": "human",
+      "name": "human types in the Chat tab -> log by human; observer shows it; Next advises the agent to answer",
+      "ok": true,
+      "ms": 445,
+      "detail": {
+        "advice": "pin p1 on s1 @ 4s [clips: bg2, glow, particles, captions, progress-track, progress-fill]: \"Title too small at this time\" (by human): fix it, then pin.resolve p1 reply=\"what changed\""
+      }
+    },
+    {
+      "area": "human",
+      "name": "Comment on an option sends a message by human",
+      "ok": true,
+      "ms": 207,
+      "detail": {
+        "text": "On r1a \"Drawer close-up\": the drawer shot feels staged"
+      }
+    },
+    {
+      "area": "human",
+      "name": "human clicks Choose on option b in the Rounds tab -> decided by human",
+      "ok": true,
+      "ms": 134,
+      "detail": {
+        "chosen": "r1b",
+        "why": "calmer, and I want the premise first"
+      }
+    },
+    {
+      "area": "ai",
+      "name": "the CLI `show` reflects the session (brief, round, pins, next)",
+      "ok": true,
+      "ms": 2280,
+      "detail": {
+        "lines": 20,
+        "advice": [
+          "ask: brief lacks audience, success: ask the person (no draft or final render until goal and success exist)",
+          "do: pin p1 on s1 @ 4s [clips: bg2, glow, particles, captions, progress-track, progress-fill]: \"Title too small at this time\" (by human): fix it, then pin.resolve p1 reply=\"what changed\"",
+          "do: the person said \"I like the calmer one, but keep the click sound.\" (m3): answer it (mgl board say \"...\" re=m3)",
+          "do: the person said \"On r1a \"Drawer close-up\": the drawer shot feels staged\" (m4): answer it (mgl board say \"...\" re=m4)"
+        ]
+      }
+    },
+    {
+      "area": "visual",
+      "name": "screenshots: light, dark, narrow 390 px, observer",
+      "ok": true,
+      "ms": 3082,
+      "detail": [
+        "e2e-light.png",
+        "e2e-dark.png",
+        "e2e-observer-chat.png",
+        "e2e-narrow.png"
+      ]
+    },
+    {
+      "area": "visual",
+      "name": "zoomed-in still + pin close-up",
+      "ok": true,
+      "ms": 764
+    },
+    {
+      "area": "perf",
+      "name": "add 300 shapes in one batch",
+      "ok": true,
+      "ms": 251,
+      "detail": {
+        "ms": 251
+      }
+    },
+    {
+      "area": "perf",
+      "name": "pan with all 300+ shapes in view (zoomed out): avg fps >= 50, p95 <= 33 ms",
+      "ok": true,
+      "ms": 5041,
+      "detail": {
+        "frames": 259,
+        "avgMs": 17.31,
+        "p95Ms": 16.8,
+        "worstMs": 66.7,
+        "fps": 57.8,
+        "longFrames": 8
+      }
+    },
+    {
+      "area": "perf",
+      "name": "pan at 100% zoom over the 300 shapes: avg fps >= 50",
+      "ok": true,
+      "ms": 4653,
+      "detail": {
+        "frames": 245,
+        "avgMs": 16.87,
+        "p95Ms": 16.8,
+        "worstMs": 66.7,
+        "fps": 59.3,
+        "longFrames": 1
+      }
+    },
+    {
+      "area": "perf",
+      "name": "pan with 300+ shapes in view under 4x CPU throttle (laptop on battery): avg fps >= 30",
+      "ok": true,
+      "ms": 10060,
+      "detail": {
+        "frames": 350,
+        "avgMs": 26.95,
+        "p95Ms": 66.6,
+        "worstMs": 183.2,
+        "fps": 37.1,
+        "longFrames": 111
+      }
+    },
+    {
+      "area": "perf",
+      "name": "one draw of the full board (renderer cost, CPU throttle 1x)",
+      "ok": true,
+      "ms": 581,
+      "detail": {
+        "medianMs": 17.9,
+        "worstMs": 59
+      }
+    },
+    {
+      "area": "page",
+      "name": "no console errors or page errors on any page",
+      "ok": true,
+      "ms": 1
+    },
+    {
+      "area": "page",
+      "name": "no failed requests (4xx/5xx) from the pages",
+      "ok": true,
+      "ms": 0
+    }
+  ],
+  "metrics": {
+    "canvas": {
+      "x": 0,
+      "y": 0,
+      "w": 1100,
+      "h": 739.609375
+    },
+    "timeline": {
+      "tracks": 13,
+      "minRowPx": 22,
+      "bodyPx": 112,
+      "minClipPx": 18,
+      "clippedLabels": 1,
+      "clips": 19,
+      "scrollable": false
+    },
+    "panAllInView": {
+      "frames": 259,
+      "avgMs": 17.31,
+      "p95Ms": 16.8,
+      "worstMs": 66.7,
+      "fps": 57.8,
+      "longFrames": 8
+    },
+    "pan100": {
+      "frames": 245,
+      "avgMs": 16.87,
+      "p95Ms": 16.8,
+      "worstMs": 66.7,
+      "fps": 59.3,
+      "longFrames": 1
+    },
+    "panAllInView4xThrottle": {
+      "frames": 350,
+      "avgMs": 26.95,
+      "p95Ms": 66.6,
+      "worstMs": 183.2,
+      "fps": 37.1,
+      "longFrames": 111
+    },
+    "cameraStepToFrame": {
+      "medianMs": 17.9,
+      "worstMs": 59
+    }
+  },
+  "consoleErrors": [],
+  "failedRequests": [],
+  "screenshots": [
+    "/home/user/Michelangelo/evals/board/results/e2e-light.png",
+    "/home/user/Michelangelo/evals/board/results/e2e-dark.png",
+    "/home/user/Michelangelo/evals/board/results/e2e-observer-chat.png",
+    "/home/user/Michelangelo/evals/board/results/e2e-narrow.png",
+    "/home/user/Michelangelo/evals/board/results/e2e-still-closeup.png",
+    "/home/user/Michelangelo/evals/board/results/e2e-perf-300.png"
+  ],
+  "url": "http://127.0.0.1:44755",
+  "expectedErrors": [
+    {
+      "who": "human",
+      "step": "expected-400",
+      "text": "Failed to load resource: the server responded with a status of 400 (Bad Request)"
+    }
+  ],
+  "finishedAt": "2026-10-09T13:14:48.411Z",
+  "summary": {
+    "passed": 50,
+    "failed": 0,
+    "total": 50
+  },
+  "serverJsonRemoved": true
+}

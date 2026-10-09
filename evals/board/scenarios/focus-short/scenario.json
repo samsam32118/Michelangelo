@@ -1,0 +1,56 @@
+{
+  "id": "focus-short",
+  "about": "A person wants 'a short about focus' and is vague at first. The agent must ask before spending, offer options with tradeoffs and taste, wait for choices, resolve a pin, react to 'make it warmer', and climb the ladder one rung at a time to a final render.",
+  "agentPrompt": "A person is making a vertical Short with you on the Michelangelo board. The board server is running (see .mgl/board/server.json). Read `mgl board show video.mgl.json` every turn and work with them until there is a final render they approve. They only talk through the board (log, rounds, pins).",
+  "script": "Most of us check our phone every few minutes. Put it in another room for one hour. Your focus comes back, and so does your evening.",
+  "preset": "shorts",
+  "seed": [
+    {"op": "say", "text": "hey, can you make me a short about focus? something people actually watch"}
+  ],
+  "steps": [
+    {
+      "id": "answer-brief",
+      "when": {"briefQuestions": true},
+      "orAfterSec": 240,
+      "do": [
+        {"op": "say", "text": "it's for students cramming for exams, about 16-22. I want them to try one thing: phone in another room for an hour. success = they could explain the trick to a friend after one watch. calm, not hype-y. 10-15 s. please don't burn more than ~5 CPU minutes"},
+        {"op": "brief.set", "goal": "a 10-15 s Short that makes students try the phone-in-another-room trick", "audience": "students cramming for exams, 16-22", "success": ["a viewer can explain the trick to a friend after one watch"], "tone": ["calm"], "avoid": ["hype", "stock-photo look"], "length": "10-15s", "budget": {"cpuMin": 5}, "questions": []}
+      ]
+    },
+    {
+      "id": "choose-b",
+      "when": {"roundProposed": true},
+      "do": [
+        {"op": "round.decide", "round": "{{round}}", "chosen": "{{option:2}}", "why": "the second one feels calmer and closer to how studying actually feels"},
+        {"op": "say", "text": "going with {{optionTitle:2}}. the first felt a bit like every other productivity short"}
+      ]
+    },
+    {
+      "id": "pin-title",
+      "when": {"stills": 2, "decided": 1},
+      "do": [
+        {"op": "pin.add", "target": "{{still:2}}", "u": 0.5, "v": 0.3, "text": "the title is too small and too generic"}
+      ]
+    },
+    {
+      "id": "warmer",
+      "when": {"pinsResolved": true, "spendLevel": 1, "afterAiSay": true},
+      "do": [
+        {"op": "say", "text": "love it, make it warmer"}
+      ]
+    }
+  ],
+  "rules": [
+    {
+      "id": "decide-proposed",
+      "when": {"roundProposed": true},
+      "do": [
+        {"op": "round.decide", "round": "{{round}}", "chosen": "{{option:1}}", "why": "{{optionTitle:1}} fits; it keeps the calm feel and stays within budget"},
+        {"op": "say", "text": "ok, {{optionTitle:1}}"}
+      ]
+    }
+  ],
+  "done": {"spendLevel": 4},
+  "timeoutSec": 3600,
+  "final": {"minSec": 9, "maxSec": 16, "width": 1080, "height": 1920}
+}

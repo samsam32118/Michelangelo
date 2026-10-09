@@ -37,8 +37,8 @@
     "README.md"
   ],
   "scripts": {
-    "build": "tsc -p tsconfig.build.json && node scripts/postbuild.mjs",
-    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "build": "tsc -p tsconfig.build.json && tsc -p tsconfig.board-client.json && node scripts/build-board-bundle.mjs && node scripts/postbuild.mjs",
+    "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.board-client.json --noEmit",
     "test": "vitest run",
     "test:fast": "npm run typecheck && vitest run",
     "schema": "node --import tsx scripts/gen-schema.ts",
@@ -55,6 +55,7 @@
   },
   "devDependencies": {
     "@types/node": "^26.6.4",
+    "esbuild": "0.28.2",
     "tsx": "^4.23.15",
     "typescript": "^7.0.2",
     "vitest": "^5.0.3"

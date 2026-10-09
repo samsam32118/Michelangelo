@@ -2,6 +2,8 @@
  * The Canvas 2D subset that shape draw code may use. The browser's CanvasRenderingContext2D and @napi-rs/canvas's
  * SKRSContext2D both satisfy it, so one draw function serves the page and the Skia snapshot.
  */
+import type { Outline } from './types.js';
+
 export interface Ctx2D {
   save(): void;
   restore(): void;
@@ -56,4 +58,6 @@ export interface DrawEnv {
   selected?: boolean;
   /** recently changed by: draws a flash outline */
   flash?: 'human' | 'ai';
+  /** the linked project: timeline shapes draw its tracks and clips; stills take its aspect and fps */
+  outline?: Outline | null;
 }

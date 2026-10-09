@@ -37,8 +37,8 @@
     "README.md"
   ],
   "scripts": {
-    "build": "tsc -p tsconfig.build.json && node scripts/postbuild.mjs",
-    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "build": "tsc -p tsconfig.build.json && tsc -p tsconfig.board-client.json && node scripts/postbuild.mjs",
+    "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.board-client.json --noEmit",
     "test": "vitest run",
     "test:fast": "npm run typecheck && vitest run",
     "schema": "node --import tsx scripts/gen-schema.ts",

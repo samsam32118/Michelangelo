@@ -37,7 +37,8 @@ export interface GeoShape extends ShapeBase { type: 'rect' | 'ellipse'; text?: s
 export interface ArrowShape extends ShapeBase { type: 'arrow'; from?: string | Point; to?: string | Point; text?: string }
 export interface DrawShape extends ShapeBase { type: 'draw'; points: Point[] }
 export interface ImageShape extends ShapeBase { type: 'image'; src: string }
-export interface StillShape extends ShapeBase { type: 'still'; t: TimeLike; comp?: string; fidelity?: Fidelity }
+/** `project`: a variant (a sibling project file, relative to the board) rendered through the same still cache */
+export interface StillShape extends ShapeBase { type: 'still'; t: TimeLike; comp?: string; fidelity?: Fidelity; project?: string }
 export interface TimelineShape extends ShapeBase { type: 'timeline'; comp?: string; from?: TimeLike; to?: TimeLike }
 export interface PinShape extends ShapeBase { type: 'pin'; target: string; u?: number; v?: number; text?: string; status?: 'open' | 'resolved'; reply?: string }
 
@@ -67,6 +68,8 @@ export interface RoundOption {
   tradeoffs?: string;
   cost?: string;
   taste?: string;
+  /** a variant: a sibling project file (relative to the board) that pictures this option */
+  project?: string;
 }
 
 export interface Round {
@@ -80,7 +83,8 @@ export interface Round {
   notes?: string;
 }
 
-export interface LogEntry { id: string; by: Who; text: string; at?: string }
+/** `re`: the log ids this message answers */
+export interface LogEntry { id: string; by: Who; text: string; at?: string; re?: string[] }
 export interface SpendEntry { id: string; level: Level; what: string; ms: number; round?: string }
 
 export interface BoardFile {
@@ -107,8 +111,8 @@ export type BoardOp =
   | { op: 'round.set'; round: string; props: Partial<Pick<Round, 'status' | 'notes' | 'goal' | 'fidelity'>> }
   | { op: 'pin.add'; target: string; u?: number; v?: number; text: string }
   | { op: 'pin.resolve'; id: string; reply?: string }
-  | { op: 'say'; text: string }
-  | { op: 'still.add'; t: TimeLike; comp?: string; fidelity?: Fidelity; x?: number; y?: number; parent?: string }
+  | { op: 'say'; text: string; re?: string | string[] }
+  | { op: 'still.add'; t: TimeLike; comp?: string; fidelity?: Fidelity; x?: number; y?: number; parent?: string; project?: string }
   | { op: 'storyboard.make'; frame?: string; every?: TimeLike; cuts?: boolean; fidelity?: Fidelity }
   | { op: 'spend.add'; level: Level; what: string; ms: number; round?: string };
 
@@ -136,4 +140,4 @@ export type OpsResult =
   | { ok: false; error: { code: string; message: string; fix?: string } };
 
 /** GET /api/state */
-export interface BoardState { board: BoardFile; version: number; project: Outline | null; view: Partial<Record<Who, Presence>> }
+export interface BoardState { board: BoardFile; version: number; project: Outline | null; view: Partial<Record<Who, Presence>>; /** advise() output, when the server includes it */ advice?: Advice[] }

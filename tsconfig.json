@@ -34,5 +34,6 @@
     "scripts",
     "evals/lib",
     "examples"
-  ]
+  ],
+  "exclude": ["src/board/client"]
 }

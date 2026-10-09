@@ -3,7 +3,7 @@ import type { BoardOp, Shape, Who } from '../shared/types.js';
 import type { App, ToolName } from './app.js';
 import type { Tools } from './tools.js';
 import { shift } from './tools.js';
-import { ID_PREFIX, nextId } from './local-ops.js';
+import { ID_PREFIX } from './local-ops.js';
 import { modKey } from './dom.js';
 
 export const TOOL_KEYS: Record<string, ToolName> = { v: 'select', h: 'hand', n: 'note', t: 'text', r: 'rect', o: 'ellipse', a: 'arrow', d: 'draw', s: 'still', p: 'pin', f: 'frame' };
@@ -100,7 +100,7 @@ export function duplicate(app: App): void {
   const ids = [...withChildren(app, app.selection)].filter((id) => app.store.get(id)?.type !== 'pin');
   if (!ids.length) return;
   const map = new Map<string, string>(), taken: string[] = [];
-  for (const id of ids) { const s = app.store.get(id)!; const n = nextId(app.store.board, ID_PREFIX[s.type], taken); taken.push(n); map.set(id, n); }
+  for (const id of ids) { const s = app.store.get(id)!; const n = app.store.newId(ID_PREFIX[s.type], taken); taken.push(n); map.set(id, n); }
   const ops: BoardOp[] = [];
   for (const id of app.store.shapes().map((s) => s.id).filter((x) => map.has(x))) {
     const s = structuredClone(app.store.get(id)!) as Shape & Record<string, unknown>;

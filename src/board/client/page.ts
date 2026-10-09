@@ -158,7 +158,10 @@ button.primary{background:var(--accent);border-color:var(--accent);color:#fff}bu
 #help dl{display:grid;grid-template-columns:auto 1fr;gap:6px 16px;margin:14px 0}#help dt{text-align:right}#help dd{margin:0}
 #help kbd{font-size:11px;color:var(--ink);background:var(--panel2);border:1px solid var(--line2);border-bottom-width:2px;border-radius:5px;padding:2px 6px}
 #help code{font:12px var(--mono);background:var(--panel2);padding:1px 5px;border-radius:4px}
-.copy-box{position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);width:min(600px,90vw);height:40vh;z-index:40}
+.copy-box{position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);width:min(600px,calc(100% - 24px));max-height:calc(100% - 24px);overflow:auto;z-index:40;background:var(--panel);border:1px solid var(--line);border-radius:12px;box-shadow:var(--shadow-lg);padding:12px 14px;font-size:13px}
+.copy-box p{margin:0 0 8px}.copy-box code{font:12px var(--mono);background:var(--panel2);padding:1px 5px;border-radius:4px;overflow-wrap:anywhere}
+.copy-box textarea{width:100%;font:12px/1.4 var(--mono);border:1px solid var(--line2);border-radius:8px;padding:7px 9px;background:var(--panel2);resize:vertical}
+.copy-box .actions{justify-content:flex-end}
 @media (max-width:900px){
 #app{grid-template-columns:minmax(0,1fr);grid-template-rows:minmax(0,1fr) auto auto}
 #panel{grid-column:1;grid-row:3;width:auto;max-height:38vh;border-left:0;border-top:1px solid var(--line)}

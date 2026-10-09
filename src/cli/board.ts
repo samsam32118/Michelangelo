@@ -487,7 +487,7 @@ async function exportPage(a: Args, o: Out) {
   const { arg } = fileArg(a, 'mgl board export video.mgl.json [-o board.html]');
   const out = str(a, 'out');
   const r = await (await serverMod()).exportBoard(arg, out ? { out } : {});
-  o.line(`${r.path} (${Math.round(r.bytes / 1024)} KB: ${r.modules} modules, ${r.stills} still${r.stills === 1 ? '' : 's'}, ${r.images} image${r.images === 1 ? '' : 's'}, ${Math.round(r.ms)} ms)`);
+  o.line(`${r.path} (${Math.round(r.bytes / 1024)} KB: the page as one inline script, ${r.stills} still${r.stills === 1 ? '' : 's'}, ${r.images} image${r.images === 1 ? '' : 's'}, ${Math.round(r.ms)} ms)`);
   for (const w of r.warnings ?? []) o.line(`warn: ${clip(w, 160)}`);
   o.hint(`open it from disk or publish it; edits there are queued: the person clicks "Copy changes", then mgl board edit ${arg} --batch changes.jsonl --by human`);
   o.set({ ...r });

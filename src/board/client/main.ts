@@ -125,11 +125,7 @@ function boot(): void {
     app.store.load(embed);
     app.store.setConn('detached');
     const copy = h('button', { class: 'copy-changes', 'data-mgl': 'copy-changes', title: 'Copy the edits made on this page as JSONL for mgl board edit --batch' }, 'Copy changes');
-    copy.addEventListener('click', async () => {
-      const text = app.store.pending.map((p) => JSON.stringify(p.op)).join('\n');
-      try { await navigator.clipboard.writeText(text); app.toast(`${app.store.pending.length} change(s) copied. Apply with: mgl board edit <file> --batch changes.jsonl --by human`, 'info'); }
-      catch { const ta = h('textarea', { class: 'copy-box', readonly: true, 'aria-label': 'Changes as JSONL' }); ta.value = text; document.body.append(ta); ta.select(); }
-    });
+    copy.addEventListener('click', () => void copyChanges(app));
     status.append(copy);
     firstView();
     return;
@@ -181,6 +177,32 @@ function boot(): void {
     es.addEventListener('focus', (e) => { const d = data<{ ids: string[] }>(e); if (d?.ids) { app.focus(d.ids); } });
     es.addEventListener('toast', (e) => { const d = data<{ by?: 'human' | 'ai'; text: string }>(e); if (d?.text) app.toast(d.text, d.by ?? 'ai'); });
   }
+}
+
+/**
+ * "Copy changes" on a detached page: the queued ops as JSONL. The clipboard is used only where the page may use it (an
+ * Artifact's sandboxed frame forbids it, and asking anyway logs a permissions-policy error); the JSONL is also shown in
+ * a box the person can copy from and an agent can read (and in #mgl-outline).
+ */
+async function copyChanges(app: App): Promise<void> {
+  const text = app.store.pending.map((p) => JSON.stringify(p.op)).join('\n');
+  const n = app.store.pending.length;
+  const policy = (document as unknown as { featurePolicy?: { allowsFeature(f: string): boolean } }).featurePolicy;
+  const clipOk = !!navigator.clipboard && window.isSecureContext && (policy ? policy.allowsFeature('clipboard-write') : true);
+  let copied = false;
+  if (clipOk && n) { try { await navigator.clipboard.writeText(text); copied = true; } catch { /* show the box */ } }
+  document.querySelector('.copy-box')?.remove();
+  const ta = h('textarea', { readonly: true, rows: 8, 'aria-label': 'Changes as JSONL', 'data-mgl': 'changes-jsonl' });
+  ta.value = text;
+  const close = h('button', { 'data-mgl': 'copy-close', onclick: () => box.remove() }, 'Close');
+  const box = h('section', { class: 'copy-box', role: 'region', 'aria-label': 'Changes to apply' },
+    h('p', {}, n ? `${n} change${n === 1 ? '' : 's'}${copied ? ' copied' : ''}. Save as changes.jsonl and run: ` : 'No changes yet: edits on this page are queued here.', n ? h('code', {}, 'mgl board edit <file> --batch changes.jsonl --by human') : null),
+    ta, h('div', { class: 'actions' }, close));
+  box.addEventListener('keydown', (e) => { if (e.key === 'Escape') { e.stopPropagation(); box.remove(); } });
+  document.body.append(box);
+  ta.focus();
+  ta.select();
+  if (copied) app.toast(`${n} change${n === 1 ? '' : 's'} copied. Apply with: mgl board edit <file> --batch changes.jsonl --by human`, 'info');
 }
 
 if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot); else boot();

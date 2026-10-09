@@ -1,11 +1,11 @@
-/** mgl board export: one offline HTML file with the modules (import map of data: URLs), the state and the stills. */
+/** mgl board export: one offline HTML file with the page as one classic inline script, the state and the stills. */
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { emptyProject, formatProject } from '../../src/sdk/index.js';
 import { BoardSession } from '../../src/board/model/index.js';
-import { exportBoard } from '../../src/board/server/export.js';
+import { exportBoard, inlineScript } from '../../src/board/server/export.js';
 import { main } from '../../src/cli/main.js';
 
 let dir: string;
@@ -20,27 +20,32 @@ beforeAll(async () => {
 afterAll(() => rmSync(dir, { recursive: true, force: true }));
 
 describe('export', () => {
-  it('writes one self-contained page: import map, embedded state and stills, no server URLs', async () => {
+  it('writes one self-contained page: one classic inline script (no import map, no data: scripts), embedded state and stills', async () => {
     const r = await exportBoard(join(dir, 'v.mgl.json'));
     expect(r.path).toBe(join(dir, 'v.board.html'));
     expect(r.stills).toBe(1);
+    expect(r.modules).toBe(1);
     const html = readFileSync(r.path, 'utf8');
-    expect(html).toContain('<script type="importmap">');
-    expect(html).not.toContain('src="/app/client/main.js"');
+    // an Artifact's CSP (script-src 'unsafe-inline', no data:/blob:) runs inline classic scripts only
+    expect(html).not.toContain('type="importmap"');
+    expect(html).not.toContain('type="module"');
+    expect(html).not.toMatch(/<script[^>]+src=/);
+    expect(html).not.toContain('data:text/javascript');
     expect(html).not.toContain('a </script> in text'); // escaped inside the embedded JSON
-    const map = JSON.parse(/<script type="importmap">(.*?)<\/script>/s.exec(html)![1]!) as { imports: Record<string, string> };
-    expect(Object.keys(map.imports)).toContain('mgl:/app/client/main.js');
-    expect(Object.keys(map.imports)).toContain('mgl:/app/shared/shapes.js');
-    expect(Object.keys(map.imports)).not.toContain('mgl:/app/client/page.js');
-    // every relative import was rewritten to a mapped bare specifier
-    for (const [k, url] of Object.entries(map.imports)) {
-      const code = Buffer.from(url.replace(/^data:text\/javascript;base64,/, ''), 'base64').toString('utf8');
-      expect(code, k).not.toMatch(/from\s*["']\.{1,2}\//);
-      for (const m of code.matchAll(/from\s*["'](mgl:[^"']+)["']/g)) expect(map.imports[m[1]!], `${k} → ${m[1]}`).toBeDefined();
-    }
+    const scripts = [...html.matchAll(/<script>([\s\S]*?)<\/script>/g)].map((m) => m[1]!);
+    expect(scripts).toHaveLength(2);
+    const bundle = scripts[1]!;
+    expect(bundle).not.toMatch(/^\s*(import|export)\s/m); // an IIFE, not a module
+    expect(bundle).toContain('MGL_EMBED');
+    expect(bundle).not.toMatch(/<\/script/i);
+    expect(() => new Function(bundle)).not.toThrow(); // parses as a classic script
     const files = JSON.parse(/window\.MGL_EMBED_FILES=(.*?);<\/script>/s.exec(html)![1]!) as Record<string, string>;
     expect(Object.keys(files)).toEqual(['still:0.5s||thumb']);
     expect(files['still:0.5s||thumb']).toMatch(/^data:image\/png;base64,iVBOR/);
+  });
+  it('inlineScript escapes </script and drops a trailing source map comment', () => {
+    expect(inlineScript('var a = "</script>"; var b = `</SCRIPT x`;\n//# sourceMappingURL=x.map\n')).toBe('var a = "<\\/script>"; var b = `<\\/SCRIPT x`;\n');
+    expect(() => inlineScript('var a = "<!--";')).toThrow(/<!--/);
   });
   it('mgl board with no subcommand prints the guide; export is a subcommand', async () => {
     let out = '';

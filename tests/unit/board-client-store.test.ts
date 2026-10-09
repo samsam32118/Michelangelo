@@ -52,3 +52,38 @@ describe('Store optimistic batches', () => {
     expect(n1(s)).toMatchObject({ x: 0, y: 0 });
   });
 });
+
+describe('Store detached (an exported page)', () => {
+  const detached = () => { const s = new Store(); s.detached = true; s.idTag = 'q7k'; s.load({ board: at(0, 0), version: 1, project: null, view: {} }); return s; };
+  it('queues ops with the ids they got here, so later ops still name the same shapes on the real board', async () => {
+    const s = detached();
+    const r = await s.send([{ op: 'shape.add', shape: { type: 'note', x: 10, y: 10, text: 'a' } as never }], 'human');
+    // tagged with this page's id tag: the real board may have its own n2 by the time the ops are applied
+    expect(r).toMatchObject({ ok: true, created: ['n2-q7k'] });
+    await s.send([{ op: 'shape.set', id: 'n2-q7k', props: { text: 'b' } }], 'human');
+    expect(s.newId('n')).toBe('n3-q7k');
+    await s.send([{ op: 'shape.add', shape: { type: 'note', x: 0, y: 0 } as never }, { op: 'shape.add', shape: { type: 'rect', x: 0, y: 0 } as never }], 'human');
+    expect(s.pending.map((p) => p.op)).toEqual([
+      { op: 'shape.add', shape: { type: 'note', x: 10, y: 10, text: 'a', id: 'n2-q7k' } },
+      { op: 'shape.set', id: 'n2-q7k', props: { text: 'b' } },
+      { op: 'shape.add', shape: { type: 'note', x: 0, y: 0, id: 'n3-q7k' } },
+      { op: 'shape.add', shape: { type: 'rect', x: 0, y: 0, id: 'g1-q7k' } },
+    ]);
+    expect(s.pending.every((p) => p.by === 'human')).toBe(true);
+  });
+  it('undo and redo work on the queue, without a server', async () => {
+    const s = detached();
+    await s.send([{ op: 'shape.add', shape: { id: 'n9', type: 'note', x: 0, y: 0 } as never }], 'human');
+    await s.send([{ op: 'shape.move', ids: ['n9'], dx: 5, dy: 0 }], 'human');
+    expect(await s.post('/api/undo', { by: 'human' })).toMatchObject({ ok: true });
+    expect(s.get('n9')).toMatchObject({ x: 0 });
+    expect(s.pending).toHaveLength(1);
+    expect(await s.post('/api/redo', {})).toMatchObject({ ok: true });
+    expect(s.get('n9')).toMatchObject({ x: 5 });
+    await s.post('/api/undo'); await s.post('/api/undo');
+    expect(s.get('n9')).toBeUndefined();
+    expect(s.pending).toHaveLength(0);
+    expect(await s.post('/api/undo')).toMatchObject({ ok: false, error: { code: 'E_HISTORY_EMPTY' } });
+    expect(n1(s)).toMatchObject({ x: 0, y: 0 }); // the embedded board is untouched
+  });
+});

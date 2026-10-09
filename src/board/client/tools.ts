@@ -12,7 +12,7 @@ import { chrome } from '../shared/palette.js';
 import { formatSeconds } from '../shared/time.js';
 import type { App } from './app.js';
 import { handlePoint, HANDLES, type Handle, type Renderer } from './renderer.js';
-import { ID_PREFIX, nextId } from './local-ops.js';
+import { ID_PREFIX } from './local-ops.js';
 import { openPrompt } from './text-edit.js';
 
 interface Gesture { move(p: Point, e: PointerEvent): void; up(p: Point, e: PointerEvent): void; cancel?(): void }
@@ -251,7 +251,7 @@ export class Tools {
         app.overlay = undefined;
         const [dw, dh] = SHAPE_DEFS[type].size;
         const b = box ?? (type === 'text' ? { x: start[0], y: start[1] - 16, w: 0, h: 0 } : type === 'frame' ? { x: start[0], y: start[1], w: dw, h: dh } : { x: start[0] - dw / 2, y: start[1] - dh / 2, w: dw, h: dh });
-        const id = nextId(app.store.board, ID_PREFIX[type]);
+        const id = app.store.newId(ID_PREFIX[type]);
         const shape: Record<string, unknown> = { id, type, x: Math.round(b.x), y: Math.round(b.y) };
         if (box && type !== 'text') { shape.w = Math.round(b.w); shape.h = Math.round(b.h); }
         const parent = type === 'frame' ? undefined : frameAt(app, center(b.w ? b : { ...b, w: 1, h: 1 }));
@@ -296,7 +296,7 @@ export class Tools {
         app.invalidate();
         if (!to && Math.hypot(end[0] - start[0], end[1] - start[1]) * app.camera.cam.zoom < 10) return;
         const [f, t] = ends();
-        const id = nextId(app.store.board, 'a');
+        const id = app.store.newId('a');
         void app.send([{ op: 'shape.add', shape: { id, type: 'arrow', from: f, to: t } as never }]);
         app.setTool('select');
         app.select([id]);
@@ -318,7 +318,7 @@ export class Tools {
         app.overlay = undefined;
         const x = Math.round(Math.min(...pts.map((q) => q[0]))), y = Math.round(Math.min(...pts.map((q) => q[1])));
         const points = pts.map((q): Point => [round1(q[0] - x), round1(q[1] - y)]);
-        const id = nextId(app.store.board, 'd');
+        const id = app.store.newId('d');
         const parent = frameAt(app, start);
         void app.send([{ op: 'shape.add', shape: { id, type: 'draw', x, y, points, ...(parent ? { parent: parent.id } : {}) } as never }]);
         app.invalidate();
@@ -360,7 +360,7 @@ export class Tools {
     const p = this.board(e), hit = this.app.hitAt(p);
     if (hit && ['note', 'text', 'rect', 'ellipse', 'frame', 'arrow', 'pin'].includes(hit.type)) { this.app.select([hit.id]); this.app.editText(hit.id); return; }
     if (!hit) {
-      const id = nextId(this.app.store.board, 't'), parent = frameAt(this.app, p);
+      const id = this.app.store.newId('t'), parent = frameAt(this.app, p);
       void this.app.send([{ op: 'shape.add', shape: { id, type: 'text', x: Math.round(p[0]), y: Math.round(p[1] - 16), ...(parent ? { parent: parent.id } : {}) } as never }]).then((r) => { if (r.ok) this.app.editText(id); });
       this.app.select([id]);
     }

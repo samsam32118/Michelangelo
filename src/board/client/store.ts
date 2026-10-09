@@ -7,7 +7,7 @@
 import type { Advice, BoardFile, BoardOp, BoardState, OpsResult, Outline, Presence, Shape, Who } from '../shared/types.js';
 import { shapeBounds } from '../shared/shapes.js';
 import type { Box } from '../shared/geometry.js';
-import { applyLocal } from './local-ops.js';
+import { allIds, applyLocal, ID_PREFIX, nextId } from './local-ops.js';
 
 export type Change = 'board' | 'project' | 'view' | 'advice' | 'flash' | 'conn';
 export const FLASH_MS = 1400;
@@ -35,6 +35,15 @@ export class Store {
   /** the newest server state that arrived while a batch was in flight (it may or may not contain that batch) */
   private held?: { board: BoardFile; version: number };
   private seq = 0;
+  /**
+   * Detached pages give new shapes ids with this page's tag (n3-k4q): their queued ops are replayed on the real board
+   * later, where the agent may have made an n3 meanwhile, or another exported copy its own n3.
+   */
+  idTag = Math.random().toString(36).slice(2, 5).padEnd(3, '0');
+  /** detached: the embedded board, the batches applied on top of it (pending), and the ones undone (redo) */
+  private embedded?: BoardFile;
+  private done: { ops: BoardOp[]; by: Who }[] = [];
+  private undone: { ops: BoardOp[]; by: Who }[] = [];
   private listeners = new Set<(c: Change) => void>();
   private mine = new Map<string, { by: Who; at: number }>();
   private memo?: { key: unknown; ov: number; shapes: Shape[]; byId: Map<string, Shape>; bounds: Map<string, Box> };
@@ -123,13 +132,17 @@ export class Store {
     if (!ops.length) return { ok: true, version: this.version, changed: [] };
     if (this.detached) {
       try {
-        const r = applyLocal(this.server, ops, by);
+        const fixed = withLocalIds(this, ops);
+        const r = applyLocal(this.server, fixed, by);
+        this.embedded ??= this.server;
         this.server = r.board;
         this.version++;
-        for (const op of ops) this.pending.push({ op, by });
+        this.done.push({ ops: fixed, by });
+        this.undone = [];
+        for (const op of fixed) this.pending.push({ op, by });
         r.changed.forEach((id) => this.flash(id, by));
         this.rebuild();
-        return { ok: true, version: this.version, changed: r.changed };
+        return { ok: true, version: this.version, changed: r.changed, created: fixed.flatMap((o) => (o.op === 'shape.add' ? [(o.shape as { id: string }).id] : [])) };
       } catch (e) {
         return { ok: false, error: { code: 'E_DETACHED', message: (e as Error).message, fix: 'detached pages apply simple ops only; run mgl board serve for the rest.' } };
       }
@@ -159,6 +172,7 @@ export class Store {
   }
 
   async post(path: string, body: unknown = {}): Promise<Record<string, unknown>> {
+    if (this.detached && (path === '/api/undo' || path === '/api/redo')) return this.localHistory(path === '/api/undo' ? 'undo' : 'redo');
     if (this.detached) return { ok: false, error: { code: 'E_DETACHED', message: `${path} needs the board server.`, fix: 'run mgl board serve <file>.' } };
     try {
       const r = await fetch(`${this.base}${path}`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
@@ -166,6 +180,29 @@ export class Store {
     } catch (e) {
       return { ok: false, error: { code: 'E_NETWORK', message: (e as Error).message, fix: 'is mgl board serve still running?' } };
     }
+  }
+
+  /** a free readable id for a new shape (n3; on a detached page n3-<tag>), avoiding `taken` too */
+  newId(prefix: string, taken: string[] = []): string {
+    if (!this.detached) return nextId(this.board, prefix, taken);
+    const suffix = `-${this.idTag}`;
+    const mine = [...allIds(this.board), ...taken].filter((i) => i.endsWith(suffix)).map((i) => i.slice(0, -suffix.length));
+    return `${nextId(this.board, prefix, [...taken, ...mine])}${suffix}`;
+  }
+
+  /** detached undo / redo: drop (or bring back) the latest queued batch and replay the rest on the embedded board */
+  localHistory(which: 'undo' | 'redo'): Record<string, unknown> {
+    const from = which === 'undo' ? this.done : this.undone, to = which === 'undo' ? this.undone : this.done;
+    const step = from.pop();
+    if (!step) return { ok: false, error: { code: 'E_HISTORY_EMPTY', message: `nothing to ${which} on this page.`, fix: 'undo here only takes back changes made on this exported page.' } };
+    to.push(step);
+    let b = this.embedded ?? this.server;
+    for (const x of this.done) b = applyLocal(b, x.ops, x.by).board;
+    this.server = b;
+    this.version++;
+    this.pending = this.done.flatMap((x) => x.ops.map((op) => ({ op, by: x.by })));
+    this.rebuild();
+    return { ok: true, version: this.version, summary: [`${which}: ${step.ops.map((o) => o.op).join(', ')}`] };
   }
 
   async refresh(): Promise<boolean> {
@@ -184,6 +221,21 @@ export class Store {
   }
 
   setConn(c: string): void { if (c !== this.conn) { this.conn = c; this.emit('conn'); } }
+}
+
+/**
+ * A detached page queues its ops to be replayed on the real board later, where other ids may exist by then: give each
+ * shape.add the id it gets here, so the ops after it (a text edit, an arrow to it) still name the same shape.
+ */
+export function withLocalIds(store: Store, ops: BoardOp[]): BoardOp[] {
+  const taken: string[] = [];
+  return ops.map((o) => {
+    if (o.op !== 'shape.add' || (o.shape as { id?: string }).id) return o;
+    const type = (o.shape as { type?: string }).type ?? 'note';
+    const id = store.newId(ID_PREFIX[type as keyof typeof ID_PREFIX] ?? 'x', taken);
+    taken.push(id);
+    return { ...o, shape: { ...o.shape, id } } as BoardOp;
+  });
 }
 
 /** JSON with sorted keys: the server may write keys in another order without changing anything */

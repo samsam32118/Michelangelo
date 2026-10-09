@@ -46,6 +46,22 @@ function guard(req: IncomingMessage, allowed: Set<string>, path: string): void {
   if (!ok) throw new HttpError(403, 'E_ORIGIN', `a ${req.method} from ${origin} is refused (only the board page itself may change the board).`, 'use the page this server serves, the CLI (mgl board edit) or a request without an Origin header.');
 }
 
+/**
+ * The page's Content-Security-Policy (BOARD.md §8.1): scripts from this server only (no inline, no eval), requests to
+ * this server only, bitmaps from it or data:/blob:. Inline styles are allowed (the page's one <style> and style
+ * properties set by script). Framing is allowed from this server and from loopback / allow-listed origins on any port
+ * (a local dev tool or a tunnel's page may embed the board), not from other sites.
+ */
+export function pageCsp(allowHost: string[] = []): string {
+  const names = ['127.0.0.1', 'localhost', ...allowHost.map(hostName).filter((n) => /^[a-z0-9.-]+$/.test(n) && !['127.0.0.1', 'localhost'].includes(n))];
+  const ancestors = ["'self'", ...names.flatMap((n) => [`http://${n}:*`, `https://${n}:*`])];
+  return [
+    "default-src 'none'", "script-src 'self'", "style-src 'self' 'unsafe-inline'", "img-src 'self' data: blob:", "media-src 'self'",
+    "connect-src 'self'", "font-src 'self'", "manifest-src 'self'", "base-uri 'none'", "form-action 'none'", "object-src 'none'",
+    `frame-ancestors ${ancestors.join(' ')}`,
+  ].join('; ');
+}
+
 function readBody(req: IncomingMessage): Promise<unknown> {
   return new Promise((done, failed) => {
     const chunks: Buffer[] = [];
@@ -118,6 +134,7 @@ export async function startBoardServer(opts: ServeOptions): Promise<BoardServer>
   if (opts.host !== undefined && !LOOPBACK.has(host)) process.stderr.write(`warning: the board server listens on ${host}; anyone who can reach it can read and edit the board (no authentication). Use the default (127.0.0.1) unless you need this.\n`);
   const { boardPath, projectPath: given } = resolveBoardPath(opts.file);
   const allowed = new Set(['127.0.0.1', 'localhost', '::1', ...(['0.0.0.0', '::'].includes(host) ? [] : [hostName(host)]), ...(opts.allowHost ?? []).map(hostName)]);
+  const csp = pageCsp(opts.allowHost ?? []);
   const session = await BoardSession.open(boardPath);
   const cacheDir = boardCacheDir(boardPath);
   const boardDir = dirname(resolve(boardPath));
@@ -168,13 +185,13 @@ export async function startBoardServer(opts: ServeOptions): Promise<BoardServer>
     guard(req, allowed, path);
     if (method === 'GET' && (path === '/' || path === '/index.html')) {
       const html = await pageHtml();
-      res.writeHead(200, { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-cache' });
+      res.writeHead(200, { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-cache', 'content-security-policy': csp, 'x-content-type-options': 'nosniff', 'referrer-policy': 'no-referrer' });
       return void res.end(html);
     }
     if (method === 'GET' && path.startsWith('/app/')) {
       const code = await appModule(path);
       if (code === undefined) throw new HttpError(404, 'E_NOT_FOUND', `${path} is not a page module.`, 'page modules are /app/client/<name>.js and /app/shared/<name>.js.');
-      res.writeHead(200, { 'content-type': 'text/javascript; charset=utf-8', 'cache-control': 'no-cache' });
+      res.writeHead(200, { 'content-type': 'text/javascript; charset=utf-8', 'cache-control': 'no-cache', 'x-content-type-options': 'nosniff' });
       return void res.end(code);
     }
     if (method === 'GET' && path === '/api/state') return sendJson(res, 200, state());

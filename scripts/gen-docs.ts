@@ -118,7 +118,9 @@ export interface ErrorDoc { code: string; exit: 1 | 2 | 0; message: string; fix:
 
 export function scanErrors(): ErrorDoc[] {
   const found = new Map<string, ErrorDoc>();
-  for (const f of files(join(ROOT, 'src'))) {
+  // the board (src/board, cli/board.ts) reuses core codes; scan it last so the examples stay the project ones
+  const all = files(join(ROOT, 'src')), isBoard = (f: string) => /[\\/]board[\\/.]/.test(relative(ROOT, f));
+  for (const f of [...all.filter((f) => !isBoard(f)), ...all.filter(isBoard)]) {
     const src = readFileSync(f, 'utf8');
     const rel = relative(ROOT, f);
     const re = /'((?:E|W)_[A-Z0-9_]+)'/g;

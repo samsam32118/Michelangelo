@@ -87,3 +87,26 @@ Sources read (2026-10-03): `docs/AGENT-PLATFORM-PLAN.md` and `docs/spikes/render
 | A pause threshold set from the silence floor misses sentence pauses in TTS | Digital silence (-120 dB) at the ends pulled the threshold to ~-62 dB; Kokoro's sentence gaps sit near -50 dB, so two-sentence lines came out as 2–3 voiced runs; 25 dB under the speech peak found them (aligned words within 100 ms: 53 % → 72 %) | `pauseThreshold` = max(floor + 6, p95 - 25) |
 | Fast speech is not unreadable captions | A 25 characters/s rule flagged recipe Shorts whose captions follow 150 wpm speech word by word | `caption-timing` reports only > 35 characters/s, flashes under 0.3 s and short blinks |
 
+## Borrowed for the board (2026-10-09): tldraw, clean room
+
+The board (DESIGN §18) is a clean-room build. Only concepts were taken from infinite-canvas whiteboards such as
+tldraw; **no tldraw code, docs of its internals or package was read, copied, translated or depended on.**
+
+| Idea | From | In Michelangelo |
+|---|---|---|
+| An infinite canvas with pan and zoom at the cursor | tldraw (concept) | `src/board/client/camera.ts` |
+| Shapes as typed records with a per-type module (bounds, hit test, draw) | tldraw (concept) | `src/board/shared/shapes.ts`, one Canvas 2D subset for the page and Skia |
+| Frames that group and move their children | tldraw (concept) | `frame` shapes, `parent` with absolute x/y |
+| Arrows bound to shapes, following them | tldraw (concept) | `arrow` `from`/`to` a shape id or a point |
+| A tool bar with one-key tools, marquee, resize handles | tldraw (concept) | `src/board/client/tools.ts`, `keys.ts` |
+| An editor API reachable from the browser console | tldraw (concept) | `window.mgl` (BOARD.md §6.3), the door for agents that drive a browser |
+
+## Lessons learned building the board (2026-10-09)
+
+| Lesson | Evidence | What the board does |
+|---|---|---|
+| Bookkeeping must not be "the last edit" | Each uncached `/api/still` (scrubbing the timeline) recorded a `spend.add` undo step, so Ctrl-Z after a scrub removed a spend row instead of the person's edit | Spend-only batches are not undo steps; undo and redo keep the current spend rows |
+| Reused error codes change the generated docs | Board files sort before core files, so `errors.md` took the board's example for `E_ARG`, `E_JSON`, `E_LOCKED` ... | `gen-docs` scans `src/board` and `cli/board.ts` last; fixes are literal strings (the scanner cannot follow a constant) |
+| A still's size depends on its comp | The snapshot sized every still 9:16 without the outline, so landscape projects drew tall placeholders | The outline goes into `shapeBounds` and the draw env everywhere |
+| A localhost server is reachable from every web page the person opens | Any site could POST ops to 127.0.0.1:4477, and DNS rebinding could read the board | Host allow-list and same-origin check on writes (`E_HOST`, `E_ORIGIN`) |
+

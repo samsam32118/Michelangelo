@@ -82,7 +82,11 @@ export async function readBoard(boardPath: string): Promise<{ board: BoardFile; 
     return { board: emptyBoard(boardPath, proj !== boardPath && existsSync(proj) ? proj : undefined), text: null };
   }
   try { return { board: parseBoardText(text), text }; } catch (e) {
-    if (e instanceof MglError) e.message = `${path.basename(boardPath)}: ${e.message}`;
+    if (e instanceof MglError) {
+      const old = e.message;
+      e.message = `${path.basename(boardPath)}: ${old}`;
+      for (const p of e.problems ?? []) if (p.message === old) p.message = e.message;
+    }
     throw e;
   }
 }

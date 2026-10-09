@@ -1,11 +1,11 @@
 #!/usr/bin/env node
-/** The CLI: mgl / michelangelo. Nine verbs, ≤ 40 lines of output, --json everywhere, exit codes 0 / 1 / 2. */
+/** The CLI: mgl / michelangelo. Ten verbs, ≤ 40 lines of output, --json everywhere, exit codes 0 / 1 / 2. */
 import { MglError, suggest } from '../core/errors.js';
 import { shellSafeFix } from './shell.js';
 import { readFileSync } from 'node:fs';
 import { Out, errorLines, internalError, parseArgs, type ArgSpec, type Args } from './io.js';
 
-type Verb = { spec: ArgSpec; usage: string; run: (a: Args, o: Out) => Promise<void> };
+type Verb = { spec: ArgSpec; usage: string; help?: () => Promise<string[]>; run: (a: Args, o: Out) => Promise<void> };
 
 const lazy = <M>(load: () => Promise<M>, pick: (m: M) => (a: Args, o: Out) => Promise<void>) => async (a: Args, o: Out) => pick(await load())(a, o);
 
@@ -18,6 +18,7 @@ const VERBS: Record<string, Verb> = {
   render: { spec: { values: ['range', 'still', 'comp', 'segments', 'bus', 'crf', 'bitrate', 'audio-bitrate', 'pcm', 'prores', 'timecode', 'color-range'], bools: ['draft', 'final', 'hq', 'alpha', 'detach', 'status'], alias: { 'pcm-depth': 'pcm' } }, usage: 'render <file> [out] [--draft|--final|--hq] [--range a-b] [--still t] [--alpha] [--detach] [--status] [--comp id] [--segments n]\n      delivery: [--crf n] [--bitrate 8M] [--audio-bitrate 320k] [--pcm 16|24] [--prores proxy|lt|422|hq|4444|4444xq] [--timecode 10:00:00:00] [--color-range tv|pc] [--bus <id>|all]', run: lazy(() => import('./render.js'), (m) => m.render) },
   docs: { spec: {}, usage: 'docs [topic|op|commands|format|schema|<effect>|template <id>] [--all]', run: lazy(() => import('./docs.js'), (m) => m.docs) },
   plugin: { spec: { values: ['dir'], bools: ['no-typecheck'] }, usage: 'plugin new <kind> <name> [--dir .] | test <dir> | trust <dir> | list [file]', run: lazy(() => import('./plugin.js'), (m) => m.plugin) },
+  board: { spec: { values: ['port', 'host', 'allow-host', 'by', 'batch', 'out', 'frame', 'ids', 'level', 'range'], bools: ['dry-run', 'force'], alias: { o: 'out' } }, usage: "board serve <file> [--port 4477] [--host 127.0.0.1] [--allow-host name] | show <file> | edit <file> <op> [k=v ...] | '<json>' | --batch f.jsonl [--dry-run] [--by human] | undo | redo\n      board view <file> | focus <file> <id...> | say <file> \"text\" | snapshot <file> [-o board.png] [--frame id] [--ids a,b]\n      board export <file> [-o board.html] | render <file> --level 1..4 [--ids s1,s2] [--range a-b] [--force]  (mgl board: the guide)", help: async () => (await import('./board.js')).BOARD_HELP, run: lazy(() => import('./board.js'), (m) => m.board) },
   doctor: { spec: { bools: ['fetch'] }, usage: 'doctor [file] [--fetch]', run: lazy(() => import('./doctor.js'), (m) => m.doctor) },
 };
 
@@ -59,7 +60,7 @@ export async function main(argv: string[]): Promise<number> {
       throw new MglError({ code: 'E_USAGE', message: `"${verb}" is not a verb.`, fix: dym.length ? `did you mean "mgl ${dym[0]}"? (mgl help)` : `verbs: ${Object.keys(VERBS).join(', ')}` });
     }
     const a = parseArgs(rest, v.spec);
-    if (a.flags.help) { o.line(...`usage: mgl ${v.usage}`.split('\n')); o.end(); return 0; }
+    if (a.flags.help) { o.line(...(v.help ? await v.help() : `usage: mgl ${v.usage}`.split('\n'))); o.end(); return 0; }
     if (a.flags.all) o.unbounded = true;
     await v.run(a, o);
     o.end();

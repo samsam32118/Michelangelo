@@ -2,10 +2,12 @@
  * A board session: the board in memory, a version counter, and undo / redo across processes. History lives in
  * <dir>/.mgl/board-history.jsonl (one line per step: {t: "do", before, after} snapshots, or {t: "undo" | "redo", seq}).
  * Every write happens under a lock; a step is undone only when the file on disk is still what that step wrote.
+ * Spend rows are a ledger of CPU already spent: a spend-only batch is not an undo step, and undo / redo keep the
+ * current spend rows (so a still rendered while scrubbing never becomes "the last edit").
  */
 import { appendFileSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
-import { fail } from '../../core/errors.js';
+import { MglError, fail } from '../../core/errors.js';
 import { withLock } from '../../sdk/project.js';
 import type { BoardFile, BoardOp, Outline, Who } from '../shared/types.js';
 import { emptyBoard, parseBoardText, readBoard } from './file.js';
@@ -20,13 +22,19 @@ type Entry = DoEntry | StepEntry;
 
 export interface ApplyResult { changed: string[]; created: string[]; version: number; board: BoardFile; dryRun?: boolean }
 export interface StepResult { changed: string[]; version: number; summary: string[] }
+/** One history step as the CLI and page show it. */
+export interface HistoryStep { summary: string; by: Who; at: string }
+export interface StepOptions { /** who is stepping: undo refuses a step the other party made (E_UNDO_OTHER) unless force */ by?: Who; force?: boolean }
 
 /** A short text for an op: its name and its main argument. */
 export function opSummary(op: BoardOp): string {
   const o = op as unknown as Record<string, unknown>;
-  const main = o.id ?? o.ids ?? o.round ?? o.target ?? o.t ?? o.goal ?? o.text ?? (o.shape as { type?: string } | undefined)?.type;
+  const sh = o.shape as { type?: string; text?: string; label?: string; src?: string } | undefined;
+  const main = o.id ?? o.ids ?? o.round ?? o.target ?? o.t ?? o.goal ?? o.text ?? sh?.type;
   const m = main === undefined ? '' : ' ' + (typeof main === 'string' ? (main.length > 40 ? JSON.stringify(main.slice(0, 39) + '…') : main) : JSON.stringify(main));
-  return `${o.op}${m}`;
+  // what a shape says matters to the other party reading the history ("shape.add note \"try a sunrise open\"")
+  const said = sh ? sh.text ?? sh.label ?? sh.src : undefined;
+  return `${o.op}${m}${typeof said === 'string' && said ? ' ' + JSON.stringify(said.length > 60 ? said.slice(0, 59) + '…' : said) : ''}`;
 }
 
 /** Ids whose line differs between two boards ("brief" for the brief). */
@@ -63,7 +71,10 @@ export class BoardSession {
   private sync(): boolean {
     const disk = this.readDisk();
     if (disk === this.text) return false;
-    this.board = disk === null ? emptyBoard(this.boardPath, this.projectPath) : parseBoardText(disk);
+    try { this.board = disk === null ? emptyBoard(this.boardPath, this.projectPath) : parseBoardText(disk); } catch (e) {
+      if (e instanceof MglError) prefixError(e, this.key);
+      throw e;
+    }
     this.text = disk;
     this.projectPath = projectOf(this.boardPath, this.board);
     this.version++;
@@ -94,46 +105,63 @@ export class BoardSession {
       const after = formatBoard(r.board);
       if (after === before && this.text !== null) return { changed: [], created: [], version: this.version, board: this.board };
       this.write(after);
-      this.record({ t: 'do', seq: this.nextSeq(), board: this.key, at: opts.now ?? new Date().toISOString(), by, summary: ops.map(opSummary).join('; '), before, after });
+      if (!ops.every((o) => o.op === 'spend.add')) this.record({ t: 'do', seq: this.nextSeq(), board: this.key, at: opts.now ?? new Date().toISOString(), by, summary: ops.map(opSummary).join('; '), before, after });
       this.board = r.board;
       this.version++;
       return { changed: r.changed, created: r.created, version: this.version, board: r.board };
     });
   }
 
-  async undo(n = 1): Promise<StepResult> { return this.step('undo', n); }
-  async redo(n = 1): Promise<StepResult> { return this.step('redo', n); }
+  async undo(n = 1, o: StepOptions = {}): Promise<StepResult> { return this.step('undo', n, o); }
+  async redo(n = 1, o: StepOptions = {}): Promise<StepResult> { return this.step('redo', n, o); }
 
-  /** Undo and redo stacks (newest first) as summaries. */
-  historyStatus(): { undo: string[]; redo: string[] } {
+  /** Undo and redo stacks (newest first) as summaries, and the same steps with who made them. */
+  historyStatus(): { undo: string[]; redo: string[]; undoSteps: HistoryStep[]; redoSteps: HistoryStep[] } {
     const { undo, redo } = this.stacks();
-    return { undo: undo.map((e) => e.summary).reverse(), redo: redo.map((e) => e.summary).reverse() };
+    const step = (e: DoEntry): HistoryStep => ({ summary: e.summary, by: e.by, at: e.at });
+    return { undo: undo.map((e) => e.summary).reverse(), redo: redo.map((e) => e.summary).reverse(), undoSteps: undo.map(step).reverse(), redoSteps: redo.map(step).reverse() };
   }
 
-  private step(dir: 'undo' | 'redo', n: number): StepResult {
+  /** Steps `other` made after `self`'s latest step (oldest first): what the other party did since you last acted. */
+  since(self: Who): HistoryStep[] {
+    const { undo } = this.stacks();
+    let i = undo.length;
+    while (i > 0 && undo[i - 1]!.by !== self) i--;
+    return undo.slice(i).map((e) => ({ summary: e.summary, by: e.by, at: e.at }));
+  }
+
+  private step(dir: 'undo' | 'redo', n: number, o: StepOptions = {}): StepResult {
     if (!Number.isInteger(n) || n < 1) fail('E_ARG', `${dir} takes a number of steps, got ${n}.`, `e.g. mgl board edit <file> ${dir} 2`);
     return withLock(this.lockDir, () => {
       const disk = this.readDisk();
       const { undo, redo } = this.stacks();
       const from = dir === 'undo' ? undo : redo;
       if (!from.length) fail('E_HISTORY_EMPTY', `nothing to ${dir}.`, dir === 'undo' ? 'no recorded board edits (hand edits are not recorded).' : 'redo only works right after an undo.');
+      // one shared history: an agent's undo must not silently take back the person's edit (and the other way round)
+      if (dir === 'undo' && o.by && !o.force) {
+        const other = from.slice(-n).reverse().find((e) => e.by !== o.by);
+        if (other) fail('E_UNDO_OTHER', `the step to undo was made by the ${other.by === 'human' ? 'person' : 'agent'}: "${other.summary}".`,
+          o.by === 'ai' ? 'leave the person\'s edit, or ask them first; to take it back anyway: mgl board edit <file> undo --force (or change it with an op).' : 'undo the agent\'s step anyway with force, or change it with an op.');
+      }
       const old = this.board;
-      let text = disk;
+      const spend = disk === null ? undefined : parseBoardText(disk).spend;
+      let text = disk === null ? null : withoutSpend(disk);
       const summary: string[] = [];
       for (let i = 0; i < n && from.length; i++) {
         const e = from.pop()!;
-        const expect = dir === 'undo' ? e.after : e.before;
+        const expect = withoutSpend(dir === 'undo' ? e.after : e.before);
         if (text !== expect) {
           if (i > 0) break;
           fail('E_HISTORY_STALE', `cannot ${dir}: ${this.key} changed on disk since "${e.summary}" (a hand edit or another tool).`,
             `${dir === 'undo' ? 'undo' : 'redo'} it with an op instead (e.g. shape.remove / shape.set), or restore the file by hand; history only steps over its own writes.`);
         }
-        text = dir === 'undo' ? e.before : e.after;
+        text = withoutSpend(dir === 'undo' ? e.before : e.after);
         summary.push(`${dir === 'undo' ? 'undid' : 'redid'}: ${e.summary}`);
         this.record({ t: dir, seq: e.seq, board: this.key }, false);
       }
       const board = parseBoardText(text!);
-      this.write(text!);
+      if (spend?.length) board.spend = spend; else delete board.spend;
+      this.write(formatBoard(board));
       this.board = board;
       this.projectPath = projectOf(this.boardPath, board);
       this.version++;
@@ -175,6 +203,21 @@ export class BoardSession {
   }
 }
 
-function projectOf(boardPath: string, b: BoardFile): string | undefined {
-  return b.project ? path.join(path.dirname(boardPath), b.project) : undefined;
+/** The board text with its spend rows removed (the form undo compares and restores). */
+function withoutSpend(text: string): string {
+  const b = parseBoardText(text);
+  delete b.spend;
+  return formatBoard(b);
+}
+
+/** the linked project, absolute (a "project" that is already absolute stays as it is) */
+export function projectOf(boardPath: string, b: BoardFile): string | undefined {
+  return b.project ? path.resolve(path.dirname(path.resolve(boardPath)), b.project) : undefined;
+}
+
+/** "<file>: message", on the error and on the problem that repeats it (so the CLI does not print it twice). */
+export function prefixError(e: MglError, key: string): void {
+  const old = e.message;
+  e.message = `${key}: ${old}`;
+  for (const p of e.problems ?? []) if (p.message === old) p.message = e.message;
 }

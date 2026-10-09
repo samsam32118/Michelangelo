@@ -31,6 +31,8 @@ const base = {
   tags: z.array(z.string()).optional(),
 };
 const End = z.union([Id, Point]);
+/** a variant project: a .mgl.json path relative to the board file, inside its folder */
+export const VariantPath = z.string().regex(/^(?![\\/])(?![a-zA-Z]:)(?!.*(^|[\\/])\.\.([\\/]|$)).+\.mgl\.json$/, 'a variant is a .mgl.json path relative to the board file, inside its folder (e.g. calm.mgl.json)');
 
 export const SHAPE_SCHEMAS: Record<ShapeType, z.ZodObject> = {
   frame: z.strictObject({ ...base }),
@@ -41,7 +43,7 @@ export const SHAPE_SCHEMAS: Record<ShapeType, z.ZodObject> = {
   arrow: z.strictObject({ ...base, from: End.optional(), to: End.optional(), text: z.string().optional() }),
   draw: z.strictObject({ ...base, points: z.array(Point) }),
   image: z.strictObject({ ...base, src: z.string().min(1) }),
-  still: z.strictObject({ ...base, t: TimeLike, comp: Id.optional(), fidelity: z.enum(FIDELITIES).optional() }),
+  still: z.strictObject({ ...base, t: TimeLike, comp: Id.optional(), fidelity: z.enum(FIDELITIES).optional(), project: VariantPath.optional() }),
   timeline: z.strictObject({ ...base, comp: Id.optional(), from: TimeLike.optional(), to: TimeLike.optional() }),
   pin: z.strictObject({ ...base, target: Id, u: Num.min(0).max(1).optional(), v: Num.min(0).max(1).optional(), text: z.string().optional(), status: z.enum(['open', 'resolved']).optional(), reply: z.string().optional() }),
 };
@@ -58,14 +60,14 @@ export const BRIEF_TEXT = ['goal', 'audience', 'platform', 'length'] as const;
 
 export const RoundOption = z.strictObject({
   id: Id, title: z.string().min(1), summary: z.string().optional(), shapes: z.array(Id).optional(), tradeoffs: z.string().optional(),
-  cost: z.string().optional(), taste: z.string().optional(),
+  cost: z.string().optional(), taste: z.string().optional(), project: VariantPath.optional(),
 });
 export const ROUND_STATUS = ['open', 'proposed', 'decided', 'dropped'] as const;
 export const Round = z.strictObject({
   id: Id, goal: z.string(), fidelity: Level, status: z.enum(ROUND_STATUS), options: z.array(RoundOption).optional(),
   chosen: Id.optional(), why: z.string().optional(), notes: z.string().optional(),
 });
-export const LogEntry = z.strictObject({ id: Id, by: Who, text: z.string(), at: z.string().optional() });
+export const LogEntry = z.strictObject({ id: Id, by: Who, text: z.string(), at: z.string().optional(), re: z.array(Id).optional() });
 export const SpendEntry = z.strictObject({ id: Id, level: Level, what: z.string(), ms: Num.min(0), round: Id.optional() });
 
 export const BoardSchema = z.strictObject({
@@ -83,7 +85,7 @@ const SHAPE_HEAD = ['id', 'type', 'x', 'y', 'w', 'h', 'rot'];
 const SHAPE_TAIL = ['label', 'color', 'by', 'parent', 'locked', 'tags'];
 const SHAPE_OWN: Record<ShapeType, string[]> = {
   frame: [], note: ['text'], text: ['text', 'size'], rect: ['text', 'fill'], ellipse: ['text', 'fill'], arrow: ['from', 'to', 'text'],
-  draw: ['points'], image: ['src'], still: ['t', 'comp', 'fidelity'], timeline: ['comp', 'from', 'to'],
+  draw: ['points'], image: ['src'], still: ['t', 'comp', 'fidelity', 'project'], timeline: ['comp', 'from', 'to'],
   pin: ['target', 'u', 'v', 'text', 'status', 'reply'],
 };
 export const SHAPE_KEYS: Record<ShapeType, string[]> = Object.fromEntries(SHAPE_TYPES.map((t) => [t, [...SHAPE_HEAD, ...SHAPE_OWN[t], ...SHAPE_TAIL]])) as Record<ShapeType, string[]>;
@@ -91,8 +93,8 @@ export const KEY_ORDER = {
   brief: ['goal', 'audience', 'platform', 'length', 'tone', 'references', 'mustHave', 'avoid', 'success', 'questions', 'budget'],
   budget: ['cpuMin', 'maxLevel'],
   rounds: ['id', 'goal', 'fidelity', 'status', 'options', 'chosen', 'why', 'notes'],
-  options: ['id', 'title', 'summary', 'shapes', 'tradeoffs', 'cost', 'taste'],
-  log: ['id', 'by', 'text', 'at'],
+  options: ['id', 'title', 'summary', 'shapes', 'tradeoffs', 'cost', 'taste', 'project'],
+  log: ['id', 'by', 'text', 'at', 're'],
   spend: ['id', 'level', 'what', 'ms', 'round'],
 };
 
@@ -286,6 +288,10 @@ export function checkRefs(b: BoardFile, err: Reporter) {
       seen.add(e.id);
     });
   }
+  const logIds = new Set((b.log ?? []).map((m) => m.id));
+  (b.log ?? []).forEach((m, i) => (m.re ?? []).forEach((id, k) => {
+    if (!logIds.has(id)) err(['log', i, 're', k], 'E_REF', `log "${m.id}" answers "${id}", which is not a log message.`, `use ids of messages in "log" (${[...logIds].slice(-3).join(', ') || 'none yet'}).`);
+  }));
   (b.spend ?? []).forEach((e, i) => {
     if (e.round !== undefined && !roundIds.has(e.round)) err(['spend', i, 'round'], 'E_REF', `spend "${e.id}" is for round "${e.round}", which does not exist.`, `use one of ${[...roundIds].join(', ') || '(no rounds yet)'}, or remove "round".`);
   });

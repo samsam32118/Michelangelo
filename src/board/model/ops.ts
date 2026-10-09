@@ -6,7 +6,7 @@
 import { z } from 'zod';
 import { MglError, fail, suggest } from '../../core/errors.js';
 import { SHAPE_TYPES, type BoardFile, type BoardOp, type Outline, type Round, type Shape, type ShapeType, type Who } from '../shared/types.js';
-import { BRIEF_LISTS, Brief, DEFAULT_SIZE, FIDELITIES, KEY_ORDER, ROUND_STATUS, RoundOption, SHAPE_KEYS, SHAPE_SCHEMAS, STILL_WIDTH, TimeLike, reportZod, validateBoard } from './schema.js';
+import { BRIEF_LISTS, Brief, DEFAULT_SIZE, FIDELITIES, KEY_ORDER, ROUND_STATUS, RoundOption, SHAPE_KEYS, SHAPE_SCHEMAS, STILL_WIDTH, TimeLike, VariantPath, reportZod, validateBoard } from './schema.js';
 import { compOf, framesToTime, timeToFrames } from './outline.js';
 
 export interface OpsContext { by: Who; outline?: Outline | null; now?: string }
@@ -21,7 +21,8 @@ const Level = z.union([z.literal(0), z.literal(1), z.literal(2), z.literal(3), z
 const Num = z.number().finite();
 const by = { by: z.enum(['human', 'ai']).optional() };
 const op = <T extends string>(name: T) => ({ op: z.literal(name), ...by });
-const nullable = (shape: Record<string, z.ZodType>) => Object.fromEntries(Object.entries(shape).map(([k, v]) => [k, (v as z.ZodOptional).unwrap?.().nullable().optional() ?? v]));
+/** every field optional and nullable (null removes it) */
+const nullable = (shape: Record<string, z.ZodType>) => Object.fromEntries(Object.entries(shape).map(([k, v]) => [k, (v instanceof z.ZodOptional ? (v.unwrap() as z.ZodType) : v).nullable().optional()]));
 
 export const OP_SCHEMAS = {
   'shape.add': z.strictObject({ ...op('shape.add'), shape: z.record(z.string(), z.unknown()) }),
@@ -36,8 +37,8 @@ export const OP_SCHEMAS = {
   'round.set': z.strictObject({ ...op('round.set'), round: Id, props: z.strictObject({ status: z.enum(ROUND_STATUS).optional(), notes: z.string().nullable().optional(), goal: z.string().min(1).optional(), fidelity: Level.optional() }) }),
   'pin.add': z.strictObject({ ...op('pin.add'), target: Id, u: Num.min(0).max(1).optional(), v: Num.min(0).max(1).optional(), text: z.string().min(1) }),
   'pin.resolve': z.strictObject({ ...op('pin.resolve'), id: Id, reply: z.string().optional() }),
-  say: z.strictObject({ ...op('say'), text: z.string().min(1) }),
-  'still.add': z.strictObject({ ...op('still.add'), t: TimeLike, comp: Id.optional(), fidelity: z.enum(FIDELITIES).optional(), x: Num.optional(), y: Num.optional(), parent: Id.optional() }),
+  say: z.strictObject({ ...op('say'), text: z.string().min(1), re: z.union([Id, Ids]).optional() }),
+  'still.add': z.strictObject({ ...op('still.add'), t: TimeLike, comp: Id.optional(), fidelity: z.enum(FIDELITIES).optional(), x: Num.optional(), y: Num.optional(), parent: Id.optional(), project: VariantPath.optional() }),
   'storyboard.make': z.strictObject({ ...op('storyboard.make'), frame: z.string().min(1).optional(), every: TimeLike.optional(), cuts: z.boolean().optional(), fidelity: z.enum(FIDELITIES).optional() }),
   'spend.add': z.strictObject({ ...op('spend.add'), level: Level, what: z.string().min(1), ms: Num.min(0), round: Id.optional() }),
 } as const;
@@ -57,7 +58,7 @@ export const OP_EXAMPLES: Record<string, string> = {
   'round.set': 'round.set r1 status=dropped',
   'pin.add': 'pin.add s1 u=0.5 v=0.2 text="title too small"',
   'pin.resolve': 'pin.resolve p1 reply="title is now 96 px"',
-  say: 'say "Two options are up in round r2"',
+  say: 'say "Two options are up in round r2" re=m4',
   'still.add': 'still.add 2.5s fidelity=half',
   'storyboard.make': 'storyboard.make every=3s',
   'spend.add': 'spend.add level=1 what="still s1" ms=180',
@@ -102,13 +103,13 @@ class State {
   touch(id: string, created = false) { this.changed.add(id); if (created) this.created.add(id); }
   who(o: { by?: Who }): Who { return o.by ?? this.ctx.by; }
   /** approximate bounds for layout (the page's SHAPE_DEFS draw the real thing) */
-  bounds(s: Shape): { x: number; y: number; w: number; h: number } {
+  bounds(s: Shape, depth = 0): { x: number; y: number; w: number; h: number } {
     if (s.type === 'still') {
       const w = s.w ?? STILL_WIDTH[s.fidelity ?? 'thumb']!;
       return { x: s.x, y: s.y, w, h: s.h ?? Math.round(w * this.aspect()) };
     }
     if (s.type === 'arrow') {
-      const pts = (['from', 'to'] as const).map((k) => this.endPoint(s[k])).filter((p): p is [number, number] => !!p);
+      const pts = (['from', 'to'] as const).map((k) => this.endPoint(s[k], depth + 1)).filter((p): p is [number, number] => !!p);
       if (!pts.length) return { x: s.x, y: s.y, w: 0, h: 0 };
       const xs = pts.map((p) => p[0]), ys = pts.map((p) => p[1]);
       return { x: Math.min(...xs), y: Math.min(...ys), w: Math.max(...xs) - Math.min(...xs), h: Math.max(...ys) - Math.min(...ys) };
@@ -125,12 +126,13 @@ class State {
     const c = this.ctx.outline ? compOf(this.ctx.outline) : undefined;
     return c ? c.size[1] / c.size[0] : 16 / 9;
   }
-  endPoint(v: string | [number, number] | undefined): [number, number] | undefined {
+  /** depth: arrows bound to arrows (refused by the ops, possible by hand) must not recurse forever */
+  endPoint(v: string | [number, number] | undefined, depth = 0): [number, number] | undefined {
     if (Array.isArray(v)) return v;
-    if (typeof v !== 'string') return undefined;
+    if (typeof v !== 'string' || depth > 8) return undefined;
     const t = this.shapes.find((x) => x.id === v);
     if (!t) return undefined;
-    const r = this.bounds(t);
+    const r = this.bounds(t, depth);
     return [r.x + r.w / 2, r.y + r.h / 2];
   }
   /** A free spot: right of the last shape of the same type (gap 30), else right of everything (gap 60); inside `parent` when given. */
@@ -168,7 +170,7 @@ function opError(name: string, o: Record<string, unknown>, issues: z.core.$ZodIs
     fail('E_UNKNOWN_KEY', `${name}: "${where}${k}" is not a field of ${name}.`, dym.length ? `did you mean "${dym[0]}"?` : `fields: ${keys.join(', ')}.`, dym.length ? { didYouMean: dym } : {});
   }
   let err: MglError | undefined;
-  reportZod([first], o, (path, code, message, fix, extra) => { err ??= new MglError({ code, message: `${name}: ${message.replace(/^the board/, 'the op')}`, fix: `${fix}${ex}`, path: path.join('.'), ...extra }); });
+  reportZod([first], o, (path, code, message, fix, extra) => { err ??= new MglError({ code, message: `${name}: ${message.replace(/^the board/, 'the op')}`, fix: `${fix.startsWith('compare with') ? 'see docs/plans/BOARD.md §5 (ops).' : fix}${ex}`, path: path.join('.'), ...extra }); });
   throw err ?? new MglError({ code: 'E_SCHEMA', message: `${name}: ${first.message}.`, fix: ex.trim() || 'see docs/plans/BOARD.md §5.' });
 }
 
@@ -219,7 +221,14 @@ function checkStillTime(st: State, t: string | number, comp: string | undefined,
   if (f < 0 || (c.length > 0 && f >= c.length)) fail('E_TIME_RANGE', `${opName}: t ${JSON.stringify(t)} is outside comp "${c.id}" (0 to ${framesToTime(c.length, c.fps)}).`, `use a time from 0 to ${framesToTime(Math.max(0, c.length - 1), c.fps)}.`);
 }
 
-function refShape(st: State, id: string, opName: string, field: string) { st.shape(id, `${opName}: ${field}`); }
+function refShape(st: State, id: string, opName: string, field: string): Shape { return st.shape(id, `${opName}: ${field}`); }
+
+/** An arrow end or a pin target must be another shape that is not an arrow or a pin (no self-binding, no chains). */
+function refTarget(st: State, id: string, self: string, opName: string, field: string) {
+  if (id === self) fail('E_ARG', `${opName}: ${field} "${id}" is the shape itself.`, field.startsWith('arrow') ? 'bind the arrow to another shape, or give a point [x, y].' : 'pin it on another shape.');
+  const t = refShape(st, id, opName, field);
+  if (t.type === 'arrow' || t.type === 'pin') fail('E_ARG', `${opName}: ${field} "${id}" is a ${t.type}; ${field.startsWith('arrow') ? 'arrows bind to' : 'pins go on'} a still, note, frame or other shape.`, field.startsWith('arrow') ? 'bind it to the shape that arrow or pin points at, or give a point [x, y].' : 'pin it on the shape the arrow or pin points at.');
+}
 
 type Handler = (st: State, o: Record<string, unknown>) => void;
 
@@ -230,8 +239,8 @@ const HANDLERS: Record<string, Handler> = {
     if (s.id !== undefined) checkNewId(st, s.id, 'shape.add'); else s.id = st.nextId(ID_PREFIX[type]);
     s.by ??= st.who(o);
     checkParent(st, s.parent, 'shape.add');
-    if (type === 'arrow') for (const k of ['from', 'to']) if (typeof s[k] === 'string') refShape(st, s[k] as string, 'shape.add', `arrow ${k}`);
-    if (type === 'pin') { if (typeof s.target !== 'string') fail('E_MISSING', 'shape.add: a pin needs "target" (a shape id).', `use ${OP_EXAMPLES['pin.add']}`); refShape(st, s.target, 'shape.add', 'pin target'); }
+    if (type === 'arrow') for (const k of ['from', 'to']) if (typeof s[k] === 'string') refTarget(st, s[k] as string, s.id as string, 'shape.add', `arrow ${k}`);
+    if (type === 'pin') { if (typeof s.target !== 'string') fail('E_MISSING', 'shape.add: a pin needs "target" (a shape id).', `use ${OP_EXAMPLES['pin.add']}`); refTarget(st, s.target, s.id as string, 'shape.add', 'pin target'); }
     if (type === 'still' && (typeof s.t === 'string' || typeof s.t === 'number')) checkStillTime(st, s.t, s.comp as string | undefined, 'shape.add');
     if (s.x === undefined && s.y === undefined && type !== 'arrow' && type !== 'pin') [s.x, s.y] = st.place(type, s.parent as string | undefined);
     const shape = checkShape(s, 'shape.add');
@@ -245,8 +254,8 @@ const HANDLERS: Record<string, Handler> = {
     const next = { ...s } as Record<string, unknown>;
     for (const [k, v] of Object.entries(props)) { if (v === null) delete next[k]; else next[k] = v; }
     if ('parent' in props && props.parent !== null) checkParent(st, props.parent, 'shape.set');
-    if (s.type === 'arrow') for (const k of ['from', 'to']) if (typeof props[k] === 'string') refShape(st, props[k] as string, 'shape.set', `arrow ${k}`);
-    if (s.type === 'pin' && typeof props.target === 'string') refShape(st, props.target, 'shape.set', 'pin target');
+    if (s.type === 'arrow') for (const k of ['from', 'to']) if (typeof props[k] === 'string') refTarget(st, props[k] as string, s.id, 'shape.set', `arrow ${k}`);
+    if (s.type === 'pin' && typeof props.target === 'string') refTarget(st, props.target, s.id, 'shape.set', 'pin target');
     if (s.type === 'still' && ('t' in props || 'comp' in props)) checkStillTime(st, next.t as string, next.comp as string | undefined, 'shape.set');
     const shape = checkShape(next, 'shape.set');
     st.shapes[st.shapes.indexOf(s)] = shape;
@@ -403,14 +412,20 @@ const HANDLERS: Record<string, Handler> = {
   },
   say(st, o) {
     const id = st.nextId('m');
-    (st.b.log ??= []).push({ id, by: st.who(o), text: o.text as string, at: st.ctx.now ?? new Date().toISOString() });
+    const re = o.re === undefined ? [] : Array.isArray(o.re) ? (o.re as string[]) : [o.re as string];
+    const log = (st.b.log ??= []);
+    for (const r of re) if (!log.some((m) => m.id === r)) {
+      const dym = suggest(r, log.map((m) => m.id));
+      fail('E_REF', `say: re "${r}" is not a log message.`, dym.length ? `did you mean "${dym[0]}"?` : log.length ? `answer one of ${log.slice(-3).map((m) => m.id).join(', ')}.` : 'there are no messages to answer yet; leave "re" out.');
+    }
+    log.push({ id, by: st.who(o), text: o.text as string, at: st.ctx.now ?? new Date().toISOString(), ...(re.length ? { re: [...new Set(re)] } : {}) });
     st.touch(id, true);
   },
   'still.add'(st, o) {
     checkStillTime(st, o.t as string, o.comp as string | undefined, 'still.add');
     checkParent(st, o.parent, 'still.add');
     const s: Record<string, unknown> = { id: st.nextId('s'), type: 'still', t: o.t, by: st.who(o) };
-    for (const k of ['comp', 'fidelity', 'parent']) if (o[k] !== undefined) s[k] = o[k];
+    for (const k of ['comp', 'fidelity', 'parent', 'project']) if (o[k] !== undefined) s[k] = o[k];
     const [px, py] = o.x === undefined || o.y === undefined ? st.place('still', o.parent as string | undefined) : [0, 0];
     s.x = o.x ?? px; s.y = o.y ?? py;
     st.shapes.push(checkShape(s, 'still.add'));
@@ -427,14 +442,17 @@ const HANDLERS: Record<string, Handler> = {
     let frames: number[];
     if (useCuts) {
       if (!starts.length) fail('E_ARG', `storyboard.make: comp "${c.id}" has no visual clips, so it has no cuts.`, 'use every=3s, or add clips first.');
-      frames = starts;
+      // a cut's first frame is often mid-entrance (text sliding in): sample a little later, before the next cut
+      frames = starts.map((f, i) => f + Math.max(0, Math.min(Math.round(c.fps * 0.5), Math.floor(((starts[i + 1] ?? c.length) - f) / 2))));
     } else {
       if (c.length <= 0) fail('E_ARG', `storyboard.make: comp "${c.id}" is empty (length 0).`, 'add clips (or set the comp length) first.');
       let step: number;
       try { step = timeToFrames((o.every as string | number | undefined) ?? '3s', c.fps); } catch (e) { if (e instanceof MglError) fail(e.code, `storyboard.make: ${e.message}`, e.fix); throw e; }
       if (step <= 0) fail('E_ARG', 'storyboard.make: "every" must be more than 0.', 'e.g. every=3s');
+      // offset the samples: at t=0 entrance animations have not started (an empty first frame misleads)
+      const off = Math.min(Math.floor(step / 2), Math.round(c.fps * 0.5));
       frames = [];
-      for (let f = 0; f < c.length; f += step) frames.push(f);
+      for (let f = off; f < c.length; f += step) frames.push(f);
     }
     if (frames.length > 60) fail('E_TOO_MANY', `storyboard.make would make ${frames.length} stills (at most 60).`, `use a longer interval, e.g. every=${framesToTime(Math.ceil(c.length / 30), c.fps)}.`);
     const fid = (o.fidelity as string | undefined) ?? 'thumb';
@@ -489,6 +507,13 @@ export function parseOp(raw: unknown, st?: State): BoardOp {
   return o as unknown as BoardOp;
 }
 
+/** Prefix an error's message, and the problem that repeats it (the CLI prints each distinct problem once). */
+function relabel(e: MglError, prefix: string): void {
+  const old = e.message;
+  e.message = prefix + old;
+  for (const p of e.problems ?? []) if (p.message === old) p.message = e.message;
+}
+
 /** Apply ops in order on a copy; throws MglError (naming the op) on the first invalid one. */
 export function applyOps(b: BoardFile, ops: BoardOp[], ctx: OpsContext): OpsResult {
   if (!Array.isArray(ops) || !ops.length) fail('E_COMMAND', 'no ops given.', 'give one op or a list: [{"op": "say", "text": "hi"}].');
@@ -498,14 +523,14 @@ export function applyOps(b: BoardFile, ops: BoardOp[], ctx: OpsContext): OpsResu
       const o = parseOp(raw, st) as unknown as Record<string, unknown>;
       HANDLERS[o.op as string]!(st, o);
     } catch (e) {
-      if (e instanceof MglError && ops.length > 1) e.message = `op ${i + 1} of ${ops.length}: ${e.message}`;
+      if (e instanceof MglError && ops.length > 1) relabel(e, `op ${i + 1} of ${ops.length}: `);
       throw e;
     }
   });
   for (const t of ['shapes', 'rounds', 'log', 'spend'] as const) if (st.b[t] && !st.b[t]!.length) delete st.b[t];
   let board: BoardFile;
   try { board = validateBoard(clone(st.b)); } catch (e) {
-    if (e instanceof MglError) e.message = `after the ops: ${e.message}`;
+    if (e instanceof MglError) relabel(e, 'after the ops: ');
     throw e;
   }
   return { board, changed: [...st.changed], created: [...st.created] };

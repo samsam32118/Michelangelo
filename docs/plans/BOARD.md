@@ -169,6 +169,7 @@ to `ai` (`--by human` overrides).
 | `mgl board focus <file> <id...>` | moves every open page's camera to the shapes and highlights them (needs a server) |
 | `mgl board say <file> "text"` | a `say` op; it also appears as a toast on the page |
 | `mgl board snapshot <file> [-o board.png] [--frame id] [--ids a,b]` | draws the board (or a frame) with Skia, with stills rendered, long edge ≤ 1568 px |
+| `mgl board export <file> [-o board.html]` | a self-contained, offline page with the board and its stills embedded, for browser panes that cannot reach the server and for Artifacts (§8.1) |
 | `mgl board render <file> --level 1..4 [--ids s1,s2] [--range a-b]` | climbs the ladder: renders stills, a sheet (look), a draft or the final; records spend; prints the estimate first for 3–4 |
 
 `<file>` may be the project file or the board file. `mgl board show video.mgl.json` uses `video.board.json`
@@ -254,6 +255,44 @@ still preview. The page has no framework, and the DOM is built by hand.
   `by: "human"`.
 - Every change goes through `POST /api/ops`. The page applies the change optimistically and then reconciles
   with the server's `state` event.
+
+### 8.1 Browsers that agents drive (Claude Code, Codex)
+
+Agents see the page through browsers they control: the Claude desktop app's built-in browser pane, Claude in
+Chrome, Codex's browser, Playwright. These browsers mostly **read the page as text or an accessibility tree**
+(`get_page_text`, `read_page`, `find`), click elements by label, fill forms, run JavaScript in the console,
+and take screenshots only sometimes. The page must work for all of them:
+
+- **A DOM mirror of the canvas.** A `<section id="mgl-outline" aria-label="Board outline">` lists every shape
+  as text (type, id, label or text, who made it, its frame; stills with their time and visible clips; pins
+  with their status). It is followed by the brief, the rounds with their options, and the **next** advice.
+  It is kept in sync on every state change. It is visually hidden by default (an "Outline" toggle shows it)
+  but always present in the accessibility tree, so `get_page_text` returns the whole board.
+- **Labelled controls.** Every tool button, tab, field and option button has a visible text or `aria-label`,
+  plus `data-mgl` attributes (`data-mgl="tool-note"`, `data-mgl="choose-r1b"`, `data-mgl="brief-goal"`). The
+  brief fields are real `<input>` and `<textarea>` elements with `<label>`, so `form_input` works. Choose and
+  Comment are real `<button>` elements.
+- **The console API** (§6.3) is the primary door for an agent with JavaScript access. `mgl.help()` returns its
+  text as well as printing it. `document.title` shows the board name and the count of open items ("Board ·
+  focus-short · 2 open pins"), which helps an agent find the right tab.
+- **No external requests.** There are no CDNs and no web fonts, and only system font stacks are used. The page
+  works offline and under a strict CSP: no `eval`, no `new Function`, no inline event-handler attributes.
+- **Small panes.** The layout works from 360 px wide. Below 900 px the side panel becomes a bottom sheet,
+  and the tool bar wraps. Touch and pen input go through pointer events.
+- **Defensive platform use.** `localStorage` is wrapped in try/catch. If `EventSource` fails or is blocked by
+  a proxy, the page falls back to polling `GET /api/state?since=<version>` every 1 s. There are no popups and
+  no `alert()` or `confirm()` (they block automation). The page works inside an iframe.
+- **Remote panes cannot reach the agent's localhost.** A browser pane on the person's computer cannot open a
+  server that a cloud session started. So there are two more ways in:
+  1. `mgl board serve --host 0.0.0.0 --allow-host <name>` for tunnels and port forwarding. Requests whose
+     `Host` header is not loopback or allow-listed are refused (this also prevents DNS rebinding), and
+     mutating requests from an unexpected `Origin` are refused.
+  2. `mgl board export <file> [-o board.html]` writes **one self-contained HTML file**: all JS and CSS
+     inline, stills embedded as data URIs (≤ 8 MB total), and the board state embedded. It can be published
+     as an Artifact or opened from disk. With no server, the page runs **detached**: edits are applied
+     locally and queued, `mgl.pending()` returns the queued ops, and a "Copy changes" button copies them as
+     JSONL. The person pastes them back, or the agent reads them through the browser, and the agent applies
+     them with `mgl board edit <file> --batch changes.jsonl --by human`.
 
 ## 9. Code layout (ownership: `src/board/`, plus `src/cli/board.ts`)
 
